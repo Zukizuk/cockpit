@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## 19 November 2026
+## 19 November 2026 (version 0.1.1)
 
 **New**
 - **Cockpit is open source** (MIT). It installs with a double-click: download the release, unzip it and run Install.cmd. It brings its own Node, adds Cockpit to the Start menu, starts it at login, sets up Ctrl+Alt+K, and offers to connect Claude Code. Uninstall.cmd takes it away and keeps your notes.

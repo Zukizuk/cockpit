@@ -5,7 +5,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-export const VERSION = '0.1.0'
 export const HOST = '127.0.0.1'
 export const PORT = Number(process.env.COCKPIT_PORT) || 4790
 export const HOME = process.env.COCKPIT_HOME || os.homedir()
@@ -13,15 +12,17 @@ export const DATA_DIR = process.env.COCKPIT_DATA || path.join(HOME, '.cockpit')
 export const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
 /** What changed in Cockpit, newest first (read in the app from Settings or the + box). */
 export const CHANGELOG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'CHANGELOG.md')
-/** Where Cockpit's code lives (feedback opens an issue there); a fork sets its own in package.json. */
-export const REPOSITORY = (() => {
+const PKG = (() => {
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8'))
-    return String(pkg.repository?.url || pkg.repository || '').replace(/^git\+/, '').replace(/\.git$/, '')
+    return JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8'))
   } catch {
-    return ''
+    return {}
   }
 })()
+/** Cockpit's version (package.json). */
+export const VERSION = PKG.version || '0.0.0'
+/** Where Cockpit's code lives (feedback opens an issue there); a fork sets its own in package.json. */
+export const REPOSITORY = String(PKG.repository?.url || PKG.repository || '').replace(/^git[+]/, '').replace(/[.]git$/, '')
 
 /** How the board behaves, set in Settings. */
 export const STICKY_COLORS = ['ink', 'yellow', 'orange', 'pink', 'green']
