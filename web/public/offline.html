@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cockpit isn't running</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; font: 15px/1.6 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif; background: #f4f5f8; color: #1c2027; }
+      @media (prefers-color-scheme: dark) { body { background: #0f1116; color: #e5e8ee; } code { background: #1c2029 !important; } }
+      main { max-width: 520px; padding: 32px; }
+      h1 { font-size: 22px; margin: 16px 0 8px; }
+      code { background: #eceef3; padding: 2px 6px; border-radius: 5px; font-family: 'Cascadia Code', Consolas, monospace; font-size: 13px; }
+      a.btn { display: inline-block; margin-top: 18px; padding: 8px 16px; border-radius: 8px; background: #4f6bed; color: #fff; text-decoration: none; font-weight: 600; }
+      li { margin: 6px 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/icons/icon-192.png" width="56" height="56" alt="" />
+      <h1>Cockpit's server isn't running</h1>
+      <p>The app window is here, but the small local server it reads from has stopped. Any of these starts it:</p>
+      <ul>
+        <li>Ask any Claude chat to show you something in Cockpit.</li>
+        <li>Run <code>npm start</code> in the cockpit folder (<code>~\projects\cockpit</code>).</li>
+      </ul>
+      <a class="btn" href="/">Try again</a>
+    </main>
+  </body>
+</html>

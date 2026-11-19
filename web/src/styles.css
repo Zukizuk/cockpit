@@ -1,0 +1,1989 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/* Cockpit — a dark, neutral board. Glass only on what floats (dock, menus, dialogs, the reader's bar, the outputs
+   panel); cards hold text, so they are near-solid. No hue anywhere except state. */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  color-scheme: dark;
+  --radius: 0.625rem;
+  --background: oklch(0.155 0 0);
+  --foreground: oklch(0.93 0 0);
+  --card: oklch(0.195 0 0);
+  --card-foreground: oklch(0.93 0 0);
+  --popover: oklch(0.22 0 0 / 0.82);
+  --popover-foreground: oklch(0.93 0 0);
+  --primary: oklch(0.93 0 0);
+  --primary-foreground: oklch(0.18 0 0);
+  --secondary: oklch(0.26 0 0);
+  --secondary-foreground: oklch(0.93 0 0);
+  --muted: oklch(0.26 0 0);
+  --muted-foreground: oklch(0.66 0 0);
+  --accent: oklch(1 0 0 / 0.07);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.68 0.19 22);
+  --border: oklch(1 0 0 / 0.09);
+  --input: oklch(1 0 0 / 0.12);
+  --ring: oklch(0.62 0 0);
+
+  --line: oklch(1 0 0 / 0.07);
+  --code-bg: oklch(1 0 0 / 0.045);
+  --code-ink: oklch(0.8 0.1 25);
+  --add-bg: oklch(0.72 0.15 150 / 0.13);
+  --add-ink: oklch(0.85 0.1 150);
+  --del-bg: oklch(0.68 0.17 22 / 0.13);
+  --del-ink: oklch(0.86 0.08 22);
+  --hl-keyword: oklch(0.78 0.11 330);
+  --hl-string: oklch(0.82 0.12 135);
+  --hl-number: oklch(0.8 0.1 65);
+  --hl-comment: oklch(0.55 0 0);
+  --hl-title: oklch(0.78 0.09 245);
+  --hl-builtin: oklch(0.82 0.1 80);
+  --hl-literal: oklch(0.78 0.09 245);
+  --hl-var: oklch(0.76 0.13 22);
+  --serif: Charter, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+
+  /* elevation (dark: one ring, plus a soft drop that reads on the near-black board) */
+  --ring-1: 0 0 0 1px oklch(1 0 0 / 0.08);
+  --ring-2: 0 0 0 1px oklch(1 0 0 / 0.14);
+  --lift: 0 18px 50px -18px oklch(0 0 0 / 0.75), 0 2px 8px -2px oklch(0 0 0 / 0.5);
+
+  /* the note editor (a sticky note's paper sets its own) */
+  --ed-font: 'Segoe UI Variable Text', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --ed-mono: 'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
+  --ed-text: oklch(0.93 0 0);
+  --ed-muted: oklch(0.66 0 0);
+  --ed-faint: oklch(1 0 0 / 0.34);
+  --ed-link: oklch(0.9 0 0);
+  --ed-code: oklch(0.8 0.1 25);
+  --ed-selection: oklch(1 0 0 / 0.18);
+  --ed-match: oklch(1 0 0 / 0.08);
+
+  /* strong curves (emil-design-eng): ease-out for things arriving, ease-in-out for things moving */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-size: 15px;
+    overflow: hidden;
+  }
+  ::selection {
+    background: oklch(1 0 0 / 0.18);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(1 0 0 / 0.16) transparent;
+  }
+}
+
+/* ---- glass: the floating layer ----------------------------------------------------------------------------- */
+
+.glass,
+[data-slot='dropdown-menu-content'],
+[data-slot='context-menu-content'],
+[data-slot='select-content'],
+[data-slot='dialog-content'],
+[data-slot='sheet-content'] {
+  background: oklch(0.21 0 0 / 0.66) !important;
+  backdrop-filter: blur(28px) saturate(160%);
+  box-shadow:
+    0 0 0 1px oklch(1 0 0 / 0.09),
+    inset 0 1px 0 oklch(1 0 0 / 0.06),
+    0 24px 60px -20px oklch(0 0 0 / 0.8);
+  border: 0 !important;
+}
+
+/* menus open over cards, a bright sticky note too: more solid than the rest of the glass, so they never take its colour */
+[data-slot='dropdown-menu-content'],
+[data-slot='context-menu-content'],
+[data-slot='select-content'] {
+  background: oklch(0.21 0 0 / 0.9) !important;
+}
+
+[data-slot='dialog-overlay'],
+[data-slot='sheet-overlay'] {
+  background: oklch(0 0 0 / 0.35) !important;
+  backdrop-filter: blur(2px);
+}
+
+[data-slot='sheet-content'] {
+  top: 12px !important;
+  bottom: 12px !important;
+  right: 12px !important;
+  height: auto !important;
+  border-radius: 18px;
+}
+
+/* opened many times a day: no open or close animation (and no zoom from the centre) */
+.palette,
+[data-slot='dialog-overlay']:has(~ .palette) {
+  animation: none !important;
+}
+
+.palette {
+  top: 18% !important;
+  translate: -50% 0 !important;
+}
+
+.palette [data-slot='command'] {
+  background: transparent;
+}
+
+/* ---- the board ------------------------------------------------------------------------------------------- */
+
+.board {
+  position: fixed;
+  inset: 0;
+}
+
+.react-flow {
+  --xy-background-color: var(--background);
+  --xy-selection-background-color: oklch(1 0 0 / 0.05);
+  --xy-selection-border: 1px solid oklch(1 0 0 / 0.2);
+}
+
+.react-flow__node {
+  border-radius: 14px;
+}
+
+.react-flow__node:focus-visible {
+  outline: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
+  background: var(--card);
+  box-shadow: var(--ring-1), var(--lift);
+  overflow: hidden;
+  transition-property: box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.card:hover {
+  box-shadow: var(--ring-2), var(--lift);
+}
+
+.card.is-selected {
+  box-shadow: 0 0 0 1px oklch(1 0 0 / 0.26), var(--lift);
+}
+
+.card.is-flash {
+  animation: card-flash 900ms var(--ease-out);
+}
+
+/* a card added just now eases in; cards already on the board at load don't */
+.card.is-new {
+  animation: card-in 220ms var(--ease-out) both;
+}
+
+.card.is-new.is-flash {
+  animation: card-in 220ms var(--ease-out) both, card-flash 900ms var(--ease-out);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    scale: 0.96;
+  }
+}
+
+@keyframes card-flash {
+  0% {
+    box-shadow: 0 0 0 4px oklch(1 0 0 / 0.28), var(--lift);
+  }
+  100% {
+    box-shadow: 0 0 0 1px oklch(1 0 0 / 0.26), var(--lift);
+  }
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  flex-shrink: 0;
+  padding: 0 6px 0 14px;
+  border-bottom: 1px solid var(--line);
+  cursor: grab;
+  user-select: none;
+}
+
+.card-head:active {
+  cursor: grabbing;
+}
+
+.card.is-locked .card-head,
+.card.is-locked .card-head:active {
+  cursor: default;
+}
+
+/* Tidy and Undo: cards glide to their new places (a drag stays instant: this is on only for a moment) */
+.board.is-arranging .react-flow__node {
+  transition: transform 380ms var(--ease-in-out);
+}
+
+.card-actions {
+  opacity: 0.55;
+  transition: opacity 150ms ease-out;
+}
+
+.card:hover .card-actions,
+.card.is-selected .card-actions,
+.card-actions:focus-within {
+  opacity: 1;
+}
+
+.card-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 20px;
+  cursor: auto;
+  user-select: text;
+}
+
+/* folded to its header: the title line and its subtitle say what it is */
+.card.is-folded .card-body {
+  display: none;
+}
+
+.card.is-folded .card-head {
+  border-bottom-color: transparent;
+}
+
+.card-body.flush {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-body.tight {
+  padding: 6px;
+}
+
+.card-body .frame {
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+}
+
+.card-body .table-scroll {
+  max-height: none;
+}
+
+/* resize: invisible edges, small corner handles while selected */
+.rz-line {
+  border-color: transparent !important;
+}
+
+.rz-handle {
+  width: 9px !important;
+  height: 9px !important;
+  border: 0 !important;
+  border-radius: 3px;
+  background: oklch(1 0 0 / 0.35) !important;
+}
+
+/* ---- dock, toast -------------------------------------------------------------------------------------------- */
+
+.dock {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  translate: -50% 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 15px; /* 10px buttons + 5px inset */
+}
+
+.dock-dot {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: oklch(0.93 0 0);
+  color: oklch(0.18 0 0);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 15px;
+  text-align: center;
+}
+
+.focus-bar {
+  position: fixed;
+  left: 50%;
+  top: 14px;
+  translate: -50% 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 5px 5px 14px;
+  border-radius: 13px; /* 8px button + 5px inset */
+  font-size: 13px;
+}
+
+.focus-bar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  transition-property: background-color, scale;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.focus-bar-btn:hover {
+  background: oklch(1 0 0 / 0.08);
+}
+
+.focus-bar-btn:active {
+  scale: 0.96;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 72px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  translate: -50% 8px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 9px 16px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  opacity: 0;
+  pointer-events: none;
+  transition-property: opacity, translate;
+  transition-duration: 220ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.toast.is-on {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+.toast.is-on.has-action {
+  padding-right: 6px;
+  pointer-events: auto;
+}
+
+.toast-btn {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 7px; /* 12px toast, 5px inset */
+  background: oklch(1 0 0 / 0.09);
+  font-size: 13px;
+  font-weight: 600;
+  transition-property: background-color, scale;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.toast-btn:hover {
+  background: oklch(1 0 0 / 0.15);
+}
+
+.toast-btn:active {
+  scale: 0.96;
+}
+
+/* Snippets: a box to paste into, then one slim row per thing kept; a click on a row copies it */
+.card-body.snip-body {
+  padding: 10px 10px 10px;
+}
+
+/* a card as tall as its content, up to a limit; then it scrolls */
+.card.is-auto .card-body {
+  flex: none;
+  max-height: min(560px, 70vh);
+}
+
+.snip-new {
+  border-radius: 10px;
+  background: oklch(0 0 0 / 0.22);
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.07);
+  transition: box-shadow 150ms ease-out;
+}
+
+.snip-new:focus-within {
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.16);
+}
+
+.snip-field {
+  display: block;
+  width: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  padding: 8px 12px;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-y: auto;
+}
+
+.snip-field::placeholder {
+  color: oklch(1 0 0 / 0.38);
+}
+
+.snip-field.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.snip-field.is-secret {
+  -webkit-text-security: disc;
+}
+
+/* inside the box (radius 10, padding 4): its controls take radius 6 */
+.snip-opts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 4px;
+}
+
+.snip-name {
+  min-width: 0;
+  flex: 1;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  outline: none;
+  background: oklch(1 0 0 / 0.06);
+  color: var(--foreground);
+  font-size: 12.5px;
+  transition: background-color 150ms ease-out;
+}
+
+.snip-name:focus {
+  background: oklch(1 0 0 / 0.1);
+}
+
+.snip-name::placeholder {
+  color: oklch(1 0 0 / 0.38);
+}
+
+.snip-row .snip-name {
+  display: block;
+  width: 100%;
+  height: 22px;
+  margin: -2px 0 0 -8px;
+  font-size: 13.5px;
+}
+
+.snip-keep {
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  white-space: nowrap;
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+.snip-keep:hover,
+.snip-keep[data-state='open'] {
+  background: oklch(1 0 0 / 0.08);
+  color: var(--foreground);
+}
+
+.snip-save {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: scale 150ms ease-out;
+}
+
+.snip-save:active {
+  scale: 0.96;
+}
+
+.snip-list {
+  display: grid;
+  /* minmax(0): a long value is cut with "…", it never widens the card */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
+  margin-top: 8px;
+}
+
+.snip-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 5px 8px 5px 10px;
+  border-radius: 8px;
+  cursor: copy;
+  outline: none;
+  transition: background-color 150ms ease-out;
+}
+
+.snip-row:hover,
+.snip-row:focus-visible,
+.snip-row:has([data-state='open']) {
+  background: oklch(1 0 0 / 0.05);
+}
+
+.snip-title,
+.snip-value {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snip-title {
+  font-size: 13.5px;
+  line-height: 18px;
+}
+
+.snip-value {
+  margin-top: 1px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+
+.snip-value.is-open {
+  white-space: normal;
+  word-break: break-all;
+  color: var(--foreground);
+}
+
+.snip-dots {
+  letter-spacing: 0.06em;
+}
+
+.snip-shown {
+  user-select: all;
+  cursor: text;
+}
+
+.snip-left {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  transition: opacity 150ms ease-out;
+}
+
+.snip-row:hover .snip-left,
+.snip-row:focus-within .snip-left {
+  opacity: 0;
+}
+
+/* after copying, the row's icon turns into a check for a moment */
+.snip-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.snip-icon > svg {
+  grid-area: 1 / 1;
+  width: 15px;
+  height: 15px;
+  transition-property: opacity, scale, filter;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+.snip-icon-b {
+  opacity: 0;
+  scale: 0.25;
+  filter: blur(4px);
+  color: var(--foreground);
+}
+
+.snip-row.is-copied .snip-icon-a {
+  opacity: 0;
+  scale: 0.25;
+  filter: blur(4px);
+}
+
+.snip-row.is-copied .snip-icon-b {
+  opacity: 1;
+  scale: 1;
+  filter: blur(0);
+}
+
+/* its buttons float over the row's right end, fading the text under them */
+.snip-actions {
+  position: absolute;
+  inset-block: 0;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  padding-left: 22px;
+  background: linear-gradient(to right, transparent, color-mix(in oklab, var(--card), white 5%) 18px);
+  opacity: 0;
+  cursor: auto;
+  transition: opacity 150ms ease-out;
+}
+
+.snip-row:hover .snip-actions,
+.snip-row:focus-within .snip-actions,
+.snip-actions:has([data-state='open']) {
+  opacity: 1;
+}
+
+.snip-more {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  outline: none;
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease-out;
+}
+
+.snip-more:hover,
+.snip-more[data-state='open'] {
+  background: oklch(1 0 0 / 0.08);
+  color: var(--foreground);
+}
+
+.snip-full {
+  margin: 2px 6px 8px 36px;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: 8px;
+}
+
+.snip-full pre {
+  margin: 0 !important;
+}
+
+.snip-full pre,
+.snip-full code {
+  white-space: pre-wrap !important;
+  word-break: break-word;
+}
+
+/* Quick access section titles */
+.quick-head {
+  padding: 12px 8px 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* a group within Pinned: a quieter title than the section's */
+.quick-head.quick-group {
+  padding-top: 8px;
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 12px;
+  color: oklch(1 0 0 / 0.5);
+}
+
+.quick .out-detail {
+  max-width: none;
+}
+
+/* ---- outputs rows (Claude's "Edited 4 files" card, every row live) -------------------------------------- */
+
+.out-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 4px 0 10px;
+  border-radius: 8px;
+  transition: background-color 150ms ease-out;
+}
+
+.out-row:hover {
+  background: oklch(1 0 0 / 0.05);
+}
+
+.out-detail {
+  max-width: 40%;
+}
+
+.out-row:hover .out-detail,
+.out-row:focus-within .out-detail {
+  visibility: hidden;
+}
+
+/* the row's buttons float over its right end, fading the text under them */
+.out-actions {
+  padding-left: 22px;
+  background: linear-gradient(to right, transparent, var(--card) 18px);
+}
+
+.out-group .out-actions {
+  background: linear-gradient(to right, transparent, oklch(0.215 0 0) 18px);
+}
+
+.out-group {
+  min-width: 0;
+  padding: 8px 4px 6px;
+  border-radius: 14px;
+  background: oklch(1 0 0 / 0.03);
+  box-shadow: var(--ring-1);
+}
+
+/* ---- outputs: turns, inline runs ---------------------------------------------------------------------- */
+
+.turn-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 10px 4px;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+}
+
+.turn-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed oklch(1 0 0 / 0.14);
+}
+
+.turn-divider.first {
+  margin-top: 2px;
+}
+
+.turn-new {
+  order: 2;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: oklch(0.93 0 0);
+  color: oklch(0.18 0 0);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.inline-run {
+  display: grid;
+  gap: 4px;
+  margin: 0 6px 8px 34px;
+}
+
+.cmd-out.inline {
+  flex: none;
+  min-height: 0;
+  max-height: 220px;
+}
+
+/* ---- diffs, GitHub-style --------------------------------------------------------------------------------- */
+
+.gh-diff {
+  border-radius: 8px;
+  box-shadow: var(--ring-1);
+  overflow: hidden;
+  font: 12.5px/1.6 var(--font-mono);
+}
+
+.gh-diff-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  background: oklch(1 0 0 / 0.04);
+  border-bottom: 1px solid var(--line);
+}
+
+.gh-bar {
+  display: inline-flex;
+  gap: 1px;
+  margin-left: 4px;
+}
+
+.gh-bar i {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  background: oklch(0.68 0.17 22);
+}
+
+.gh-bar i.g {
+  background: oklch(0.72 0.15 150);
+}
+
+.gh-row {
+  display: grid;
+  grid-template-columns: 44px 44px 1fr;
+}
+
+.gh-n {
+  padding: 0 8px;
+  text-align: right;
+  color: oklch(0.45 0 0);
+  user-select: none;
+}
+
+.gh-t {
+  padding: 0 12px 0 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.gh-sign {
+  display: inline-block;
+  width: 14px;
+  user-select: none;
+  color: oklch(0.55 0 0);
+}
+
+.gh-row.add {
+  background: oklch(0.72 0.15 150 / 0.13);
+}
+
+.gh-row.add .gh-n {
+  background: oklch(0.72 0.15 150 / 0.2);
+  color: oklch(0.8 0.08 150);
+}
+
+.gh-row.add .gh-sign {
+  color: oklch(0.82 0.12 150);
+}
+
+.gh-row.del {
+  background: oklch(0.68 0.17 22 / 0.13);
+}
+
+.gh-row.del .gh-n {
+  background: oklch(0.68 0.17 22 / 0.2);
+  color: oklch(0.8 0.07 22);
+}
+
+.gh-row.del .gh-sign {
+  color: oklch(0.82 0.1 22);
+}
+
+.gh-row.hunk {
+  background: oklch(0.7 0.06 250 / 0.12);
+  color: oklch(0.75 0.05 250);
+}
+
+.gh-row.file {
+  color: var(--color-muted-foreground);
+}
+
+/* ---- command card ------------------------------------------------------------------------------------------ */
+
+.cmd-text {
+  margin: 0;
+  max-height: 34%;
+  min-height: 2.6em;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--code-bg);
+  font: 12.5px/1.55 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  flex-shrink: 0;
+}
+
+.cmd-out {
+  flex: 1;
+  min-height: 90px;
+  margin: 0;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: oklch(0.12 0 0);
+  box-shadow: var(--ring-1);
+  font: 12px/1.55 var(--font-mono);
+  color: oklch(0.86 0 0);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---- the reader (full screen) ----------------------------------------------------------------------------- */
+
+.reader {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow-y: auto;
+  background: oklch(0.13 0 0 / 0.72);
+  backdrop-filter: blur(24px) saturate(140%);
+  animation: reader-in 180ms var(--ease-out);
+}
+
+@keyframes reader-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.reader-page {
+  animation: reader-page-in 240ms var(--ease-out);
+}
+
+@keyframes reader-page-in {
+  from {
+    translate: 0 8px;
+  }
+}
+
+.reader-page {
+  width: min(820px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 14px 0 120px;
+}
+
+.reader-page.wide {
+  width: min(1320px, calc(100% - 32px));
+}
+
+.reader-bar {
+  position: sticky;
+  top: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 7px 7px 16px;
+  border-radius: 15px;
+  margin-bottom: 34px;
+}
+
+.reader-body.tall .frame {
+  height: calc(100vh - 140px);
+}
+
+.reader-title {
+  font-size: 38px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin-bottom: 10px;
+}
+
+/* ---- notes -------------------------------------------------------------------------------------------------- */
+
+.note-body.mode-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+
+.mode-split .note-preview {
+  border-left: 1px solid var(--line);
+  padding-left: 32px;
+}
+
+/* in a card: sized to the card, not the screen, with smaller type than full screen */
+.card .editor .cm-editor .cm-content {
+  min-height: 160px;
+  padding-bottom: 40px;
+}
+
+.card .editor .cm-editor {
+  font-size: 15px;
+}
+
+/* ---- sticky notes: paper with its corner folded over ---------------------------------------------------- */
+
+.paper-yellow {
+  --paper: oklch(0.925 0.1 100);
+  --paper-band: oklch(0.9 0.11 98);
+  --paper-deep: oklch(0.83 0.115 92);
+  --ink: oklch(0.29 0.045 85);
+}
+
+.paper-orange {
+  --paper: oklch(0.895 0.07 60);
+  --paper-band: oklch(0.87 0.08 58);
+  --paper-deep: oklch(0.8 0.085 55);
+  --ink: oklch(0.3 0.045 45);
+}
+
+.paper-pink {
+  --paper: oklch(0.885 0.06 10);
+  --paper-band: oklch(0.86 0.068 8);
+  --paper-deep: oklch(0.79 0.075 5);
+  --ink: oklch(0.3 0.045 5);
+}
+
+.paper-green {
+  --paper: oklch(0.905 0.07 160);
+  --paper-band: oklch(0.88 0.078 158);
+  --paper-deep: oklch(0.81 0.085 156);
+  --ink: oklch(0.29 0.045 160);
+}
+
+.paper-ink {
+  --paper: oklch(0.265 0 0);
+  --paper-band: oklch(0.245 0 0);
+  --paper-deep: oklch(0.345 0 0);
+  --ink: oklch(0.92 0 0);
+}
+
+/* the bottom-right corner is cut away and its flap (the back of the paper) lies folded over the page; the
+   shadow follows the paper's shape, cut corner and all */
+.card.is-sticky {
+  position: relative;
+  border-radius: 7px;
+  color: var(--ink);
+  background: linear-gradient(-45deg, transparent 16px, var(--paper) 16.5px);
+  box-shadow: none;
+  filter: drop-shadow(0 1px 1.5px oklch(0 0 0 / 0.32)) drop-shadow(0 10px 16px oklch(0 0 0 / 0.3));
+  --foreground: var(--ink);
+  --muted-foreground: color-mix(in oklab, var(--ink) 58%, transparent);
+  --ed-text: var(--ink);
+  --ed-muted: color-mix(in oklab, var(--ink) 70%, transparent);
+  --ed-faint: color-mix(in oklab, var(--ink) 42%, transparent);
+  --ed-link: var(--ink);
+  --ed-code: color-mix(in oklab, var(--ink) 80%, oklch(0.55 0.16 30));
+  --ed-selection: color-mix(in oklab, var(--ink) 17%, transparent);
+  --ed-match: color-mix(in oklab, var(--ink) 9%, transparent);
+  --ed-size: 15px;
+  --ed-leading: 1.55;
+  --ed-h1: 1.3em;
+  --ed-h2: 1.15em;
+  --ed-h3: 1.05em;
+}
+
+.card.is-sticky::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22.6px; /* the cut's legs: 16px × √2 */
+  height: 22.6px;
+  background: linear-gradient(to top left, transparent 50%, var(--paper-deep) 50%);
+  border-top-left-radius: 3px;
+  filter: drop-shadow(-1px -1px 1.2px oklch(0 0 0 / 0.14));
+  pointer-events: none;
+}
+
+.card.is-sticky:hover,
+.card.is-sticky.is-selected {
+  box-shadow: none;
+}
+
+.card.is-sticky.is-selected {
+  outline: 1.5px solid oklch(1 0 0 / 0.55);
+  outline-offset: 3px;
+}
+
+.card.is-sticky.is-flash {
+  animation: none;
+}
+
+.card.is-sticky.is-new.is-flash {
+  animation: card-in 220ms var(--ease-out) both;
+}
+
+/* a slim band to hold it by; its buttons show on hover */
+.sticky-strip {
+  height: 30px;
+  gap: 6px;
+  padding: 0 3px 0 12px;
+  border-bottom: 0;
+  background: var(--paper-band);
+}
+
+.sticky-strip-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+/* a note's title, shown and typed in its header or strip */
+.note-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 5px;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: text;
+  outline: none;
+}
+
+.note-title:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* no title: a faint "Untitled" to click (on a sticky note, only once it's hovered or selected) */
+.note-title.is-empty {
+  font-weight: 400;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.note-title.is-empty.is-always,
+.card:hover .note-title.is-empty,
+.card.is-selected .note-title.is-empty,
+.note-title.is-empty:focus-visible {
+  opacity: 0.6;
+}
+
+.sticky-strip-text .note-title:not(.is-empty) {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.note-title-input {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: oklch(0 0 0 / 0.25);
+  box-shadow: 0 0 0 1px oklch(1 0 0 / 0.12) inset;
+  font-size: 13px;
+  font-weight: 500;
+  color: inherit;
+  outline: none;
+}
+
+.note-title-input::placeholder {
+  color: var(--muted-foreground);
+  font-weight: 400;
+}
+
+.card.is-sticky .card-actions {
+  opacity: 0;
+}
+
+.card.is-sticky:hover .card-actions,
+.card.is-sticky.is-selected .card-actions,
+.card.is-sticky .card-actions:focus-within,
+.card.is-sticky .card-actions:has([data-state='open']),
+.card.is-sticky.is-locked .card-actions {
+  opacity: 1;
+}
+
+.card.is-sticky .icon-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.card.is-sticky .icon-btn:hover,
+.card.is-sticky .icon-btn[data-state='open'] {
+  background: color-mix(in oklab, var(--ink) 9%, transparent);
+  color: var(--ink);
+}
+
+/* the writing fills the paper: a click anywhere on it puts the cursor in */
+.card-body.sticky-body {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 16px 16px;
+  overflow: hidden;
+}
+
+.sticky-body .note-pane,
+.sticky-body .note-body,
+.sticky-body .note-edit {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.sticky-body .editor,
+.sticky-body .cm-editor {
+  height: 100%;
+}
+
+.sticky-body .cm-scroller {
+  overflow: auto;
+}
+
+.card .sticky-body .editor .cm-editor .cm-content {
+  min-height: 100%;
+  padding: 4px 0 26px;
+}
+
+.card.is-sticky .note-conflict {
+  background: color-mix(in oklab, var(--ink) 9%, transparent);
+  color: var(--ink);
+}
+
+/* the colours in a sticky note's menu */
+.sticky-swatches {
+  display: flex;
+  gap: 7px;
+  padding: 6px 8px;
+}
+
+.sticky-swatch,
+.sticky-swatch[data-highlighted] {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 999px;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.18);
+  cursor: pointer;
+  transition: box-shadow 150ms ease-out;
+}
+
+.sticky-swatch[data-highlighted] {
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.18), 0 0 0 2px oklch(1 0 0 / 0.3);
+}
+
+.sticky-swatch.is-on {
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.18), 0 0 0 2px oklch(0.22 0 0), 0 0 0 3.5px oklch(1 0 0 / 0.75);
+}
+
+/* ---- Later: two lines a row; on hover the second line is its buttons ------------------------------------ */
+
+.card-body.later-body {
+  overflow-x: hidden;
+}
+
+.later-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
+  margin: 0 -6px;
+}
+
+.later-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 4px 0 10px;
+  border-radius: 9px;
+  transition: background-color 150ms ease-out;
+}
+
+.later-row:hover,
+.later-row:has(:focus-visible),
+.later-row[data-state='open'],
+.later-row.is-menu,
+.later-row.is-editing {
+  background: oklch(1 0 0 / 0.05);
+}
+
+.later-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--muted-foreground);
+}
+
+.later-row.is-editing .later-icon {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
+.later-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 4px;
+  outline: none;
+  font-size: 13.5px;
+  line-height: 20px;
+  text-align: left;
+}
+
+.later-title:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.later-title.is-done {
+  color: var(--muted-foreground);
+}
+
+/* where it's from and when, at the right end; hidden while the buttons are showing */
+.later-detail {
+  flex: none;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+  text-align: right;
+}
+
+.later-detail.is-old {
+  color: oklch(0.85 0.1 80 / 0.85);
+}
+
+/* the row's buttons float over its right end, fading the name under them (as on Outputs) */
+.later-actions {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-left: 22px;
+  background: linear-gradient(to right, transparent, var(--card) 18px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease-out;
+}
+
+.later-row:hover .later-actions,
+.later-row:has(:focus-visible) .later-actions,
+.later-row[data-state='open'] .later-actions,
+.later-row.is-menu .later-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.later-row:hover .later-detail,
+.later-row:has(:focus-visible) .later-detail,
+.later-row[data-state='open'] .later-detail,
+.later-row.is-menu .later-detail {
+  visibility: hidden;
+}
+
+.later-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  outline: none;
+  transition-property: background-color, color, scale;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.later-btn:hover {
+  background: oklch(1 0 0 / 0.08);
+  color: var(--foreground);
+}
+
+.later-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.later-btn:active {
+  scale: 0.96;
+}
+
+.later-edit {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 200px;
+  field-sizing: content;
+  resize: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  outline: none;
+  background: oklch(0 0 0 / 0.22);
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.14);
+  color: var(--foreground);
+  font-size: 13.5px;
+  line-height: 20px;
+}
+
+/* ---- viewers ------------------------------------------------------------------------------------------------ */
+
+.frame {
+  display: block;
+  width: 100%;
+  min-height: 300px;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: var(--ring-1);
+}
+
+.frame.white {
+  background: #fff;
+}
+
+.image-view {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  cursor: zoom-in;
+}
+
+.image-view.fit {
+  cursor: zoom-out;
+}
+
+.image-view.fit img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.image-view img,
+.md img {
+  border-radius: 6px;
+  outline: 1px solid oklch(1 0 0 / 0.1);
+  outline-offset: -1px;
+}
+
+.media {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.code-view {
+  display: flex;
+  font-size: 12.5px;
+  line-height: 1.65;
+  border-radius: 8px;
+  background: var(--code-bg);
+}
+
+.code-view pre {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.code-view .gutter {
+  flex-shrink: 0;
+  padding: 14px 10px 14px 14px;
+  text-align: right;
+  color: oklch(0.45 0 0);
+  user-select: none;
+}
+
+.code-view .code {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+
+.diff-view {
+  margin: 0;
+  padding: 10px 0;
+  font: 12.5px/1.6 var(--font-mono);
+  border-radius: 8px;
+  background: var(--code-bg);
+}
+
+.diff-view .dl {
+  padding: 0 14px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-view .add {
+  background: var(--add-bg);
+  color: var(--add-ink);
+}
+
+.diff-view .del {
+  background: var(--del-bg);
+  color: var(--del-ink);
+}
+
+.diff-view .hunk,
+.diff-view .file {
+  color: var(--color-muted-foreground);
+}
+
+.csv-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.csv-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--color-muted-foreground);
+}
+
+.csv-bar input {
+  height: 28px;
+  width: 200px;
+  padding: 0 10px;
+  border-radius: 7px;
+  background: oklch(1 0 0 / 0.05);
+  outline: none;
+}
+
+.table-scroll {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  max-height: calc(100vh - 220px);
+  border-radius: 8px;
+  box-shadow: var(--ring-1);
+}
+
+table.data {
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+table.data th,
+table.data td {
+  padding: 6px 11px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  white-space: nowrap;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+table.data th {
+  position: sticky;
+  top: 0;
+  background: oklch(0.23 0 0);
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+}
+
+table.data td.num {
+  text-align: right;
+}
+
+table.data .rownum {
+  color: oklch(0.45 0 0);
+  text-align: right;
+}
+
+table.data tbody tr:hover td {
+  background: oklch(1 0 0 / 0.035);
+}
+
+/* compare (older items) */
+.compare {
+  font-size: 12.5px;
+}
+
+.compare-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--color-muted-foreground);
+}
+
+.tag-before,
+.tag-after {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  margin-right: 6px;
+  background: var(--del-bg);
+  color: var(--del-ink);
+}
+
+.tag-after {
+  background: var(--add-bg);
+  color: var(--add-ink);
+}
+
+.compare-body {
+  border-radius: 8px;
+  box-shadow: var(--ring-1);
+  overflow: hidden;
+  font-family: var(--font-mono);
+  line-height: 1.6;
+}
+
+.crow {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px 1fr;
+}
+
+.cn {
+  padding: 0 8px;
+  text-align: right;
+  color: oklch(0.45 0 0);
+  background: var(--code-bg);
+}
+
+.cl {
+  padding: 0 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cl.minus {
+  background: var(--del-bg);
+  color: var(--del-ink);
+}
+
+.cl.plus {
+  background: var(--add-bg);
+  color: var(--add-ink);
+}
+
+.fold {
+  display: block;
+  width: 100%;
+  padding: 3px;
+  background: var(--code-bg);
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+}
+
+/* ---- reading: markdown, articles, Word ---------------------------------------------------------------------- */
+
+.md {
+  font-size: 16px;
+  line-height: 1.72;
+  overflow-wrap: break-word;
+  color: oklch(0.9 0 0);
+}
+
+.md.md-compact {
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+
+.md.article {
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 1.75;
+}
+
+.md.article.md-compact {
+  font-size: 16px;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-family: var(--font-sans);
+  color: var(--color-foreground);
+  line-height: 1.3;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 1.7em 0 0.55em;
+}
+
+.md h1 {
+  font-size: 1.8em;
+}
+
+.md h2 {
+  font-size: 1.4em;
+}
+
+.md h3 {
+  font-size: 1.15em;
+}
+
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md table,
+.md pre,
+.md figure {
+  margin: 0 0 1em;
+}
+
+.md ul {
+  list-style: disc;
+  padding-left: 1.4em;
+}
+
+.md ol {
+  list-style: decimal;
+  padding-left: 1.4em;
+}
+
+.md li {
+  margin: 0.25em 0;
+}
+
+.md li::marker {
+  color: oklch(0.55 0 0);
+}
+
+.md li:has(> input[type='checkbox']) {
+  list-style: none;
+  margin-left: -1.3em;
+}
+
+.md input[type='checkbox'] {
+  margin-right: 0.5em;
+  accent-color: oklch(0.85 0 0);
+}
+
+.md blockquote {
+  padding-left: 1em;
+  border-left: 3px solid oklch(1 0 0 / 0.25);
+  color: oklch(0.8 0 0);
+}
+
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  padding: 0.14em 0.38em;
+  border-radius: 5px;
+  background: oklch(1 0 0 / 0.07);
+  color: var(--code-ink);
+}
+
+.md pre {
+  position: relative;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: var(--code-bg);
+  overflow-x: auto;
+  font: 13px/1.6 var(--font-mono);
+}
+
+.md pre code {
+  padding: 0;
+  background: none;
+  color: oklch(0.9 0 0);
+  font-size: inherit;
+}
+
+.copy-code {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: oklch(0.26 0 0);
+  box-shadow: var(--ring-1);
+  color: var(--color-muted-foreground);
+  font: 11.5px var(--font-sans);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.md pre:hover .copy-code {
+  opacity: 1;
+}
+
+.md table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font: 13.5px/1.5 var(--font-sans);
+}
+
+.md th,
+.md td {
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.md th {
+  background: oklch(1 0 0 / 0.04);
+  text-align: left;
+  font-weight: 600;
+}
+
+.md img,
+.md video {
+  max-width: 100%;
+  height: auto;
+}
+
+.md figure figcaption {
+  color: var(--color-muted-foreground);
+  font: 12.5px var(--font-sans);
+  text-align: center;
+  margin-top: 6px;
+}
+
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 2em 0;
+}
+
+.md a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: oklch(1 0 0 / 0.3);
+  text-underline-offset: 3px;
+}
+
+.md a:hover {
+  text-decoration-color: oklch(1 0 0 / 0.8);
+}
+
+.mermaid-diagram {
+  margin: 0 0 1em;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* ---- syntax colours -------------------------------------------------------------------------------------- */
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag {
+  color: var(--hl-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute {
+  color: var(--hl-string);
+}
+
+.hljs-number,
+.hljs-attr {
+  color: var(--hl-number);
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: var(--hl-comment);
+  font-style: italic;
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-meta {
+  color: var(--hl-title);
+}
+
+.hljs-built_in,
+.hljs-type {
+  color: var(--hl-builtin);
+}
+
+.hljs-literal,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link {
+  color: var(--hl-literal);
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-name,
+.hljs-tag,
+.hljs-deletion {
+  color: var(--hl-var);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.is-flash,
+  .card.is-new,
+  .reader-page,
+  .reader {
+    animation: none;
+  }
+  .board.is-arranging .react-flow__node {
+    transition: none;
+  }
+}

@@ -1,0 +1,382 @@
+// Talking to Cockpit's local server. Every change carries X-Cockpit: 1, which the server requires.
+
+export class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.status = status
+  }
+}
+
+async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method,
+    headers: method === 'GET' ? {} : { 'X-Cockpit': '1', 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const text = await res.text()
+  let data: any = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    throw new ApiError(`The server answered ${res.status} with something that isn't JSON`, res.status)
+  }
+  if (!res.ok) throw new ApiError(data?.error || `HTTP ${res.status}`, res.status)
+  return data as T
+}
+
+export const get = <T,>(url: string) => request<T>('GET', url)
+export const post = <T,>(url: string, body: unknown = {}) => request<T>('POST', url, body)
+export const put = <T,>(url: string, body: unknown = {}) => request<T>('PUT', url, body)
+
+export type Format = 'markdown' | 'html' | 'code' | 'text' | 'diff' | 'json' | 'csv' | 'mermaid' | 'image' | 'pdf' | 'video' | 'audio' | 'binary' | 'article' | 'link' | 'compare' | 'docx' | 'sheet' | 'slides'
+
+/** Something kept to copy (see server/lib/snippets.js). A secret's text never comes with the list. */
+export interface Snippet {
+  id: string
+  title: string
+  secret: boolean
+  language: string
+  length: number
+  lines: number
+  preview: string
+  createdAt: number
+  expiresAt: number | null
+  from: string
+}
+export type SnippetKeep = 'day' | 'week' | 'month' | 'forever'
+
+/** Something pinned: opened often, kept one click away (see server/lib/pinned.js). */
+export interface Pin {
+  id: string
+  kind: 'file' | 'folder' | 'link' | 'note'
+  target: string
+  title: string
+  group: string
+  opens: number
+  lastOpened?: number
+  addedAt: number
+  missing?: boolean
+  /** Cockpit can show it itself (a page, a note, a file it has a viewer for). */
+  viewable?: boolean
+}
+/** Opened 3+ times in two weeks and not pinned: Quick access shows it by itself (see server/lib/usage.js). */
+export interface Often {
+  key: string
+  kind: 'file' | 'folder' | 'link' | 'note'
+  target: string
+  title: string
+  opens: number
+  lastOpened: number
+  inCockpit: boolean
+  viewable?: boolean
+}
+export interface PinnedList {
+  items: Pin[]
+  groups: string[]
+  often: Often[]
+}
+export type PinInput = { path?: string; url?: string; note?: string; title?: string; group?: string }
+
+export interface ShownEntry {
+  id: string
+  kind: 'file' | 'content' | 'link' | 'compare'
+  path: string
+  path2?: string
+  url?: string
+  siteName?: string
+  byline?: string
+  excerpt?: string
+  image?: string
+  words?: number
+  readError?: string
+  tags?: string[]
+  format: Format
+  language?: string
+  title: string
+  note?: string
+  from?: string
+  createdAt: string
+  /** When it was last shown (a file shown again keeps its item). */
+  shownAt?: string
+  seen?: boolean
+  pinned?: boolean
+  hidden?: boolean
+  /** On the Later list: to check, being read, or done. */
+  later?: LaterState
+  laterAt?: string
+  doneAt?: string
+  /** A saved link whose page is still being read in the background. */
+  readingAt?: string
+  /** Named after its address until the page gives it a name (or it is named by hand). */
+  autoTitle?: boolean
+}
+
+export type LaterState = 'todo' | 'reading' | 'done'
+
+export interface FileState {
+  exists: boolean
+  size: number
+  mtime: number
+}
+
+export interface ShownRead extends FileState {
+  entry: ShownEntry
+  text?: string
+  text2?: string
+  /** Word, as HTML. */
+  html?: string
+  /** Spreadsheets: each sheet's first rows. */
+  sheets?: { name: string; rows: string[][]; total: number; cols: number }[]
+  /** PowerPoint: each slide's text, line by line. */
+  slides?: { n: number; lines: string[] }[]
+  previewError?: string
+  truncated?: boolean
+}
+
+export interface NoteInfo {
+  path: string
+  name: string
+  folder: string
+  title: string
+  /** A title given by hand (empty when none). */
+  given?: string
+  mtime: number
+  size: number
+  excerpt?: string
+}
+
+export interface NotesList {
+  root: string
+  notes: NoteInfo[]
+  today: string
+}
+
+export interface NoteRead {
+  path: string
+  text: string
+  mtime: number
+}
+
+export interface NoteSaved {
+  path: string
+  mtime: number
+  conflict?: boolean
+  text?: string
+}
+
+export interface Project {
+  id: string
+  title: string
+  inShort: string
+  updated: string
+  mtime: number
+  status: string
+}
+
+export interface ProjectRead {
+  id: string
+  path: string
+  text: string
+  mtime: number
+}
+
+export type SessionState = 'your-turn' | 'question' | 'working' | 'quiet'
+
+export interface Session {
+  key: string
+  id: string
+  title: string
+  cwd: string
+  project: string
+  entrypoint: string
+  /** Started by a scheduled task rather than by me. */
+  automatic: boolean
+  lastActivity: number
+  size: number
+  state: SessionState
+  lastPrompt: string
+  lastReply: string
+  asking: string
+}
+
+export interface Message {
+  role: 'user' | 'assistant' | 'tool-result'
+  text?: string
+  tools?: { name: string; summary: string }[]
+  at?: string
+  count?: number
+  isError?: boolean
+}
+
+export interface SessionRead extends Session {
+  messages: Message[]
+}
+
+export interface TrackerItem {
+  id: string
+  type: 'todo' | 'waiting' | 'check' | 'decided'
+  title: string
+  date?: string
+  you: boolean
+  blocker: string
+  who: string
+  note: string
+  tags: string[]
+  about: string
+  where: string
+}
+
+export interface Tracker {
+  name: string
+  file: string
+  ok: boolean
+  error?: string
+  open: TrackerItem[]
+  counts: { yours: number; todo: number; waiting: number; check: number; suggested: number }
+}
+
+export interface Task {
+  id: string
+  content: string
+  description: string
+  projectId: string
+  projectName: string
+  priority: number
+  labels: string[]
+  due: { day: string; when: string; hasTime: boolean; string: string; recurring: boolean } | null
+  overdue: boolean
+  url: string
+}
+
+export interface TodoState {
+  configured: boolean
+  tasks: Task[]
+  fetchedAt?: number
+  error?: string
+}
+
+export interface Config {
+  notesDir: string
+  hubDir: string
+  claudeProjectsDir: string
+  trackerConfig: string
+  trackers: string[]
+  sessionsDays: number
+  hasTodoistToken: boolean
+  dataDir: string
+  port: number
+  version: string
+  mcpScript: string
+  /** A new sticky note's paper. */
+  stickyColor: StickyColor
+  /** Single-letter shortcuts on the board. */
+  singleKeys: boolean
+  /** Space Tidy leaves between cards. */
+  tidyGap: number
+  /** Where CHANGELOG.md is (What's new). */
+  changelog: string
+  /** The program "Open in editor" uses. */
+  editor: Editor
+}
+
+/** Where a note or text file opens outside Cockpit (Settings). */
+export type Editor = 'notepad' | 'vscode' | 'default'
+export const EDITORS: { value: Editor; label: string }[] = [
+  { value: 'notepad', label: 'Notepad' },
+  { value: 'vscode', label: 'VS Code' },
+  { value: 'default', label: 'Default app' },
+]
+/** The menu line for opening in the chosen editor. */
+export const editorLabel = (e: Editor) => (e === 'notepad' ? 'Open in Notepad' : e === 'vscode' ? 'Open in VS Code' : 'Open in its own program')
+
+export const openOutside = (body: { kind: 'shown' | 'note' | 'project' | 'notes-folder' | 'output'; id?: string; path?: string; index?: number | string; side?: 'left' | 'right'; how?: 'default' | 'reveal' | 'vscode' | 'notepad' | 'editor' }) =>
+  post<{ ok: true }>('/api/open', body)
+
+export type OutputKind = 'file' | 'link' | 'draft' | 'command' | 'prompt'
+
+export interface OutputItem {
+  kind: OutputKind
+  label: string
+  target: string
+  text: string
+  detail: string
+  /** Stable row id (rows move down as newer turns arrive). */
+  id: string
+  /** When the turn that made it ended. */
+  at: string
+}
+
+export interface Changes {
+  repo: boolean
+  source: 'working' | 'untracked' | 'commit' | 'none'
+  label: string
+  diff: string
+  added: number
+  removed: number
+}
+
+/** What one Claude turn made, as its deliverables tray listed it. */
+export interface OutputGroup {
+  id: string
+  createdAt: string
+  updatedAt: string
+  /** When the group was last looked at: turns after it are new. */
+  seenAt?: string | null
+  from: string
+  project: string
+  /** The chat's folder: where its commands run unless another is given. */
+  cwd?: string
+  seen: boolean
+  items: OutputItem[]
+}
+
+export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets'
+
+export interface BoardCard {
+  id: string
+  type: CardType
+  /** The item id, note path, output group id or tracker name the card shows. */
+  ref: string
+  x: number
+  y: number
+  w: number
+  /** The open height, also while folded. */
+  h: number
+  folded?: boolean
+  /** Locked in place: not moved by hand or by Tidy, not resized, not deleted by the Delete key. */
+  locked?: boolean
+  /** A sticky note's paper. */
+  color?: StickyColor
+}
+
+export type StickyColor = 'yellow' | 'green' | 'pink' | 'orange' | 'ink'
+
+export interface Board {
+  cards: BoardCard[]
+  viewport: { x: number; y: number; zoom: number } | null
+}
+
+export type Shell = 'pwsh' | 'bash'
+
+export interface RunInfo {
+  command: string
+  cwd: string
+  shell: Shell
+  shells: Record<Shell, boolean>
+}
+
+export interface RunView {
+  id: string
+  shell: Shell
+  cwd: string
+  command: string
+  status: 'running' | 'done' | 'failed' | 'stopped'
+  code: number | null
+  startedAt: number
+  endedAt: number
+  truncated: boolean
+  /** Output since the offset asked for. */
+  out: string
+  offset: number
+}

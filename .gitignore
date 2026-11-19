@@ -1,0 +1,8 @@
+node_modules/
+web/dist/
+*.log
+
+*.tsbuildinfo
+
+scripts/hotkey/bin/
+release/

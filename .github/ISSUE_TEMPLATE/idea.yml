@@ -1,0 +1,9 @@
+name: An idea
+description: Something Cockpit could do, or do better
+body:
+  - type: textarea
+    attributes:
+      label: What would help
+      description: What you're trying to do, and where Cockpit gets in the way
+    validations:
+      required: true

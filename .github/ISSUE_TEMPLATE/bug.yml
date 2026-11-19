@@ -1,0 +1,21 @@
+name: Something's wrong
+description: A bug, a crash, or something that behaves oddly
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw. A screenshot helps.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Version
+      description: In Settings, at the bottom (e.g. Cockpit 0.1.0)
+  - type: input
+    attributes:
+      label: Windows version
+  - type: textarea
+    attributes:
+      label: Server log
+      description: The last lines of %USERPROFILE%\.cockpit\server.log, if anything looks related
+      render: text
