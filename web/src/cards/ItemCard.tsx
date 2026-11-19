@@ -1,8 +1,8 @@
 // A file or link on the board, drawn in place. Expand for full screen; everything else is one click away.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
 import { Code2, Copy, ExternalLink, PenLine, FolderOpen, Globe, Maximize2, Pin, RefreshCw, X } from 'lucide-react'
-import { get, openOutside, post, type ShownRead } from '../api'
+import { get, openOutside, post, type ShownEntry, type ShownRead } from '../api'
 import { ago } from '../lib'
 import { SIZES, useBoard, type CardNode } from '../board'
 import { Viewer, basename, folderOf, iconFor, kindLabel } from '../components/Viewer'
@@ -42,6 +42,7 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
     }
   }, [e, board, reload])
   const textual = !!e && ['markdown', 'code', 'text', 'json', 'csv', 'diff', 'html', 'mermaid'].includes(e.format)
+  const canCopyText = !!e && !!read?.text && (e.kind === 'content' || textual)
   const actions: CardAction[] = e
     ? [
         { label: e.kind === 'link' ? 'Open in the browser' : 'Open in its own program', icon: ExternalLink, run: () => native('default') },
@@ -55,9 +56,11 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
         { label: 'Read the page again', icon: RefreshCw, run: readAgain, hidden: e.kind !== 'link' },
         { label: 'Pin to Quick access', icon: Pin, run: () => board.pin(e.kind === 'link' ? { url: e.url, title: e.title } : { path: e.path, title: e.title }), hidden: e.kind !== 'link' && e.kind !== 'file' },
         { label: e.kind === 'link' ? 'Copy link' : 'Copy path', icon: Copy, run: () => board.copy(e.kind === 'link' ? e.url || '' : e.path, e.kind === 'link' ? 'Link copied' : 'Path copied'), gap: true, hidden: e.kind === 'content' },
+        // written content (a draft Claude made, a note kept): its words are what you came for
+        { label: 'Copy the text', icon: Copy, run: () => board.copy(read?.text || '', 'Copied'), gap: e.kind === 'content', hidden: !canCopyText },
       ]
     : []
-  return { native, readAgain, actions }
+  return { native, readAgain, actions, canCopyText }
 }
 
 export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
@@ -113,8 +116,26 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
     [rf, id, board],
   )
 
-  const { native, readAgain, actions } = useItemActions(read, load)
+  const { native, readAgain, actions, canCopyText } = useItemActions(read, load)
   const e = read?.entry
+  // The viewer is drawn again only when the item changes. Every card follows the board's shared state (a toast, a
+  // note saved elsewhere, a list refreshed), and a long document or a wide sheet is slow to draw for nothing.
+  const latest = useRef({ native, readAgain, fitImage, near: (n: ShownEntry) => board.addCard('item', n.id, { near: id }) })
+  latest.current = { native, readAgain, fitImage, near: (n: ShownEntry) => board.addCard('item', n.id, { near: id }) }
+  const viewer = useMemo(
+    () =>
+      read && (
+        <Viewer
+          read={read}
+          compact
+          onOpenNative={() => latest.current.native('default')}
+          onOpenPath={n => latest.current.near(n)}
+          onReadAgain={() => latest.current.readAgain()}
+          onImageLoad={img => latest.current.fitImage(img)}
+        />
+      ),
+    [read],
+  )
   const all: CardAction[] = [
     { label: 'Open full screen', icon: Maximize2, run: () => board.expand({ type: 'item', ref: data.ref }) },
     ...actions,
@@ -135,7 +156,11 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
       quick={
         e && (
           <>
-            <IconButton icon={ExternalLink} label={e.kind === 'link' ? 'Open in the browser' : 'Open in its own program'} onClick={() => native('default')} />
+            {e.kind === 'content' && canCopyText ? (
+              <IconButton icon={Copy} label="Copy the text" onClick={() => board.copy(read?.text || '', 'Copied')} />
+            ) : (
+              <IconButton icon={ExternalLink} label={e.kind === 'link' ? 'Open in the browser' : 'Open in its own program'} onClick={() => native('default')} />
+            )}
             <IconButton icon={Maximize2} label="Open full screen" onClick={() => board.expand({ type: 'item', ref: data.ref })} />
           </>
         )
@@ -151,7 +176,7 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
           <Skeleton className="h-4 w-5/6" />
         </div>
       ) : (
-        <Viewer read={read} compact onOpenNative={() => native('default')} onOpenPath={n => board.addCard('item', n.id, { near: id })} onReadAgain={readAgain} onImageLoad={fitImage} />
+        viewer
       )}
     </CardShell>
   )

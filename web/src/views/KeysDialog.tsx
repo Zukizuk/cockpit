@@ -42,7 +42,7 @@ export function KeysDialog() {
         </DialogHeader>
         <ul className="grid gap-x-8 sm:grid-cols-2">
           {KEYS.map(k => (
-            <li key={k.what} className="flex items-center justify-between gap-4 border-b border-white/[0.06] py-2 text-[13.5px]">
+            <li key={k.what} className="flex items-center justify-between gap-4 border-b border-ink/[0.06] py-2 text-[13.5px]">
               <span>{k.what}</span>
               <span className="flex shrink-0 gap-1">
                 {k.keys.map(key => (

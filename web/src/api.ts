@@ -1,3 +1,4 @@
+import type { Theme } from './theme'
 // Talking to Cockpit's local server. Every change carries X-Cockpit: 1, which the server requires.
 
 export class ApiError extends Error {
@@ -126,8 +127,10 @@ export interface ShownRead extends FileState {
   text2?: string
   /** Word, as HTML. */
   html?: string
-  /** Spreadsheets: each sheet's first rows. */
-  sheets?: { name: string; rows: string[][]; total: number; cols: number }[]
+  /** Spreadsheets: every sheet's name and size, with the first rows of one (`sheet`); the others load on demand. */
+  sheets?: { name: string; rows?: string[][]; total: number; cols: number }[]
+  /** Which sheet's rows came with it. */
+  sheet?: number
   /** PowerPoint: each slide's text, line by line. */
   slides?: { n: number; lines: string[] }[]
   previewError?: string
@@ -282,6 +285,8 @@ export interface Config {
   repository: string
   /** The Windows build, for feedback. */
   windows: string
+  /** Light, dark, or as Windows is set. */
+  theme: Theme
 }
 
 /** Where a note or text file opens outside Cockpit (Settings). */
@@ -352,6 +357,8 @@ export interface BoardCard {
   locked?: boolean
   /** A sticky note's paper. */
   color?: StickyColor
+  /** A card that fits its content (Snippets) was given a height by hand: it keeps that height. */
+  sized?: boolean
 }
 
 export type StickyColor = 'yellow' | 'green' | 'pink' | 'orange' | 'ink'

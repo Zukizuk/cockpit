@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { isLight } from '../theme'
 import hljs from 'highlight.js/lib/common'
 import powershell from 'highlight.js/lib/languages/powershell'
 import dos from 'highlight.js/lib/languages/dos'
@@ -53,7 +54,7 @@ export function renderMarkdown(text: string, resolveAsset?: (href: string) => st
 
 let mermaidLoad: Promise<any> | null = null
 // Cockpit is dark only.
-const dark = () => true
+const dark = () => !isLight()
 
 async function drawMermaid(blocks: HTMLElement[]) {
   mermaidLoad ??= import('mermaid').then(m => m.default)

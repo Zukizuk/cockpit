@@ -1,11 +1,11 @@
 // The frame every card on the board shares: a header to drag it by (double-click to expand), a body that scrolls
 // and selects text without moving the card, resize handles, and the same actions on right-click and in "⋯".
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { NodeResizeControl, NodeResizer, ResizeControlVariant, useNodeId, useNodesData, useReactFlow } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, type LucideIcon } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { NodeResizer, useNodeId, useNodesData, useReactFlow } from '@xyflow/react'
+import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
-import { foldNode, minSize, useBoard, type CardNode } from '../board'
+import { foldNode, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -25,8 +25,8 @@ export function IconButton({ icon: Icon, label, onClick, active, className }: { 
             onClick()
           }}
           className={cn(
-            'icon-btn grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-white/[0.07] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96]',
-            active && 'bg-white/10 text-foreground',
+            'icon-btn grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-ink/[0.07] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96]',
+            active && 'bg-ink/10 text-foreground',
             className,
           )}
         >
@@ -59,7 +59,7 @@ interface Props {
   actions: CardAction[]
   onExpand?: () => void
   bodyClassName?: string
-  /** As tall as its content (up to a limit, then it scrolls): only its width can be dragged. */
+  /** As tall as its content (up to a limit, then it scrolls), until a height is dragged by hand. */
   autoHeight?: boolean
   /** A sticky note: paper in this colour, a slim strip instead of a header. */
   sticky?: StickyColor
@@ -76,6 +76,32 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const folded = !!node?.data.folded
   const locked = !!node?.data.locked
   const min = minSize((node?.type || 'item') as CardType, node?.data.ref || '')
+  // fits its content now (Snippets, until a height is dragged by hand)
+  const fits = !!autoHeight && !node?.data.sized
+  const startH = useRef(0)
+  const setSized = (sized: boolean) =>
+    rf.setNodes(ns =>
+      ns.map(n => {
+        if (n.id !== nodeId) return n
+        const { sized: _was, ...data } = n.data
+        return sized ? { ...n, height: n.height ?? n.measured?.height, data: { ...data, sized: true } } : { ...n, height: undefined, data }
+      }),
+    )
+  // a card that fits its content keeps the height it's dragged to; a drag that only changed the width leaves it
+  // fitting its content
+  const resizeStart = () => {
+    board.remember()
+    if (!fits) return
+    resizingRef.current = true
+    startH.current = (nodeId && rf.getNode(nodeId)?.measured?.height) || 0
+    setSized(true)
+  }
+  const resizeEnd = (_e: unknown, p: { height: number }) => {
+    if (!resizingRef.current) return board.persist()
+    resizingRef.current = false
+    if (Math.abs(p.height - startH.current) < 4) setSized(false)
+    board.persist()
+  }
   const toggleFold = () => {
     board.remember()
     rf.setNodes(ns => ns.map(n => (n.id === nodeId ? foldNode(n, !folded) : n)))
@@ -86,6 +112,16 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     { label: folded ? 'Unfold' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, hidden: !!sticky, keys: 'F' },
     { label: board.focusing ? 'Bring everything back' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
     { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
+    {
+      label: 'Fit to contents',
+      icon: Shrink,
+      run: () => {
+        board.remember()
+        setSized(false)
+        board.persist()
+      },
+      hidden: !autoHeight || fits || folded,
+    },
     ...actions,
   ].filter(a => !a.hidden)
   const [flash, setFlash] = useState(false)
@@ -138,7 +174,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
         <button
           type="button"
           aria-label="More"
-          className="icon-btn grid size-7 place-items-center rounded-md text-muted-foreground transition-[background-color,color] duration-150 hover:bg-white/[0.07] hover:text-foreground"
+          className="icon-btn grid size-7 place-items-center rounded-md text-muted-foreground transition-[background-color,color] duration-150 hover:bg-ink/[0.07] hover:text-foreground"
         >
           <MoreHorizontal className="size-4" strokeWidth={1.75} />
         </button>
@@ -152,28 +188,15 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
 
   return (
     <>
-      {locked ? null : autoHeight ? (
-        selected &&
-        !folded &&
-        (['left', 'right'] as const).map(side => (
-          <NodeResizeControl
-            key={side}
-            position={side}
-            variant={ResizeControlVariant.Line}
-            resizeDirection="horizontal"
-            minWidth={min.w}
-            className="rz-line"
-            onResizeStart={() => board.remember()}
-          />
-        ))
-      ) : (
+      {locked ? null : (
         <NodeResizer
           minWidth={min.w}
           minHeight={min.h}
           isVisible={selected && !folded}
           lineClassName="rz-line"
           handleClassName="rz-handle"
-          onResizeStart={() => board.remember()}
+          onResizeStart={resizeStart}
+          onResizeEnd={resizeEnd}
         />
       )}
       <ContextMenu>
@@ -185,7 +208,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
               flash && 'is-flash',
               isNew && 'is-new',
               folded && 'is-folded',
-              autoHeight && 'is-auto',
+              fits && 'is-auto',
               locked && 'is-locked',
               sticky && `is-sticky paper-${sticky}`,
             )}

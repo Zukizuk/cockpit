@@ -42,7 +42,7 @@ function Bar({ kicker, title, children }: { kicker: string; title: string; child
       </div>
       <div className="flex items-center gap-0.5">
         {children}
-        <span className="mx-1 h-5 w-px bg-white/10" />
+        <span className="mx-1 h-5 w-px bg-ink/10" />
         <IconButton icon={X} label="Close (Esc)" onClick={() => board.expand(null)} />
       </div>
     </header>

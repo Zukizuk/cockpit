@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
 import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
-import { get, post, track, type Board, type CardType, type ShownEntry, type TelemetryStatus } from './api'
-import { AUTO_HEIGHT, BoardProvider, foldNode, isSticky, toNode, useBoard, type CardNode } from './board'
+import { get, post, track, type Board, type ShownEntry, type TelemetryStatus } from './api'
+import { BoardProvider, fitsContent, foldNode, isSticky, resizingRef, toNode, useBoard, type CardNode } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
@@ -75,10 +75,10 @@ function Canvas({ initial }: { initial: Board }) {
     [onNodesChange, board],
   )
 
-  // A card as tall as what's in it (Snippets) never keeps a fixed height: only its width is set by hand, so a
-  // fixed height would leave it cut off with no way to make it taller.
+  // A card that fits its content (Snippets, until a height is dragged by hand) never keeps a stray fixed height,
+  // which would cut it off.
   useEffect(() => {
-    const stuck = (n: CardNode) => AUTO_HEIGHT.has(n.type as CardType) && !n.data.folded && n.height !== undefined
+    const stuck = (n: CardNode) => fitsContent(n) && !n.data.folded && n.height !== undefined && !resizingRef.current
     if (nodes.some(stuck)) rf.setNodes(ns => ns.map(n => (stuck(n) ? { ...n, height: undefined } : n)))
   }, [nodes, rf])
 
@@ -377,7 +377,7 @@ function Canvas({ initial }: { initial: Board }) {
         proOptions={{ hideAttribution: true }}
         colorMode="dark"
       >
-        <Background variant={BackgroundVariant.Dots} gap={22} size={1.2} color="oklch(1 0 0 / 0.13)" />
+        <Background variant={BackgroundVariant.Dots} gap={24} size={1.8} color="var(--dots)" />
       </ReactFlow>
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -402,8 +402,8 @@ function DockButton({ label, shortcut, onClick, children, active }: { label: str
           aria-label={label}
           onClick={onClick}
           className={cn(
-            'relative grid size-9 place-items-center rounded-[10px] text-foreground/75 outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-white/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96]',
-            active && 'bg-white/[0.1] text-foreground',
+            'relative grid size-9 place-items-center rounded-[10px] text-foreground/75 outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-ink/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96]',
+            active && 'bg-ink/[0.1] text-foreground',
           )}
         >
           {children}
@@ -446,7 +446,7 @@ function Dock() {
           {board.unseenOutputs > 0 && <span className="dock-dot">{board.unseenOutputs > 9 ? '9+' : board.unseenOutputs}</span>}
         </DockButton>
       )}
-      <span className="mx-0.5 h-5 w-px bg-white/10" />
+      <span className="mx-0.5 h-5 w-px bg-ink/10" />
       <DockButton label="Show everything" shortcut="0" onClick={() => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 })}>
         <Maximize className="size-[16px]" strokeWidth={1.75} />
       </DockButton>
@@ -524,7 +524,7 @@ function OutputsSheet() {
                       type="button"
                       aria-label="Clear this chat's outputs"
                       onClick={() => clear(g.id)}
-                      className="grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-white/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96]"
+                      className="grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-ink/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96]"
                     >
                       <X className="size-3.5" strokeWidth={1.75} />
                     </button>
@@ -623,7 +623,7 @@ function UsageAsk() {
       <button type="button" className="focus-bar-btn text-muted-foreground" onClick={() => choose('no')}>
         No thanks
       </button>
-      <button type="button" className="focus-bar-btn bg-white/10" onClick={() => choose('yes')}>
+      <button type="button" className="focus-bar-btn bg-ink/10" onClick={() => choose('yes')}>
         Share
       </button>
     </div>

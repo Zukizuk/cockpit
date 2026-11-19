@@ -29,6 +29,8 @@ export const STICKY_COLORS = ['ink', 'yellow', 'orange', 'pink', 'green']
 export const TIDY_GAPS = [12, 24, 40]
 /** Where "Open in editor" opens a note or text file: Notepad, VS Code, or the file's default program. */
 export const EDITORS = ['notepad', 'vscode', 'default']
+/** Light, dark, or whatever Windows is set to. */
+export const THEMES = ['system', 'dark', 'light']
 
 export function defaults() {
   return {
@@ -52,6 +54,8 @@ export function defaults() {
     tidyGap: 24,
     /** The program "Open in editor" uses (Notepad is on every Windows machine). */
     editor: 'notepad',
+    /** Light, dark, or as Windows is set (the default). */
+    theme: 'system',
   }
 }
 
@@ -79,6 +83,7 @@ export function loadConfig() {
   if (typeof raw.singleKeys === 'boolean') cfg.singleKeys = raw.singleKeys
   if (TIDY_GAPS.includes(raw.tidyGap)) cfg.tidyGap = raw.tidyGap
   if (EDITORS.includes(raw.editor)) cfg.editor = raw.editor
+  if (THEMES.includes(raw.theme)) cfg.theme = raw.theme
   return cfg
 }
 
@@ -109,6 +114,10 @@ export function saveConfig(patch) {
   if (patch.tidyGap !== undefined) {
     if (!TIDY_GAPS.includes(patch.tidyGap)) throw new UserError(`tidyGap is one of ${TIDY_GAPS.join(', ')}`)
     raw.tidyGap = patch.tidyGap
+  }
+  if (patch.theme !== undefined) {
+    if (!THEMES.includes(patch.theme)) throw new UserError(`theme is one of ${THEMES.join(', ')}`)
+    raw.theme = patch.theme
   }
   if (patch.editor !== undefined) {
     if (!EDITORS.includes(patch.editor)) throw new UserError(`editor is one of ${EDITORS.join(', ')}`)

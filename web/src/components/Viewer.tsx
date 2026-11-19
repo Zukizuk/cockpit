@@ -6,7 +6,7 @@ import {
   AppWindow, FileCode2, FileSpreadsheet, FileText, FileType2, Film, Globe, Image as ImageIcon, NotebookText, Presentation, SquareSplitHorizontal,
   type LucideIcon,
 } from 'lucide-react'
-import { post, type ShownEntry, type ShownRead } from '../api'
+import { get, post, type ShownEntry, type ShownRead } from '../api'
 import { CompareView } from './Compare'
 import { Markdown, highlightIn } from './Markdown'
 import { CodeView, CsvView, DiffView, JsonView } from './Views'
@@ -58,10 +58,37 @@ function SafeHtml({ html, className }: { html: string; className?: string }) {
   return <article ref={ref} className={cn('md', className)} dangerouslySetInnerHTML={{ __html: clean }} />
 }
 
-function SheetView({ sheets }: { sheets: NonNullable<ShownRead['sheets']> }) {
-  const [at, setAt] = useState(0)
+/** Rows drawn at first; the rest of a sheet's first 500 on request (a wide sheet is thousands of cells). */
+const FIRST_ROWS = 150
+
+/** A workbook: one sheet at a time. Only the open sheet's rows come with the item; another loads when picked. */
+function SheetView({ read }: { read: ShownRead }) {
+  const [sheets, setSheets] = useState(read.sheets || [])
+  const [at, setAt] = useState(read.sheet ?? 0)
+  const [all, setAll] = useState(false)
+  const [loading, setLoading] = useState(false)
+  useEffect(() => {
+    setSheets(read.sheets || [])
+    setAt(read.sheet ?? 0)
+  }, [read])
+  const pick = async (i: number) => {
+    setAt(i)
+    setAll(false)
+    if (sheets[i]?.rows) return
+    setLoading(true)
+    try {
+      const r = await get<ShownRead>(`/api/shown/${read.entry.id}?sheet=${i}`)
+      setSheets(ss => ss.map((s, j) => (j === i ? { ...s, rows: r.sheets?.[i]?.rows || [] } : s)))
+    } catch {
+      setSheets(ss => ss.map((s, j) => (j === i ? { ...s, rows: [] } : s)))
+    } finally {
+      setLoading(false)
+    }
+  }
   const sheet = sheets[Math.min(at, sheets.length - 1)]
   if (!sheet) return <p className="text-muted-foreground">This workbook is empty.</p>
+  const rows = sheet.rows || []
+  const drawn = all ? rows : rows.slice(0, FIRST_ROWS)
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       {sheets.length > 1 && (
@@ -69,8 +96,8 @@ function SheetView({ sheets }: { sheets: NonNullable<ShownRead['sheets']> }) {
           {sheets.map((s, i) => (
             <button
               key={s.name}
-              onClick={() => setAt(i)}
-              className={cn('h-7 rounded-md px-2.5 text-[13px] text-muted-foreground transition-[background-color,color] duration-150 hover:bg-white/5 hover:text-foreground', i === at && 'bg-white/10 text-foreground')}
+              onClick={() => pick(i)}
+              className={cn('h-7 rounded-md px-2.5 text-[13px] text-muted-foreground transition-[background-color,color] duration-150 hover:bg-ink/5 hover:text-foreground', i === at && 'bg-ink/10 text-foreground')}
             >
               {s.name}
             </button>
@@ -78,9 +105,10 @@ function SheetView({ sheets }: { sheets: NonNullable<ShownRead['sheets']> }) {
         </div>
       )}
       <div className="table-scroll min-h-0 flex-1">
+        {loading && !sheet.rows && <p className="p-2 text-[13px] text-muted-foreground">Opening {sheet.name}…</p>}
         <table className="data">
           <tbody>
-            {sheet.rows.map((r, i) => (
+            {drawn.map((r, i) => (
               <tr key={i}>
                 <td className="rownum">{i + 1}</td>
                 {Array.from({ length: sheet.cols }, (_, c) => (
@@ -93,9 +121,14 @@ function SheetView({ sheets }: { sheets: NonNullable<ShownRead['sheets']> }) {
           </tbody>
         </table>
       </div>
-      {sheet.total > sheet.rows.length && (
+      {drawn.length < rows.length && (
+        <button type="button" className="w-fit text-[12.5px] text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => setAll(true)}>
+          Show {(rows.length - drawn.length).toLocaleString()} more rows
+        </button>
+      )}
+      {drawn.length === rows.length && sheet.total > rows.length && (
         <p className="text-[12.5px] text-muted-foreground">
-          First {sheet.rows.length.toLocaleString()} of {sheet.total.toLocaleString()} rows. Open it in Excel for the rest.
+          First {rows.length.toLocaleString()} of {sheet.total.toLocaleString()} rows. Open it in Excel for the rest.
         </p>
       )}
     </div>
@@ -107,7 +140,7 @@ function SlidesView({ slides }: { slides: NonNullable<ShownRead['slides']> }) {
   return (
     <div className="grid gap-3">
       {slides.map(s => (
-        <section key={s.n} className="rounded-xl bg-white/[0.035] p-4 shadow-[0_0_0_1px_oklch(1_0_0/0.08)]">
+        <section key={s.n} className="rounded-xl bg-ink/[0.035] p-4 shadow-[0_0_0_1px_oklch(1_0_0/0.08)]">
           <div className="mb-1 text-[12px] text-muted-foreground">Slide {s.n}</div>
           {s.lines.length ? (
             <>
@@ -203,7 +236,7 @@ export function Viewer({ read, compact, onOpenNative, onOpenPath, onReadAgain, o
     case 'docx':
       return <SafeHtml html={read.html || ''} className={cn('docx', md)} />
     case 'sheet':
-      return <SheetView sheets={read.sheets || []} />
+      return <SheetView read={read} />
     case 'slides':
       return <SlidesView slides={read.slides || []} />
     case 'compare':

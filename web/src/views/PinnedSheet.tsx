@@ -119,7 +119,7 @@ function QuickRow({ thing, icon: Icon, title, detail, faded, n, onOpen, actions 
                 <button
                   type="button"
                   aria-label="More"
-                  className="grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color] duration-150 hover:bg-white/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  className="grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color] duration-150 hover:bg-ink/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
                   <MoreVertical className="size-[14px]" strokeWidth={1.75} />
                 </button>

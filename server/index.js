@@ -368,7 +368,7 @@ async function api(req, res, url) {
     }
     if (a && !b && method === 'GET') {
       const r = shown.readShown(a)
-      if (r.exists && ['docx', 'sheet', 'slides'].includes(r.entry.format)) Object.assign(r, await readOffice(r.entry))
+      if (r.exists && ['docx', 'sheet', 'slides'].includes(r.entry.format)) Object.assign(r, await readOffice(r.entry, { sheet: url.searchParams.get('sheet') }))
       return json(res, 200, r)
     }
     if (a && !b && method === 'POST') return json(res, 200, shown.updateShown(a, await readBody(req)))

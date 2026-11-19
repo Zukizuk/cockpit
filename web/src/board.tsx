@@ -5,6 +5,7 @@
 // card added or taken off) can be undone with Ctrl+Z.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReactFlow, type Node } from '@xyflow/react'
+import { useTheme, type Theme } from './theme'
 import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type ShownEntry, type StickyColor, type Tracker } from './api'
 import { pack } from './layout'
 import { useData, useEvent } from './lib'
@@ -38,19 +39,23 @@ export function minSize(type: CardType, ref = '') {
 export const FOLDED_H = 46
 
 /** openH: the height a folded card goes back to when it's unfolded. */
-export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor }
+export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean }
 export type CardNode = Node<CardData, CardType>
 
-/** Cards as tall as what's in them (up to a limit, then they scroll): only their width is set by hand. */
+/** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
 export const AUTO_HEIGHT = new Set<CardType>(['snippets'])
+/** True while a card that fits its content is being resized by hand (so its height isn't put back meanwhile). */
+export const resizingRef = { current: false }
+/** Whether a card sizes itself to its content right now. */
+export const fitsContent = (n: { type?: string; data: CardData }) => AUTO_HEIGHT.has(n.type as CardType) && !n.data.sized
 
 export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(c.sized ? { sized: true } : {}) },
   width: c.w,
-  height: c.folded ? FOLDED_H : AUTO_HEIGHT.has(c.type) ? undefined : c.h,
+  height: c.folded ? FOLDED_H : AUTO_HEIGHT.has(c.type) && !c.sized ? undefined : c.h,
   dragHandle: '.card-drag',
   ...(c.locked ? { draggable: false, deletable: false } : {}),
 })
@@ -66,6 +71,7 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.folded ? { folded: true } : {}),
   ...(n.data.locked ? { locked: true } : {}),
   ...(n.data.color ? { color: n.data.color } : {}),
+  ...(n.data.sized ? { sized: true } : {}),
 })
 
 /** The same card folded to its header, or opened back to its height. */
@@ -73,7 +79,7 @@ export function foldNode(n: CardNode, fold: boolean): CardNode {
   if (!!n.data.folded === fold) return n
   if (fold) return { ...n, height: FOLDED_H, data: { ...n.data, folded: true, openH: n.height ?? n.measured?.height ?? SIZES[n.type as CardType].h } }
   const { folded, openH, ...data } = n.data
-  return { ...n, height: AUTO_HEIGHT.has(n.type as CardType) ? undefined : (openH ?? SIZES[n.type as CardType].h), data }
+  return { ...n, height: fitsContent({ type: n.type, data }) ? undefined : (openH ?? SIZES[n.type as CardType].h), data }
 }
 
 /** The same card locked in place (no moving by hand or by Tidy, no resizing, no Delete key), or free again. */
@@ -90,8 +96,18 @@ export type QuickThing = { kind: Pin['kind']; target: string; title: string }
 /** A button in the toast: Undo, mostly. */
 export type ToastAction = { label: string; run: () => void }
 /** How the board behaves (Settings). */
-export type Prefs = { stickyColor: StickyColor; singleKeys: boolean; tidyGap: number; changelog: string; editor: Editor }
-const DEFAULT_PREFS: Prefs = { stickyColor: 'ink', singleKeys: true, tidyGap: 24, changelog: '', editor: 'notepad' }
+/** The theme the page was last drawn in (until the settings arrive). */
+function savedTheme(): Theme {
+  try {
+    const t = localStorage.getItem('cockpit.theme')
+    return t === 'dark' || t === 'light' || t === 'system' ? t : 'system'
+  } catch {
+    return 'system'
+  }
+}
+
+export type Prefs = { stickyColor: StickyColor; singleKeys: boolean; tidyGap: number; changelog: string; editor: Editor; theme: Theme }
+const DEFAULT_PREFS: Prefs = { stickyColor: 'ink', singleKeys: true, tidyGap: 24, changelog: '', editor: 'notepad', theme: savedTheme() }
 
 interface Ctx {
   addCard: (type: CardType, ref: string, opts?: PlaceOpts) => string
@@ -203,10 +219,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const pinned = useData(() => get<PinnedList>('/api/pinned'), [], { refreshOn: ['pinned'] })
   const config = useData(() => get<Config>('/api/config'), [])
   const prefs = useMemo<Prefs>(
-    () => (config.data ? { stickyColor: config.data.stickyColor, singleKeys: config.data.singleKeys, tidyGap: config.data.tidyGap, changelog: config.data.changelog, editor: config.data.editor || 'notepad' } : DEFAULT_PREFS),
+    () => (config.data ? { stickyColor: config.data.stickyColor, singleKeys: config.data.singleKeys, tidyGap: config.data.tidyGap, changelog: config.data.changelog, editor: config.data.editor || 'notepad', theme: config.data.theme || 'system' } : DEFAULT_PREFS),
     [config.data],
   )
   const prefsRef = useRef(prefs)
+  useTheme(prefs.theme)
   prefsRef.current = prefs
   useEvent('outputs', () => outputs.reload())
 
@@ -504,7 +521,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
             if (n.id === saved.focus) return moved // the focused card keeps any resizing done while focused
             if (s.folded) return { ...moved, width: s.w, height: FOLDED_H, data: { ...data, folded: true, openH: s.openH } }
             // a card as tall as its content stays that way (a fixed height would cut it off)
-            return { ...moved, width: s.w, height: AUTO_HEIGHT.has(n.type as CardType) ? undefined : s.h, data }
+            return { ...moved, width: s.w, height: fitsContent({ type: n.type, data }) ? undefined : s.h, data }
           }),
         )
         focusSaved.current = null

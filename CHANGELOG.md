@@ -2,6 +2,20 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 19 November 2026 (evening)
+
+**New**
+- **Light mode.** Settings > Theme: Light, Dark, or Like Windows (new installs follow Windows). It switches instantly, menus, notes, code and diagrams included.
+
+**Improved**
+- **Excel, Word and PowerPoint open much faster.** A preview is made once and kept, so opening the same file again is instant, even after a restart (a 12 MB workbook went from about 10 seconds every time to a few milliseconds). The first read runs in the background, so the rest of Cockpit never waits for it. A workbook shows one sheet at a time and loads another when you pick it; long sheets show their first 150 rows, with the rest a click away.
+- Cards that show a document or a sheet aren't redrawn when something else on the board changes, so the board stays quick with big cards on it.
+- The board's dots are bigger and easier to see.
+
+**Fixed**
+- The Snippets card couldn't be made taller. It still fits what's in it, until you drag it taller; then it keeps that height. "Fit to contents" in its menu goes back.
+- A draft from Claude put on the board had no way to copy it. It now has a copy button in its header, and "Copy the text" in its menu (so do other text cards).
+
 ## 19 November 2026 (version 0.1.1)
 
 **New**

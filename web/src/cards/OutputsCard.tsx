@@ -57,7 +57,7 @@ export function RowButton({ icon: Icon, label, onClick, active }: { icon: Lucide
             onClick()
           }}
           className={cn(
-            'grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-white/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96]',
+            'grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-ink/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96]',
             active && 'text-foreground',
           )}
         >

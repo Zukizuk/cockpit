@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
-const PRIORITY_RING: Record<number, string> = { 4: 'border-red-400/80', 3: 'border-orange-400/80', 2: 'border-sky-400/70', 1: 'border-white/30' }
+const PRIORITY_RING: Record<number, string> = { 4: 'border-red-400/80', 3: 'border-orange-400/80', 2: 'border-sky-400/70', 1: 'border-ink/30' }
 
 function due(t: Task) {
   if (!t.due) return ''
@@ -65,10 +65,10 @@ export function TasksCard({ id, data, selected }: NodeProps<CardNode>) {
           {!s.error && !s.tasks.length && <p className="py-2 text-[13.5px] text-muted-foreground">Nothing due today.</p>}
           <ul className="grid">
             {s.tasks.map(t => (
-              <li key={t.id} className="flex gap-3 border-b border-white/[0.06] py-2.5 last:border-0">
+              <li key={t.id} className="flex gap-3 border-b border-ink/[0.06] py-2.5 last:border-0">
                 <button
                   aria-label="Complete"
-                  className={cn('group/tick mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-full border-[1.5px] transition-[background-color,scale] duration-150 hover:bg-white/10 active:scale-[0.96]', PRIORITY_RING[t.priority] || PRIORITY_RING[1])}
+                  className={cn('group/tick mt-0.5 grid size-[18px] shrink-0 place-items-center rounded-full border-[1.5px] transition-[background-color,scale] duration-150 hover:bg-ink/10 active:scale-[0.96]', PRIORITY_RING[t.priority] || PRIORITY_RING[1])}
                   onClick={async () => {
                     todo.setData({ ...s, tasks: s.tasks.filter(x => x.id !== t.id) })
                     try {
@@ -156,10 +156,10 @@ export function TrackerCard({ id, data, selected }: NodeProps<CardNode>) {
             <section key={g.type}>
               <h4 className="mb-1 mt-1 text-[11.5px] font-medium tracking-wide text-muted-foreground uppercase">{TYPE_LABEL[g.type]}</h4>
               {g.items.map(i => (
-                <article key={i.id} className="border-b border-white/[0.06] py-2.5 last:border-0">
+                <article key={i.id} className="border-b border-ink/[0.06] py-2.5 last:border-0">
                   <div className="flex items-center gap-2 text-[11.5px] text-muted-foreground">
                     <span className="font-mono">{i.id}</span>
-                    {i.you && <span className="rounded bg-white/10 px-1.5 text-foreground">you</span>}
+                    {i.you && <span className="rounded bg-ink/10 px-1.5 text-foreground">you</span>}
                     {i.date && <span>{i.date}</span>}
                   </div>
                   <p className="mt-0.5 text-[14px] leading-snug font-medium">{i.title}</p>

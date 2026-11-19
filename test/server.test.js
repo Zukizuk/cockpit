@@ -37,8 +37,11 @@ test('config: board settings are checked, kept, and have defaults', async () => 
   assert.equal(before.editor, 'notepad', 'notes open in Notepad unless changed')
   assert.equal(saveConfig({ editor: 'vscode' }).editor, 'vscode')
   assert.throws(() => saveConfig({ editor: 'vim' }), /editor/)
+  assert.equal(before.theme, 'system', 'follows Windows unless chosen')
+  assert.equal(saveConfig({ theme: 'light' }).theme, 'light')
+  assert.throws(() => saveConfig({ theme: 'blue' }), /theme/)
   assert.ok(fs.existsSync(publicConfig(after).changelog), 'the changelog is where the app looks for it')
-  saveConfig({ stickyColor: 'ink', singleKeys: true, tidyGap: 24, editor: 'notepad' })
+  saveConfig({ stickyColor: 'ink', singleKeys: true, tidyGap: 24, editor: 'notepad', theme: 'system' })
 })
 
 test('security: only Cockpit itself may read or change anything', () => {

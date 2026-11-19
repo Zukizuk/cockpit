@@ -61,6 +61,7 @@ export function saveBoard(body) {
       ...(c.folded === true ? { folded: true } : {}),
       ...(c.locked === true ? { locked: true } : {}),
       ...(typeof c.color === 'string' && COLORS.has(c.color) ? { color: c.color } : {}),
+      ...(c.sized === true ? { sized: true } : {}),
     }))
   const v = body.viewport
   const viewport = v ? { x: num(v.x, -1e7, 1e7, 0), y: num(v.y, -1e7, 1e7, 0), zoom: num(v.zoom, 0.1, 4, 1) } : null

@@ -10,6 +10,12 @@ import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
 
+const THEMES = [
+  { value: 'system', label: 'Like Windows' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+]
+
 const GAPS = [
   { value: 12, label: 'Tight' },
   { value: 24, label: 'Normal' },
@@ -80,6 +86,21 @@ export function SettingsDialog() {
         <div className="grid grid-cols-1 gap-6">
           <section className="grid gap-3">
             <h3 className="text-[14px] font-medium">Board</h3>
+            <Row name="Theme">
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                size="sm"
+                value={cfg?.theme ?? 'system'}
+                onValueChange={v => v && save({ theme: v }, 'Saved.')}
+              >
+                {THEMES.map(t => (
+                  <ToggleGroupItem key={t.value} value={t.value} className="px-3">
+                    {t.label}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </Row>
             <Row name="New sticky notes" hint="Each note can still get its own colour">
               <div className="flex gap-2" role="radiogroup" aria-label="New sticky notes">
                 {STICKY_COLORS.map(c => (
@@ -215,7 +236,7 @@ export function SettingsDialog() {
             <h3 className="text-[14px] font-medium">More trackers</h3>
             <p className="text-[13px] text-muted-foreground">tracker.json files (or folders holding one), one per line.</p>
             <textarea
-              className="min-h-24 rounded-md border border-input bg-white/[0.03] px-3 py-2 font-mono text-[12px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="min-h-24 rounded-md border border-input bg-ink/[0.03] px-3 py-2 font-mono text-[12px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               value={trackers}
               onChange={e => setTrackers(e.target.value)}
             />
@@ -246,7 +267,7 @@ export function SettingsDialog() {
                 {showSent ? 'Hide' : "See what's sent"}
               </Button>
               {showSent && (
-                <pre className="max-h-56 overflow-auto rounded-md bg-white/[0.03] p-3 font-mono text-[11.5px] text-muted-foreground">
+                <pre className="max-h-56 overflow-auto rounded-md bg-ink/[0.03] p-3 font-mono text-[11.5px] text-muted-foreground">
                   {usage.preview.length ? JSON.stringify(usage.preview, null, 2) : usage.choice === 'yes' ? 'Nothing yet. Each day is sent the day after.' : 'Nothing: usage counts are off.'}
                 </pre>
               )}
