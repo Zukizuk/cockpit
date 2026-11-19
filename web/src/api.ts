@@ -278,6 +278,10 @@ export interface Config {
   changelog: string
   /** The program "Open in editor" uses. */
   editor: Editor
+  /** Where Cockpit's code lives (Send feedback opens an issue there). */
+  repository: string
+  /** The Windows build, for feedback. */
+  windows: string
 }
 
 /** Where a note or text file opens outside Cockpit (Settings). */
@@ -379,4 +383,17 @@ export interface RunView {
   /** Output since the offset asked for. */
   out: string
   offset: number
+}
+
+/** Counts one use of a feature for the anonymous usage counts (the server ignores it unless you said yes). */
+export const track = (event: string) => {
+  post('/api/telemetry/count', { event }).catch(() => {})
+}
+
+export interface TelemetryStatus {
+  available: boolean
+  choice: 'yes' | 'no' | null
+  ask: boolean
+  /** Exactly what would be sent next. */
+  preview: unknown[]
 }

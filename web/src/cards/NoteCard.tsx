@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Archive, BookOpen, CalendarCheck, ChevronLeft, ChevronRight, Code2, Copy, ExternalLink, Heading, Lock, LockOpen, Maximize2, NotebookPen, Pencil, Pin, RefreshCw, StickyNote, X } from 'lucide-react'
-import { editorLabel, openOutside } from '../api'
+import { editorLabel, openOutside, track } from '../api'
 import { isSticky, useBoard, type CardNode } from '../board'
 import { NotePane, noteKind, noteTitle, useNote } from '../components/NotePane'
 import { post } from '../api'
@@ -44,6 +44,7 @@ export function NoteCard({ id, data, selected }: NodeProps<CardNode>) {
   const goTo = async (ref: string) => {
     try {
       await note.save()
+      if (ref !== today) track('journal.past')
       board.retarget(id, ref === today ? await openToday() : ref)
     } catch (e: any) {
       board.toast(e.message)

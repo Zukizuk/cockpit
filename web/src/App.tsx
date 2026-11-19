@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
-import { get, post, type Board, type CardType, type ShownEntry } from './api'
+import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
+import { get, post, track, type Board, type CardType, type ShownEntry, type TelemetryStatus } from './api'
 import { AUTO_HEIGHT, BoardProvider, foldNode, isSticky, toNode, useBoard, type CardNode } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
@@ -51,6 +51,7 @@ export function App() {
           <SettingsDialog />
           <KeysDialog />
           <FocusBar />
+          <UsageAsk />
           <Toast />
           <Badge />
           <UrlState />
@@ -269,6 +270,7 @@ function Canvas({ initial }: { initial: Board }) {
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; at: { x: number; y: number } } | null>(null)
   const foldable = nodes.filter(n => !isSticky(n.type, n.data.ref))
   const foldAll = (fold: boolean) => {
+    if (fold) track('board.foldall')
     board.remember()
     rf.setNodes(ns => ns.map(n => (isSticky(n.type, n.data.ref) ? n : foldNode(n, fold))))
     board.persist()
@@ -337,6 +339,10 @@ function Canvas({ initial }: { initial: Board }) {
             Settings
             <DropdownMenuShortcut>,</DropdownMenuShortcut>
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={board.sendFeedback}>
+            <MessageSquare strokeWidth={1.75} />
+            Send feedback
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <ReactFlow<CardNode>
@@ -365,6 +371,7 @@ function Canvas({ initial }: { initial: Board }) {
         onPaneClick={() => rf.setNodes(ns => ns.map(n => (n.selected ? { ...n, selected: false } : n)))}
         onPaneContextMenu={e => {
           e.preventDefault()
+          track('board.menu')
           setPaneMenu({ x: e.clientX, y: e.clientY, at: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) })
         }}
         proOptions={{ hideAttribution: true }}
@@ -587,6 +594,37 @@ function FocusBar() {
       <span className="text-muted-foreground">Focus</span>
       <button type="button" onClick={() => board.toggleFocus()} className="focus-bar-btn">
         Bring everything back
+      </button>
+    </div>
+  )
+}
+
+/** Asked once, after Cockpit's first day: may it send anonymous usage counts? (Never asked in a build with no
+ * telemetry key; changeable in Settings, where "See what's sent" shows the exact data.) */
+function UsageAsk() {
+  const board = useBoard()
+  const [ask, setAsk] = useState(false)
+  useEffect(() => {
+    get<TelemetryStatus>('/api/telemetry').then(s => setAsk(s.ask), () => {})
+  }, [])
+  if (!ask || board.focusing) return null
+  const choose = (choice: 'yes' | 'no') => {
+    setAsk(false)
+    post('/api/telemetry', { choice })
+      .then(() => board.toast(choice === 'yes' ? 'Thanks. You can change this in Settings.' : 'Nothing will be sent.'))
+      .catch((e: Error) => board.toast(e.message))
+  }
+  return (
+    <div className="focus-bar glass whitespace-nowrap" role="dialog" aria-label="Anonymous usage counts">
+      <span>Share anonymous usage counts? Never what's on your board.</span>
+      <button type="button" className="focus-bar-btn text-muted-foreground" onClick={() => board.setSettingsOpen(true)}>
+        What's sent
+      </button>
+      <button type="button" className="focus-bar-btn text-muted-foreground" onClick={() => choose('no')}>
+        No thanks
+      </button>
+      <button type="button" className="focus-bar-btn bg-white/10" onClick={() => choose('yes')}>
+        Share
       </button>
     </div>
   )

@@ -13,6 +13,15 @@ export const DATA_DIR = process.env.COCKPIT_DATA || path.join(HOME, '.cockpit')
 export const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
 /** What changed in Cockpit, newest first (read in the app from Settings or the + box). */
 export const CHANGELOG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'CHANGELOG.md')
+/** Where Cockpit's code lives (feedback opens an issue there); a fork sets its own in package.json. */
+export const REPOSITORY = (() => {
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8'))
+    return String(pkg.repository?.url || pkg.repository || '').replace(/^git\+/, '').replace(/\.git$/, '')
+  } catch {
+    return ''
+  }
+})()
 
 /** How the board behaves, set in Settings. */
 export const STICKY_COLORS = ['ink', 'yellow', 'orange', 'pink', 'green']
@@ -111,7 +120,7 @@ export function saveConfig(patch) {
 /** The config as the browser may see it: never the token itself. */
 export function publicConfig(cfg) {
   const { todoistToken, ...rest } = cfg
-  return { ...rest, hasTodoistToken: Boolean(todoistToken), dataDir: DATA_DIR, port: PORT, version: VERSION, changelog: CHANGELOG }
+  return { ...rest, hasTodoistToken: Boolean(todoistToken), dataDir: DATA_DIR, port: PORT, version: VERSION, changelog: CHANGELOG, repository: REPOSITORY, windows: os.release() }
 }
 
 export function writeFileAtomic(file, data) {

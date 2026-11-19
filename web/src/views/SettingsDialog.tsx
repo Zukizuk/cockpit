@@ -1,7 +1,7 @@
 // Settings, as a small dialog: how the board behaves, Todoist, the notes folder, extra trackers, and What's new.
 import { useEffect, useState } from 'react'
-import { Sparkles } from 'lucide-react'
-import { EDITORS, get, post, type Config, type TodoState } from '../api'
+import { MessageSquare, Sparkles } from 'lucide-react'
+import { EDITORS, get, post, type Config, type TelemetryStatus, type TodoState } from '../api'
 import { useBoard } from '../board'
 import { STICKY_COLORS } from '../cards/CardShell'
 import { Button } from '@/components/ui/button'
@@ -37,10 +37,22 @@ export function SettingsDialog() {
   const [notesDir, setNotesDir] = useState('')
   const [trackers, setTrackers] = useState('')
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null)
+  const [usage, setUsage] = useState<TelemetryStatus | null>(null)
+  const [showSent, setShowSent] = useState(false)
+  const chooseUsage = async (choice: 'yes' | 'no') => {
+    try {
+      setUsage(await post<TelemetryStatus>('/api/telemetry', { choice }))
+      setMsg({ t: choice === 'yes' ? 'Thanks: usage counts are on.' : 'Usage counts are off, and anything counted is gone.' })
+    } catch (e: any) {
+      setMsg({ t: e.message, bad: true })
+    }
+  }
 
   useEffect(() => {
     if (!board.settingsOpen) return
     setMsg(null)
+    setShowSent(false)
+    get<TelemetryStatus>('/api/telemetry').then(setUsage, () => setUsage(null))
     get<Config>('/api/config').then(c => {
       setCfg(c)
       setNotesDir(c.notesDir)
@@ -211,6 +223,35 @@ export function SettingsDialog() {
               Save
             </Button>
           </section>
+          {usage?.available && (
+            <section className="grid gap-3">
+              <h3 className="text-[14px] font-medium">Privacy</h3>
+              <Row name="Anonymous usage counts" hint="How often features are used. Never what's on your board">
+                <ToggleGroup
+                  type="single"
+                  variant="outline"
+                  size="sm"
+                  value={usage.choice === 'yes' ? 'on' : 'off'}
+                  onValueChange={v => v && chooseUsage(v === 'on' ? 'yes' : 'no')}
+                >
+                  <ToggleGroupItem value="on" className="px-3">
+                    On
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="off" className="px-3">
+                    Off
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </Row>
+              <Button variant="ghost" size="sm" className="w-fit px-2 text-muted-foreground" onClick={() => setShowSent(!showSent)}>
+                {showSent ? 'Hide' : "See what's sent"}
+              </Button>
+              {showSent && (
+                <pre className="max-h-56 overflow-auto rounded-md bg-white/[0.03] p-3 font-mono text-[11.5px] text-muted-foreground">
+                  {usage.preview.length ? JSON.stringify(usage.preview, null, 2) : usage.choice === 'yes' ? 'Nothing yet. Each day is sent the day after.' : 'Nothing: usage counts are off.'}
+                </pre>
+              )}
+            </section>
+          )}
           {msg && <p className={msg.bad ? 'text-[13px] text-destructive' : 'text-[13px] text-muted-foreground'}>{msg.t}</p>}
           <div className="flex items-center gap-3">
             <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
@@ -227,6 +268,10 @@ export function SettingsDialog() {
             >
               <Sparkles className="size-3.5" strokeWidth={1.75} />
               What's new
+            </Button>
+            <Button size="sm" variant="ghost" className="gap-1.5" onClick={board.sendFeedback}>
+              <MessageSquare className="size-3.5" strokeWidth={1.75} />
+              Send feedback
             </Button>
           </div>
         </div>

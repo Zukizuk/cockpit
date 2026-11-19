@@ -830,3 +830,45 @@ test('changes: uncommitted edits, a new file, and the last commit, the way git s
   assert.equal((await changesForFile(path.join(T, 'loose.txt'))).repo, false)
   assert.deepEqual(countDiff('--- a\n+++ b\n+x\n-y\n context'), { added: 1, removed: 1 })
 })
+
+test('telemetry: nothing without a key or a yes; only counts are sent, and a no forgets them', async () => {
+  const t = await import('../server/lib/telemetry.js')
+  const { DATA_DIR } = await import('../server/lib/config.js')
+  fs.rmSync(path.join(DATA_DIR, 'telemetry.json'), { force: true })
+  const day1 = new Date('2026-11-18T10:00:00Z')
+
+  process.env.COCKPIT_TELEMETRY_KEY = ''
+  assert.equal(t.status().available, false, 'no key: off, and never asks')
+  t.choose('yes')
+  t.count('sticky.new', day1)
+  assert.deepEqual(t.readState().days, {}, 'no key: nothing counted even with a yes')
+
+  process.env.COCKPIT_TELEMETRY_KEY = 'phc_test'
+  t.choose('no')
+  t.count('sticky.new', day1)
+  assert.deepEqual(t.readState().days, {}, 'a no: nothing counted')
+  assert.equal(t.status(Date.now()).ask, false, 'asked already')
+
+  t.choose('yes')
+  t.count('sticky.new', day1)
+  t.count('sticky.new', day1)
+  t.count('app.open', day1)
+  t.count('app.open', day1)
+  t.count('C:\Users\someone\secret.md', day1)
+  assert.deepEqual(t.readState().days['2026-11-18'], { 'sticky.new': 2, 'app.open': 1 }, 'known names only; app.open once a day')
+
+  let sent = null
+  const r = await t.sendDue({ post: async (url, body) => (sent = { url, body }), at: new Date('2026-11-19T09:00:00Z') })
+  assert.equal(r.sent, 1)
+  assert.match(sent.url, /\/batch\/$/)
+  const props = sent.body.batch[0].properties
+  assert.deepEqual(Object.keys(props).sort(), ['$process_person_profile', 'app.open', 'day', 'sticky.new', 'version', 'windows'].sort(), 'only counts, the day, the version and the Windows build')
+  assert.deepEqual(t.readState().days, {}, 'sent days are forgotten')
+  assert.equal((await t.sendDue({ post: async () => assert.fail('nothing to send') })).sent, 0)
+
+  t.count('later.link', new Date())
+  assert.equal((await t.sendDue({ post: async () => assert.fail('today is not finished') })).sent, 0)
+  t.choose('no')
+  assert.deepEqual(t.readState().days, {}, 'a no forgets what was counted')
+  delete process.env.COCKPIT_TELEMETRY_KEY
+})

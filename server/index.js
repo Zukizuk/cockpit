@@ -19,6 +19,7 @@ import * as todoist from './lib/todoist.js'
 import { readOffice } from './lib/office.js'
 import * as outputs from './lib/outputs.js'
 import { hasBoard, readBoard, saveBoard, welcomeBoard } from './lib/board.js'
+import * as telemetry from './lib/telemetry.js'
 import * as runs from './lib/runs.js'
 import { changesFor } from './lib/changes.js'
 
@@ -247,6 +248,20 @@ function startJournalSync() {
   setInterval(tick, 10 * 60_000).unref()
 }
 
+/** Counts one use of a feature (only with a yes; never fails the request). */
+const counted = name => {
+  try {
+    telemetry.count(name)
+  } catch {}
+}
+
+/** Anonymous usage counts (only with a yes, see telemetry.js): finished days go out about once an hour. */
+function startTelemetry() {
+  const tick = () => telemetry.sendDue().then(r => r.sent && log(`telemetry: sent ${r.sent} day(s)`), e => log(String(e.message || e)))
+  setTimeout(tick, 2 * 60_000).unref()
+  setInterval(tick, 60 * 60_000).unref()
+}
+
 // ---- API ---------------------------------------------------------------------------------------------------
 
 /** Counts a card or note read full screen in Cockpit, for Quick access's "Often opened". Never fails the request. */
@@ -310,6 +325,15 @@ async function api(req, res, url) {
     return
   }
 
+  if (area === 'telemetry') {
+    if (!a && method === 'GET') return json(res, 200, telemetry.status())
+    if (!a && method === 'POST') return json(res, 200, telemetry.choose((await readBody(req)).choice))
+    if (a === 'count' && method === 'POST') {
+      telemetry.count((await readBody(req)).event)
+      return json(res, 200, { ok: true })
+    }
+  }
+
   if (area === 'config') {
     if (method === 'GET') return json(res, 200, { ...publicConfig(cfg), mcpScript: path.join(here, 'mcp.js') })
     if (method === 'POST') {
@@ -364,6 +388,7 @@ async function api(req, res, url) {
   // Later: a link (read in the background) or a short note, kept to check when there's time
   if (area === 'later' && !a && method === 'POST') {
     const body = await readBody(req)
+    counted(body.url ? 'later.link' : body.path ? 'item.file' : 'later.note')
     return json(res, 200, shown.saveForLater({ url: body.url, path: body.path, text: body.text, title: body.title }))
   }
 
@@ -379,10 +404,12 @@ async function api(req, res, url) {
     if (!a && method === 'POST') {
       const body = await readBody(req)
       if (body.note) notes.resolveNote(cfg, body.note)
+      counted('quick.pin')
       return done(pinned.addPin(body))
     }
     if (a && b === 'open' && method === 'POST') {
       const r = pinned.openPin(a, (await readBody(req)).how)
+      counted('quick.open')
       usage.recordOpen({ kind: r.kind, target: r.target, title: r.title, where: r.kind === 'note' ? 'cockpit' : 'outside' })
       return done(r)
     }
@@ -395,12 +422,16 @@ async function api(req, res, url) {
     if (!a && method === 'GET') return json(res, 200, snippets.listSnippets())
     if (!a && method === 'POST') {
       const body = await readBody(req)
+      counted('snippet.add')
       return json(res, 200, await snippets.addSnippet({ text: body.text, title: body.title, secret: body.secret, language: body.language, keep: body.keep, from: 'you' }))
     }
     if (a && b === 'text' && method === 'GET') return json(res, 200, { text: await snippets.snippetText(a) })
     if (a && !b && method === 'POST') return json(res, 200, await snippets.updateSnippet(a, await readBody(req)))
     if (a && b === 'remove' && method === 'POST') return json(res, 200, snippets.removeSnippet(a))
-    if (a && b === 'copy' && method === 'POST') return json(res, 200, await snippets.copySnippet(a))
+    if (a && b === 'copy' && method === 'POST') {
+      counted('snippet.copy')
+      return json(res, 200, await snippets.copySnippet(a))
+    }
   }
 
   if (area === 'usage' && method === 'POST') {
@@ -423,6 +454,7 @@ async function api(req, res, url) {
       return json(res, 200, p)
     }
     if (a === 'open') {
+      counted('quick.open')
       // the way the user usually opens it: read in Cockpit, or in its own program / Explorer / the browser
       // how=outside: its own program / Explorer / the browser, whatever the user usually does
       const outside = body.how === 'outside' && t.kind !== 'note'
@@ -490,7 +522,10 @@ async function api(req, res, url) {
   }
 
   if (area === 'board') {
-    if (method === 'GET') return json(res, 200, hasBoard() ? readBoard() : welcomeBoard(cfg))
+    if (method === 'GET') {
+      telemetry.count('app.open')
+      return json(res, 200, hasBoard() ? readBoard() : welcomeBoard(cfg))
+    }
     if (method === 'PUT') return json(res, 200, saveBoard(await readBody(req)))
   }
 
@@ -523,6 +558,8 @@ async function api(req, res, url) {
     if (a === 'new' && method === 'POST') {
       const body = await readBody(req)
       const kind = ['journal', 'draft', 'note', 'sticky'].includes(body.kind) ? body.kind : 'note'
+      if (kind === 'sticky') counted('sticky.new')
+      if (kind === 'journal') counted('journal.open')
       return json(res, 200, { path: notes.newNote(cfg, kind, body.title, new Date(), typeof body.text === 'string' ? body.text : '') })
     }
     // a thought goes into today's journal, which a nightly job can sort (thoughts and the journal are one)
@@ -532,6 +569,7 @@ async function api(req, res, url) {
     if (a === 'title' && method === 'POST') {
       const body = await readBody(req)
       const r = notes.setTitle(cfg, body.path, body.title)
+      if (r.title) counted('note.title')
       broadcast('notes', { path: body.path })
       return json(res, 200, r)
     }
@@ -649,6 +687,7 @@ export function start() {
   notes.ensureNotes(cfg)
   startWatchers(cfg)
   startJournalSync()
+  startTelemetry()
   // secrets: unlock their key in the background now, so the first copy is instant; drop expired ones hourly
   snippets.warmKey().catch(e => log(`snippets: ${e.message}`))
   setInterval(() => {

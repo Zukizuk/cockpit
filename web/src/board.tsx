@@ -5,7 +5,7 @@
 // card added or taken off) can be undone with Ctrl+Z.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReactFlow, type Node } from '@xyflow/react'
-import { get, post, put, type Board, type BoardCard, type CardType, type Config, type Editor, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type ShownEntry, type StickyColor, type Tracker } from './api'
+import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type ShownEntry, type StickyColor, type Tracker } from './api'
 import { pack } from './layout'
 import { useData, useEvent } from './lib'
 
@@ -158,6 +158,8 @@ interface Ctx {
   reloadPrefs: () => void
   /** What's new: the changelog, full screen. */
   openChangelog: () => Promise<void>
+  /** Send feedback: a new GitHub issue with the version and Windows build filled in. */
+  sendFeedback: () => void
   outputs: OutputGroup[]
   unseenOutputs: number
   reloadOutputs: () => void
@@ -186,6 +188,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [pinnedOpen, setPinnedOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
+  useEffect(() => void (settingsOpen && track('settings.open')), [settingsOpen])
+  useEffect(() => void (keysOpen && track('keys.open')), [keysOpen])
+  useEffect(() => void (outputsOpen && track('outputs.open')), [outputsOpen])
   const [versions, setVersions] = useState<Record<string, number>>({})
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -267,6 +272,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   )
   const focusSavedRef = useRef<{ focus: string } | null>(null)
   const undo = useCallback(() => {
+    track('board.undo')
     if (focusSavedRef.current) return toast('Bring everything back first')
     const prev = past.current.pop()
     if (!prev) return toast('Nothing to undo')
@@ -296,6 +302,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   const addCard = useCallback(
     (type: CardType, ref: string, opts: PlaceOpts = {}) => {
+      track(`card.${type}`)
       const existing = rf.getNodes().find(n => n.type === type && n.data.ref === ref)
       if (existing) {
         focus(existing.id)
@@ -382,6 +389,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const setLocked = useCallback(
     (ids: string[], locked: boolean) => {
       if (!ids.length) return
+      if (locked) track('board.lock')
       remember()
       rf.setNodes(ns => ns.map(n => (ids.includes(n.id) ? lockNode(n, locked) : n)))
       persist()
@@ -442,6 +450,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   const setLater = useCallback(
     async (id: string, later: ShownEntry['later'] | null) => {
+      if (later === 'done') track('later.done')
       try {
         await post(`/api/shown/${id}`, { later })
         items.reload()
@@ -548,6 +557,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   // the top-left of the screen as it is now, in the order they're read on the board, each at the highest spot it
   // fits; locked cards stay put and the rest flow around them. Undo puts everything back.
   const tidy = useCallback(() => {
+    track('board.tidy')
     if (focusSaved.current) return toast('Bring everything back first, then tidy')
     const nodes = rf.getNodes()
     const free = nodes.filter(n => !n.data.locked)
@@ -595,6 +605,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const setPalette = useCallback((open: boolean, seed = '') => {
+    if (open) track('palette.open')
     setPaletteSeed(seed)
     setPaletteOpen(open)
   }, [])
@@ -662,6 +673,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   // Full screen, counted: what is kept being read in Cockpit shows up in Quick access by itself
   const expand = useCallback((e: Expanded) => {
     setExpanded(e)
+    if (e) track('item.fullscreen')
     if (e) post('/api/usage', e.type === 'note' ? { note: e.ref } : { id: e.ref }).catch(() => {})
   }, [])
 
@@ -720,16 +732,24 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
   }, [expand, items, toast])
 
+  const sendFeedback = useCallback(() => {
+    const c = config.data
+    if (!c?.repository) return toast('No project address to send feedback to')
+    track('feedback.open')
+    const q = new URLSearchParams({ template: 'feedback.yml', version: c.version, windows: c.windows })
+    openLink(`${c.repository}/issues/new?${q}`)
+  }, [config.data, toast, openLink])
+
   const value = useMemo<Ctx>(
     () => ({
       addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
       keysOpen, setKeysOpen, focusing, toggleFocus, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
-      outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog,
+      outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
       items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, pinnedOpen, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist],
+    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

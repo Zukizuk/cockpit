@@ -8,10 +8,12 @@ body:
     validations:
       required: true
   - type: input
+    id: version
     attributes:
       label: Version
       description: In Settings, at the bottom (e.g. Cockpit 0.1.0)
   - type: input
+    id: windows
     attributes:
       label: Windows version
   - type: textarea

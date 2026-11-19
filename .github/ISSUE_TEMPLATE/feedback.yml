@@ -1,0 +1,19 @@
+name: Feedback
+description: What you like, what gets in the way, what you'd change
+labels: [feedback]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Your feedback
+      description: Anything goes. A screenshot helps.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Cockpit version
+  - type: input
+    id: windows
+    attributes:
+      label: Windows build

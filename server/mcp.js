@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url'
 import { HOST, PORT, VERSION } from './lib/config.js'
 import { FORMATS, addCompare, addLink, addShown } from './lib/shown.js'
 import { addSnippetSync } from './lib/snippets.js'
+import * as telemetry from './lib/telemetry.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 
@@ -110,6 +111,9 @@ function fromLabel() {
 }
 
 export async function callTool(name, args = {}) {
+  try {
+    if (name === 'show' || name === 'snippet') telemetry.count(`mcp.${name}`)
+  } catch {}
   if (name === 'snippet') {
     try {
       const s = addSnippetSync({ text: args.text, title: args.title, secret: args.secret, language: args.language, keep: args.keep, from: fromLabel() })

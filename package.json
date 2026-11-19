@@ -58,5 +58,15 @@
     "vite": "^8.3.8"
   },
   "license": "MIT",
-  "author": "Sanni Marzuk"
+  "author": "Sanni Marzuk",
+  "cockpitTelemetry": {
+    "host": "https://eu.i.posthog.com",
+    "key": ""
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Zukizuk/cockpit"
+  },
+  "homepage": "https://github.com/Zukizuk/cockpit",
+  "bugs": "https://github.com/Zukizuk/cockpit/issues"
 }

@@ -1,6 +1,6 @@
 // The + box: paste a link or path to open it, type to add a line to today's journal, or find anything kept and put it on the board.
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpenText, Bookmark, ClipboardList, FileText, Keyboard, LayoutGrid, Globe, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
+import { BookOpenText, Bookmark, ClipboardList, FileText, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
 import { post } from '../api'
 import { ago } from '../lib'
 import { useBoard } from '../board'
@@ -161,6 +161,10 @@ export function Palette() {
               <CommandItem value="what's new changelog changes updates" onSelect={() => (close(), board.openChangelog())}>
                 <Sparkles strokeWidth={1.5} />
                 What's new
+              </CommandItem>
+              <CommandItem value="send feedback issue bug idea" onSelect={() => (close(), board.sendFeedback())}>
+                <MessageSquare strokeWidth={1.5} />
+                Send feedback
               </CommandItem>
               <CommandItem value="keyboard shortcuts keys" onSelect={() => (close(), board.setKeysOpen(true))}>
                 <Keyboard strokeWidth={1.5} />

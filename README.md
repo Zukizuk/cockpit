@@ -88,9 +88,14 @@ Notes are plain Markdown files, so any editor (and any agent) can read them.
 
 - The server listens on `127.0.0.1` only and refuses other hosts, other sites' origins and cross-site requests.
   Every change needs a custom header that a web page can't send.
-- Nothing is sent anywhere except what you ask for: a link you save is fetched to read it, and your Todoist token
+- Nothing else is sent anywhere unless you ask for it: a link you save is fetched to read it, and your Todoist token
   goes only to `api.todoist.com`.
 - HTML you open runs in a sandbox with no access to Cockpit.
+- **Usage counts are opt-in.** After its first day Cockpit asks once whether it may send anonymous counts of how
+  often features are used, once a day, with the version and Windows build, under a random id. Never what's on
+  your board. Settings → Privacy shows exactly what's sent and turns it off. A build with no key in
+  `package.json` (`cockpitTelemetry`), such as a fork, never asks and never sends. The code is
+  `server/lib/telemetry.js`.
 - See [SECURITY.md](SECURITY.md) to report a problem.
 
 ## Optional integrations
