@@ -265,6 +265,8 @@ export interface Config {
   claudeProjectsDir: string
   trackerConfig: string
   trackers: string[]
+  hiddenTrackers: string[]
+  scanTrackers: boolean
   sessionsDays: number
   hasTodoistToken: boolean
   dataDir: string
@@ -313,7 +315,7 @@ export const EDITORS: { value: Editor; label: string }[] = [
 /** The menu line for opening in the chosen editor. */
 export const editorLabel = (e: Editor) => (e === 'notepad' ? 'Open in Notepad' : e === 'vscode' ? 'Open in VS Code' : 'Open in its own program')
 
-export const openOutside = (body: { kind: 'shown' | 'note' | 'project' | 'notes-folder' | 'output'; id?: string; path?: string; index?: number | string; side?: 'left' | 'right'; how?: 'default' | 'reveal' | 'vscode' | 'notepad' | 'editor' }) =>
+export const openOutside = (body: { kind: 'shown' | 'note' | 'project' | 'notes-folder' | 'output' | 'path'; id?: string; path?: string; index?: number | string; side?: 'left' | 'right'; how?: 'default' | 'reveal' | 'vscode' | 'notepad' | 'editor' }) =>
   post<{ ok: true }>('/api/open', body)
 
 export type OutputKind = 'file' | 'link' | 'draft' | 'command' | 'prompt'
@@ -354,7 +356,33 @@ export interface OutputGroup {
   items: OutputItem[]
 }
 
-export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets'
+export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets' | 'folder'
+
+/** A task on the Today card's own list (when Todoist isn't connected). */
+export interface LocalTask {
+  id: string
+  content: string
+  createdAt: string
+  /** The day it was ticked off ('' while open). */
+  doneOn: string
+}
+
+/** One thing in a folder, for the folder card. */
+export interface FolderEntry {
+  name: string
+  path: string
+  dir: boolean
+  size: number
+  mtime: number
+  format: string
+}
+
+export interface FolderList {
+  path: string
+  name: string
+  entries: FolderEntry[]
+  more: number
+}
 
 export interface BoardCard {
   id: string

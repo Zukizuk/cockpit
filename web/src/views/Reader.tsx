@@ -8,7 +8,7 @@ import { useItemActions } from '../cards/ItemCard'
 import { IconButton } from '../cards/CardShell'
 import { NotePane, noteKind, noteTitle, useNote, type NoteMode } from '../components/NotePane'
 import { dayOf, todayPage, useJournalSync } from '../journal'
-import { Viewer, folderOf, kindLabel } from '../components/Viewer'
+import { Viewer, kindLabel, placeOf } from '../components/Viewer'
 import { cn } from '@/lib/utils'
 
 export function Reader() {
@@ -66,7 +66,7 @@ function ItemPage({ id }: { id: string }) {
   const wide = ['compare', 'csv', 'code', 'text', 'json', 'pdf', 'html', 'image', 'diff', 'video', 'sheet'].includes(e.format)
   return (
     <div className={cn('reader-page', wide && 'wide')}>
-      <Bar kicker={[kindLabel(e), e.kind === 'link' ? e.siteName : e.kind === 'file' ? folderOf(e.path) : e.from, ago(e.shownAt || e.createdAt)].filter(Boolean).join(' · ')} title={e.title}>
+      <Bar kicker={[kindLabel(e), e.kind === 'link' ? e.siteName : e.kind === 'file' ? placeOf(e.path) : e.from, ago(e.shownAt || e.createdAt)].filter(Boolean).join(' · ')} title={e.title}>
         {actions
           .filter(a => !a.hidden)
           .map(a => (

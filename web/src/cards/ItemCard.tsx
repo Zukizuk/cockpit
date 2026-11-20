@@ -5,7 +5,7 @@ import { Code2, Copy, ExternalLink, PenLine, FolderOpen, Globe, Maximize2, Pin, 
 import { get, openOutside, post, type ShownEntry, type ShownRead } from '../api'
 import { ago } from '../lib'
 import { SIZES, useBoard, type CardNode } from '../board'
-import { Viewer, basename, folderOf, iconFor, kindLabel } from '../components/Viewer'
+import { Viewer, basename, iconFor, kindLabel, placeOf } from '../components/Viewer'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CardShell, IconButton, type CardAction } from './CardShell'
 import { editorLabel } from '../api'
@@ -141,7 +141,7 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
     ...actions,
     { label: 'Remove from board', icon: X, run: () => board.removeCard(id), gap: true },
   ]
-  const sub = e ? [kindLabel(e), e.kind === 'link' ? e.siteName : e.kind === 'file' ? folderOf(e.path) : e.from, ago(e.shownAt || e.createdAt)].filter(Boolean).join(' · ') : ''
+  const sub = e ? [kindLabel(e), e.kind === 'link' ? e.siteName : e.kind === 'file' ? placeOf(e.path) : e.from, ago(e.shownAt || e.createdAt)].filter(Boolean).join(' · ') : ''
 
   return (
     <CardShell

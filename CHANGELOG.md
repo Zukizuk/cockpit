@@ -7,16 +7,25 @@ Newest first. Each change is listed under New, Improved or Fixed.
 **New**
 - **Updates.** Cockpit checks for a new release about once a day. When there is one, the Settings button gets a dot and Settings > Updates offers **Update now**: it downloads the release, checks it against the checksum GitHub publishes, installs it and reopens Cockpit, with your notes and board untouched. You can turn the check off. (From 0.1.2, install this version by hand once; after that it updates itself.)
 - **Outputs for everyone using Claude Code.** The installer offers a small Claude Code hook that lists what each turn made under Outputs: files written or edited, drafts, commands and links. Uninstall takes it out again.
-- **A daily copy of the board**, the last 14 kept in .cockpitackups.
+- **A daily copy of the board**, the last 14 kept in `.cockpit/backups`.
+- **Folders on the board.** Paste a folder's path (or put a pinned folder on the board) and it becomes a card with its files as a tree. Open subfolders in place; click a file to open it as a card beside the folder, or double-click to open it in its own program. Bigger folders get a box to find a file by name.
+- **Today works without Todoist.** With no Todoist connected, the Today card (T) is a simple to-do list kept on this PC. Click a task's words to change them; tick it off or remove it. With Todoist, you can now change and remove tasks too.
+- **Keep Quick access open.** The pin at the top of Quick access keeps it beside the board while you work, until you close it (or press Q).
+- **Drag anything onto the board.** Rows in Later, Outputs, Quick access and a folder card all become cards where you drop them, and so does a link dragged in from the browser.
 
 **Improved**
-- Cockpit no longer looks through your Projects, Desktop and synced folders for tracker files unless you turn that on; the Trackers box in Settings appears once there's a tracker.
+- A new task shows on the Today card at once, and is saved to Todoist in the background.
+- Settings has its sections down the left and keeps one size, so nothing jumps in after it opens.
+- Trackers add themselves: when a Claude Code chat works in a folder with a tracker, it's listed (Settings > Claude Code), and Remove takes one off for good. No list of paths to type. Cockpit only looks through your Projects, Desktop and synced folders for trackers if you turn that on.
+- Switching sheets in a workbook is instant: the other sheets load in the background once the first is shown.
+- A file's place reads as the two folders it's in ("Coupa › Savings Tracker"), not its whole path, on cards, in full screen and in Quick access. Quick access lost its long description.
 - If Cockpit can't start (another program on its port, say), opening it says so instead of doing nothing. Without Edge, it opens in your default browser.
 - The installer says plainly when Ctrl+Alt+K couldn't be set up, and Uninstall reminds you to remove a Cockpit installed as an app from Edge.
 - A smaller download.
 
 **Fixed**
 - Installing or uninstalling one copy of Cockpit stopped the Ctrl+Alt+K helper of any other copy on the same PC.
+- A PC without the hub listed a tracker called "hub" that couldn't be found.
 
 ## 20 November 2026 (version 0.1.2)
 

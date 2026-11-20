@@ -34,6 +34,8 @@ import { Input } from '@/components/ui/input'
 import { Kbd } from '@/components/ui/kbd'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { isPath, isUrl } from './paste'
+import { dragToBoard } from '../drag'
+import { placeOf } from '../components/Viewer'
 import { cn } from '@/lib/utils'
 
 function iconOf(p: Pin): LucideIcon {
@@ -56,12 +58,11 @@ function whereOf(p: Pin) {
     }
   }
   if (p.kind === 'note') return 'Note'
-  const parts = p.target.split(/[\\/]/).filter(Boolean)
-  return parts.slice(-3, -1).join(' › ') || p.target
+  return placeOf(p.target) || p.target
 }
 
 /** Dragged out of the panel onto the board, a row becomes a card where it's dropped (App's board handles the drop). */
-export const QUICK_DRAG = 'application/x-cockpit-quick'
+export { BOARD_DRAG as QUICK_DRAG } from '../drag'
 
 type RowAction = { label: string; icon: LucideIcon; run: () => void; primary?: boolean; danger?: boolean; gap?: boolean }
 
@@ -96,11 +97,7 @@ function QuickRow({ thing, icon: Icon, title, detail, faded, n, onOpen, actions 
       <ContextMenuTrigger asChild>
         <div
           className="out-row group/row"
-          draggable={thing.kind !== 'folder'}
-          onDragStart={e => {
-            e.dataTransfer.setData(QUICK_DRAG, JSON.stringify(thing))
-            e.dataTransfer.effectAllowed = 'copy'
-          }}
+          {...dragToBoard(thing)}
         >
           <Icon className={cn('size-4 shrink-0 text-muted-foreground', faded && 'opacity-40')} strokeWidth={1.5} />
           <button type="button" className="min-w-0 flex-1 text-left" onClick={onOpen} title={thing.target}>
@@ -178,7 +175,7 @@ function PinRow({ p, n }: { p: Pin; n?: number }) {
     ...(outside ? [{ label: openLabel(p.kind), icon: ExternalLink, run: () => board.openPin(p), primary: true }] : []),
     ...(p.viewable ? [{ label: p.kind === 'note' ? 'Open in Cockpit' : 'Read in Cockpit', icon: BookOpen, run: () => board.readPin(p), primary: true }] : []),
     ...(p.kind === 'file' || p.kind === 'folder' ? [{ label: 'Show in Explorer', icon: FolderOpen, run: () => board.openPin(p, 'reveal') }] : []),
-    ...(p.kind !== 'folder' ? [{ label: 'Put on the board', icon: LayoutGrid, run: () => board.putOnBoard(p) }] : []),
+    { label: 'Put on the board', icon: LayoutGrid, run: () => board.putOnBoard(p) },
     { label: 'Rename', icon: Pencil, run: () => setEditing('title'), gap: true },
     { label: 'Move to a group', icon: FolderInput, run: () => setEditing('group') },
     { label: 'Unpin', icon: PinOff, run: () => post(`/api/pinned/${p.id}/remove`).catch((e: Error) => board.toast(e.message)), danger: true, gap: true },
@@ -213,7 +210,7 @@ function OftenRow({ o, n }: { o: Often; n: number }) {
   const actions: RowAction[] = [
     ...(o.kind !== 'note' ? [{ label: openLabel(o.kind), icon: ExternalLink, run: () => board.openOften(o, 'outside'), primary: true }] : []),
     ...(o.viewable ? [{ label: o.kind === 'note' ? 'Open in Cockpit' : 'Read in Cockpit', icon: BookOpen, run: () => board.readPin(thing), primary: true }] : []),
-    ...(o.kind !== 'folder' ? [{ label: 'Put on the board', icon: LayoutGrid, run: () => board.putOnBoard(thing) }] : []),
+    { label: 'Put on the board', icon: LayoutGrid, run: () => board.putOnBoard(thing) },
     { label: 'Pin it', icon: PinIcon, run: () => act('pin'), gap: true },
     { label: "Don't show this here", icon: EyeOff, run: () => act('hide') },
   ]
@@ -265,10 +262,29 @@ export function PinnedSheet() {
 
   return (
     <Sheet open={board.pinnedOpen} onOpenChange={board.setPinnedOpen} modal={false}>
-      <SheetContent side="left" className="glass-panel w-[min(400px,calc(100vw-24px))] gap-0 sm:max-w-none">
+      <SheetContent
+        side="left"
+        className="glass-panel w-[min(400px,calc(100vw-24px))] gap-0 sm:max-w-none"
+        // kept open: working on the board leaves it where it is; only the close button (or Q) closes it
+        onInteractOutside={e => board.quickKept && e.preventDefault()}
+        onEscapeKeyDown={e => board.quickKept && e.preventDefault()}
+      >
         <SheetHeader className="pb-2">
           <SheetTitle>Quick access</SheetTitle>
-          <SheetDescription>What you pinned, and what you keep opening. A click opens it, 1 to 9 open the first nine, and dragging one onto the board makes it a card.</SheetDescription>
+          <SheetDescription className="sr-only">Pinned things and what you open often. Drag one onto the board to make it a card.</SheetDescription>
+          <button
+            type="button"
+            aria-pressed={board.quickKept}
+            title={board.quickKept ? 'Kept open: click to let it close by itself again' : 'Keep open beside the board'}
+            onClick={() => board.setQuickKept(!board.quickKept)}
+            className={cn(
+              'absolute top-[10px] right-10 grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color] duration-150 hover:bg-ink/[0.08] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              board.quickKept && 'bg-ink/10 text-foreground',
+            )}
+          >
+            <PinIcon className={cn('size-[15px]', board.quickKept && 'fill-current')} strokeWidth={1.75} />
+            <span className="sr-only">Keep open</span>
+          </button>
         </SheetHeader>
         <div className="px-4 pb-3">
           <Input
@@ -292,7 +308,7 @@ export function PinnedSheet() {
               <p>Nothing here yet.</p>
               <p className="text-[12.5px] leading-relaxed">
                 Paste a path or a link above, or choose Pin on a card or in the <Kbd>Ctrl</Kbd> <Kbd>K</Kbd> box. What you open three times in two weeks
-                shows up here by itself.
+                shows up here by itself. Drag any of them onto the board to make it a card.
               </p>
             </div>
           )}

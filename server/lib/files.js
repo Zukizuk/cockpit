@@ -80,6 +80,15 @@ export function looksLikeText(file) {
 }
 
 /** { format, language? } for a file on disk. */
+/** The format from the extension alone (no reading the file): '' when the extension says nothing. */
+export function formatByExt(file) {
+  const ext = extOf(file)
+  if (FORMAT_BY_EXT[ext]) return FORMAT_BY_EXT[ext]
+  if (LANGUAGE_BY_EXT[ext]) return 'code'
+  if (BINARY_EXT.has(ext)) return 'binary'
+  return ''
+}
+
 export function detect(file) {
   const ext = extOf(file)
   if (FORMAT_BY_EXT[ext]) return { format: FORMAT_BY_EXT[ext], language: ext === 'json' ? 'json' : undefined }

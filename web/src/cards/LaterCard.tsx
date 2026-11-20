@@ -7,9 +7,10 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { BookOpen, Bookmark, Check, Copy, ExternalLink, Globe, LayoutGrid, MoreHorizontal, Pencil, Pin, RotateCcw, StickyNote, X, type LucideIcon } from 'lucide-react'
 import { get, openOutside, type LaterState, type ShownEntry, type ShownRead } from '../api'
-import { folderOf, iconFor } from '../components/Viewer'
+import { iconFor, placeOf } from '../components/Viewer'
 import { ago } from '../lib'
 import { useBoard, type CardNode } from '../board'
+import { dragToBoard } from '../drag'
 import { CardShell } from './CardShell'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -182,7 +183,7 @@ function LaterRow({ e }: { e: ShownEntry }) {
   const Icon = isLink ? Globe : isFile ? iconFor(e) : StickyNote
   // a link named after its own address says where on the site it goes instead of repeating the site
   const unnamed = isLink && (e.title === e.siteName || e.title === e.url || !!e.autoTitle)
-  const where = isLink ? (unnamed && pathOf(e.url)) || e.siteName : isFile ? folderOf(e.path) : 'Note'
+  const where = isLink ? (unnamed && pathOf(e.url)) || e.siteName : isFile ? placeOf(e.path) : 'Note'
   const status = isLink && e.format === 'link' ? (stillReading(e) ? 'Getting the page…' : e.readError ? 'Browser only' : '') : ''
   const when = state === 'done' ? `done ${ago(e.doneAt)}` : ago(e.laterAt || e.createdAt)
   const old = state === 'todo' && Date.now() - Date.parse(e.laterAt || e.createdAt) > 3 * 86_400_000
@@ -191,7 +192,7 @@ function LaterRow({ e }: { e: ShownEntry }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className={cn('later-row', menuOpen && 'is-menu')} onDoubleClick={() => !note && readable && read()}>
+        <div className={cn('later-row', menuOpen && 'is-menu')} onDoubleClick={() => !note && readable && read()} {...dragToBoard({ kind: 'item', target: e.id, title: e.title })}>
           <Icon className="later-icon" strokeWidth={1.5} />
           {mode === 'naming' ? (
               <Input

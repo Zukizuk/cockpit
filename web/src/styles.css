@@ -2157,3 +2157,130 @@ table.data tbody tr:hover td {
   border-radius: 16px;
   translate: -50% -50%;
 }
+
+/* ---- a folder card: the tree ------------------------------------------------------------------------------ */
+
+.folder-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding-right: 8px;
+  border-radius: 7px;
+  cursor: default;
+  transition: background-color 150ms ease-out;
+}
+
+.folder-row:hover {
+  background: oklch(var(--contrast) / 0.05);
+}
+
+.folder-meta {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.folder-actions {
+  position: absolute;
+  inset-block: 0;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 22px;
+  background: linear-gradient(to right, transparent, var(--card) 18px);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.folder-row:hover .folder-actions,
+.folder-row:focus-within .folder-actions {
+  opacity: 1;
+}
+
+.folder-row:hover .folder-meta {
+  visibility: hidden;
+}
+
+.folder-note {
+  padding-block: 6px;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+}
+
+/* ---- Today: one task per row, its buttons on hover ------------------------------------------------------- */
+
+.task-row {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 9px 2px;
+  border-bottom: 1px solid oklch(var(--contrast) / 0.06);
+}
+
+.task-row:last-child {
+  border-bottom: 0;
+}
+
+.task-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+
+.task-row:hover .task-actions,
+.task-row:focus-within .task-actions {
+  opacity: 1;
+}
+
+/* ---- Settings: sections down the left, one size whichever is open ---------------------------------------- */
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 168px;
+  flex-shrink: 0;
+  padding: 16px 8px 12px;
+  border-right: 1px solid oklch(var(--contrast) / 0.06);
+  background: oklch(var(--contrast) / 0.02);
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 7px;
+  font-size: 13.5px;
+  text-align: left;
+  color: var(--muted-foreground);
+  outline: none;
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+
+.settings-tab:hover {
+  background: oklch(var(--contrast) / 0.05);
+  color: var(--foreground);
+}
+
+.settings-tab.is-on {
+  background: oklch(var(--contrast) / 0.08);
+  color: var(--foreground);
+}
+
+.settings-tab:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+@media (max-width: 560px) {
+  .settings-nav {
+    width: 128px;
+  }
+}

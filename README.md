@@ -36,8 +36,11 @@ Windows may warn that the installer is from an unknown publisher: the release is
   read-only until you unlock them.
 - **Snippets** (<kbd>C</kbd>): things you copy often, one click each. Secrets are encrypted on disk with Windows'
   own data protection and hidden until revealed.
-- **Quick access** (<kbd>Q</kbd>): your pins, plus what you open most.
-- **Today** (<kbd>T</kbd>): today's Todoist tasks, if you add your Todoist token in Settings.
+- **Quick access** (<kbd>Q</kbd>): your pins, plus what you open most. Its pin keeps it open beside the board.
+  Drag a row from it (or from Later, Outputs or a folder card) onto the board to make it a card.
+- **Today** (<kbd>T</kbd>): a simple to-do list on this PC, or today's Todoist tasks once you add your Todoist token
+  in Settings.
+- **Folders**: paste a folder's path and it's a card with its files as a tree; click a file to open it beside it.
 - **The board**: drag, resize, fold, lock in place (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>), tidy
   (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd>), undo (<kbd>Ctrl</kbd> <kbd>Z</kbd>). Right-click the board for
   the rest, <kbd>Ctrl</kbd> <kbd>K</kbd> to add or find anything, <kbd>?</kbd> for every shortcut.
@@ -118,9 +121,9 @@ Notes are plain Markdown files, so any editor (and any agent) can read them.
 These stay out of the way until you set them up:
 
 - **Todoist**: paste your API token in Settings.
-- **Trackers**: `tracker.json` files from the tracker mod for Claude Code. List them in Settings (the box appears once
-  there is one), or set `"scanTrackers": true` in `.cockpit\config.json` to look through Projects, Desktop and synced
-  folders for them.
+- **Trackers**: `tracker.json` files from the tracker mod for Claude Code. One a Claude Code chat works in is added
+  by itself (through the Outputs hook); Settings → Claude Code lists them, takes one off, and can look through
+  Projects, Desktop and synced folders for more.
 - **Journal sync over SSH** (`kokoroHost` in `.cockpit\config.json`): swaps journal pages with a self-hosted
   journal service through a restricted SSH key. See `server/lib/journal-sync.js` and `scripts/kokoro-gate.py`.
 

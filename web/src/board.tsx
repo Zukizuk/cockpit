@@ -20,6 +20,7 @@ export const SIZES: Record<CardType, { w: number; h: number }> = {
   command: { w: 600, h: 460 },
   later: { w: 440, h: 560 },
   snippets: { w: 400, h: 140 },
+  folder: { w: 420, h: 520 },
 }
 
 /** A sticky note: any note that isn't a journal page or a draft (new ones live in notes/stickies). */
@@ -92,7 +93,7 @@ export type Expanded = { type: 'item' | 'note'; ref: string } | null
 /** Where a new card goes: beside another card (near), at a point on the board (at, where something was dropped), or else the middle. */
 export type PlaceOpts = { near?: string; at?: { x: number; y: number }; size?: { w: number; h: number } }
 /** Something from Quick access: a pin or an often-opened thing. */
-export type QuickThing = { kind: Pin['kind']; target: string; title: string }
+export type QuickThing = { kind: Pin['kind'] | 'item' | 'text'; target: string; title: string }
 /** A button in the toast: Undo, mostly. */
 export type ToastAction = { label: string; run: () => void }
 /** How the board behaves (Settings). */
@@ -158,7 +159,10 @@ interface Ctx {
   setOutputsOpen: (open: boolean) => void
   /** Pinned: what is opened often, in a panel from the left. */
   pinnedOpen: boolean
-  setPinnedOpen: (open: boolean) => void
+  setPinnedOpen: (open: boolean, auto?: boolean) => void
+  /** Quick access stays open beside the board until closed by hand. */
+  quickKept: boolean
+  setQuickKept: (on: boolean) => void
   pinned: PinnedList
   pin: (body: PinInput) => Promise<void>
   openPin: (p: Pin, how?: 'default' | 'reveal') => Promise<void>
@@ -201,7 +205,33 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [palette, setPaletteOpen] = useState(false)
   const [paletteSeed, setPaletteSeed] = useState('')
   const [outputsOpen, setOutputsOpen] = useState(false)
-  const [pinnedOpen, setPinnedOpen] = useState(false)
+  const [pinnedOpen, setPinnedOpenState] = useState(false)
+  // Quick access kept open: it stays beside the board until closed by hand (remembered on this PC)
+  const [quickKept, setQuickKeptState] = useState(() => {
+    try {
+      return localStorage.getItem('cockpit.quickKept') === '1'
+    } catch {
+      return false
+    }
+  })
+  const quickKeptRef = useRef(quickKept)
+  quickKeptRef.current = quickKept
+  const setQuickKept = useCallback((on: boolean) => {
+    setQuickKeptState(on)
+    try {
+      localStorage.setItem('cockpit.quickKept', on ? '1' : '0')
+    } catch {
+      // private window: for this visit only
+    }
+  }, [])
+  /** Opens or closes Quick access; something opened from it (auto) leaves it open when it's kept open. */
+  const setPinnedOpen = useCallback((open: boolean, auto?: boolean) => {
+    if (!open && auto && quickKeptRef.current) return
+    setPinnedOpenState(open)
+  }, [])
+  useEffect(() => {
+    if (quickKept) setPinnedOpenState(true)
+  }, [quickKept])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [keysOpen, setKeysOpen] = useState(false)
   useEffect(() => void (settingsOpen && track('settings.open')), [settingsOpen])
@@ -215,7 +245,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const outputs = useData(() => get<OutputGroup[]>('/api/outputs'), [], { refreshEvery: 60_000 })
   const items = useData(() => get<ShownEntry[]>('/api/shown'), [], { refreshOn: ['shown'] })
   const notes = useData(() => get<NotesList>('/api/notes'), [], { refreshOn: ['notes'] })
-  const trackers = useData(() => get<Tracker[]>('/api/trackers'), [], { refreshEvery: 300_000 })
+  const trackers = useData(() => get<Tracker[]>('/api/trackers'), [], { refreshEvery: 300_000, refreshOn: ['trackers'] })
   const pinned = useData(() => get<PinnedList>('/api/pinned'), [], { refreshOn: ['pinned'] })
   const config = useData(() => get<Config>('/api/config'), [])
   const prefs = useMemo<Prefs>(
@@ -427,7 +457,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     async (body: Record<string, unknown>, opts: PlaceOpts = {}) => {
       if (body.url) toast('Reading the page…')
       try {
-        const e = await post<ShownEntry>('/api/shown', body)
+        const e = await post<ShownEntry & { folder?: string }>('/api/shown', body)
+        if (e.folder) return void addCard('folder', e.folder, opts)
         addCard('item', e.id, opts)
         items.reload()
         if (e.readError) toast("Couldn't read that page here; it opens in the browser from its card")
@@ -677,7 +708,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       try {
         const r = await post<Pin & { note?: string }>(`/api/pinned/${p.id}/open`, { how })
         if (r.note) {
-          setPinnedOpen(false)
+          setPinnedOpen(false, true)
           setExpanded({ type: 'note', ref: r.note })
         } else toast(how === 'reveal' ? `Showing ${p.title} in Explorer` : `Opening ${p.title}`)
       } catch (e: any) {
@@ -697,7 +728,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   /** Reads a pin full screen in Cockpit (a file Cockpit can show, a page, a note) instead of its own program. */
   const readPin = useCallback(
     async (p: QuickThing) => {
-      setPinnedOpen(false)
+      setPinnedOpen(false, true)
       if (p.kind === 'note') return expand({ type: 'note', ref: p.target })
       if (p.kind === 'link') toast('Reading the page…')
       try {
@@ -715,7 +746,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   /** A card for something from Quick access, put where it was dropped on the board (or in a free spot). */
   const putOnBoard = useCallback(
     async (p: QuickThing, at?: { x: number; y: number }) => {
-      if (p.kind === 'folder') return toast('A folder opens in Explorer; it has no card')
+      if (p.kind === 'folder') return void addCard('folder', p.target, { at })
+      if (p.kind === 'item') return void addCard('item', p.target, { at })
+      if (p.kind === 'text') return showItem({ content: p.target, format: 'markdown', title: p.title }, { at })
       if (p.kind === 'note') return void addCard('note', p.target, { at })
       await showItem(p.kind === 'link' ? { url: p.target, title: p.title } : { path: p.target, title: p.title }, { at })
     },
@@ -727,7 +760,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       try {
         const r = await post<{ expand?: Expanded; opened?: boolean }>('/api/usage/open', { key: o.key, how })
         if (r.expand) {
-          setPinnedOpen(false)
+          setPinnedOpen(false, true)
           setExpanded(r.expand)
           post('/api/usage', r.expand.type === 'note' ? { note: r.expand.ref } : { id: r.expand.ref }).catch(() => {})
         } else toast(`Opening ${o.title}`)
@@ -762,11 +795,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
       keysOpen, setKeysOpen, focusing, toggleFocus, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
-      pinnedOpen, setPinnedOpen, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
+      pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
       items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist],
+    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

@@ -93,8 +93,7 @@ export function forgetCache() {
 
 export async function closeTask(token, id, fetchImpl = fetch) {
   if (!token) throw new UserError('Add your Todoist token in Settings first')
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(id))) throw new UserError('Not a task id')
-  await call(token, 'POST', `/tasks/${encodeURIComponent(id)}/close`, null, fetchImpl)
+  await call(token, 'POST', `/tasks/${checkId(id)}/close`, null, fetchImpl)
   forgetCache()
 }
 
@@ -109,5 +108,25 @@ export async function quickAdd(token, text, fetchImpl = fetch) {
   let r = await call(token, 'POST', '/tasks/quick', { text: line.slice(0, 1000) }, fetchImpl)
   if (r?.id && !r.due) r = (await call(token, 'POST', `/tasks/${encodeURIComponent(r.id)}`, { due_string: 'today' }, fetchImpl)) || r
   forgetCache()
-  return r
+  return r?.id ? normalizeTask(r) : null
+}
+
+const checkId = id => {
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(String(id))) throw new UserError('Not a task id')
+  return encodeURIComponent(String(id))
+}
+
+/** Changes a task's words. */
+export async function renameTask(token, id, content, fetchImpl = fetch) {
+  if (!token) throw new UserError('Add your Todoist token in Settings first')
+  const line = String(content || '').trim()
+  if (!line) throw new UserError('A task needs some words')
+  await call(token, 'POST', `/tasks/${checkId(id)}`, { content: line.slice(0, 1000) }, fetchImpl)
+  forgetCache()
+}
+
+export async function deleteTask(token, id, fetchImpl = fetch) {
+  if (!token) throw new UserError('Add your Todoist token in Settings first')
+  await call(token, 'DELETE', `/tasks/${checkId(id)}`, null, fetchImpl)
+  forgetCache()
 }

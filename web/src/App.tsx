@@ -11,13 +11,15 @@ import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
 import { NoteCard } from './cards/NoteCard'
 import { OutputsCard, OutputsList, newSinceOf, summary } from './cards/OutputsCard'
-import { TasksCard, TrackerCard } from './cards/WorkCards'
+import { TrackerCard } from './cards/WorkCards'
+import { TasksCard } from './cards/TasksCard'
 import { CommandCard } from './cards/CommandCard'
 import { LaterCard, laterCounts } from './cards/LaterCard'
 import { dayOf } from './journal'
 import { SnippetsCard } from './cards/SnippetsCard'
 import { Palette } from './views/Palette'
 import { PinnedSheet, QUICK_DRAG } from './views/PinnedSheet'
+import { FolderCard } from './cards/FolderCard'
 import { Reader } from './views/Reader'
 import { SettingsDialog } from './views/SettingsDialog'
 import { isPath, isUrl } from './views/paste'
@@ -28,7 +30,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard }
+const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard }
 
 export function App() {
   const [board, setBoard] = useState<Board | null>(null)
@@ -228,8 +230,8 @@ function Canvas({ initial }: { initial: Board }) {
         l: () => board.addCard('later', 'later'),
         c: () => board.addCard('snippets', 'snippets'),
         o: () => board.setOutputsOpen(true),
-        p: () => board.setPinnedOpen(true),
-        q: () => board.setPinnedOpen(true),
+        p: () => board.setPinnedOpen(!board.pinnedOpen),
+        q: () => board.setPinnedOpen(!board.pinnedOpen),
         t: () => board.addCard('tasks', 'today'),
         // the journal card, back on today (it's moved, not doubled, if it was on an earlier day)
         j: () =>
@@ -262,20 +264,30 @@ function Canvas({ initial }: { initial: Board }) {
     return () => removeEventListener('keydown', onKey)
   }, [board, rf])
 
-  // Something dragged out of Quick access becomes a card where it's dropped
+  // Something dragged out of a list (Quick access, Later, Outputs, a folder card) becomes a card where it's dropped;
+  // so does a link dragged in from the browser
+  const outside = (e: React.DragEvent) => e.dataTransfer.types.includes('text/uri-list') && !e.dataTransfer.types.includes('Files')
   const onDragOver = (e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes(QUICK_DRAG)) return
+    if (!e.dataTransfer.types.includes(QUICK_DRAG) && !outside(e)) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'copy'
   }
   const onDrop = (e: React.DragEvent) => {
+    const at = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
     const raw = e.dataTransfer.getData(QUICK_DRAG)
-    if (!raw) return
-    e.preventDefault()
-    try {
-      board.putOnBoard(JSON.parse(raw), rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }))
-    } catch {
-      // not ours
+    if (raw) {
+      e.preventDefault()
+      try {
+        board.putOnBoard(JSON.parse(raw), at)
+      } catch {
+        // not ours
+      }
+      return
+    }
+    const url = e.dataTransfer.getData('text/uri-list').split(/\r?\n/).find(l => /^https?:\/\//i.test(l.trim()))
+    if (url) {
+      e.preventDefault()
+      board.showItem({ url: url.trim() }, { at })
     }
   }
 
@@ -479,7 +491,7 @@ function Dock() {
         {/* a little sticky note that peeks up on hover (FigJam's toolbar does this) */}
         <span aria-hidden className={cn('dock-sticky', `paper-${board.prefs.stickyColor}`)} />
       </DockButton>
-      <DockButton label="Quick access" shortcut="Q" onClick={() => board.setPinnedOpen(true)} active={board.pinnedOpen}>
+      <DockButton label="Quick access" shortcut="Q" onClick={() => board.setPinnedOpen(!board.pinnedOpen)} active={board.pinnedOpen}>
         <Pin className="size-[16px]" strokeWidth={1.75} />
       </DockButton>
       <DockButton label="Later" shortcut="L" onClick={() => board.addCard('later', 'later')}>

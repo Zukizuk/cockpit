@@ -11,6 +11,7 @@ import { get, openOutside, post, type Changes, type OutputGroup, type OutputItem
 import { ago, clock } from '../lib'
 import { useBoard, type CardNode } from '../board'
 import { basename, tidyPath } from '../components/Viewer'
+import { dragToBoard } from '../drag'
 import { CardShell, type CardAction } from './CardShell'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -168,7 +169,15 @@ export function OutputRow({ group, item, index, near, onView, counts }: { group:
   const shown = item.kind === 'file' && counts && counts.repo && counts.added + counts.removed > 0 ? counts : null
   return (
     <>
-      <div className="out-row group/row" onDoubleClick={view}>
+      <div
+        className="out-row group/row"
+        onDoubleClick={view}
+        {...dragToBoard(
+          item.kind === 'file' || item.kind === 'link'
+            ? { kind: item.kind, target: item.target, title: label }
+            : { kind: 'text', target: item.kind === 'command' ? '```\n' + (item.text || '') + '\n```' : item.text || item.label, title: item.label.slice(0, 120) },
+        )}
+      >
         <Icon className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.5} />
         <button type="button" className="min-w-0 shrink text-left" onClick={item.kind === 'command' ? () => setRunning(true) : view} title={item.target || item.text}>
           <span className="block truncate text-[13.5px]">{label}</span>

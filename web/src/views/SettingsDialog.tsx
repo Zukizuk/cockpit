@@ -1,13 +1,16 @@
-// Settings, as a small dialog: how the board behaves, Todoist, the notes folder, extra trackers, and What's new.
-import { useEffect, useState } from 'react'
+// Settings, as a dialog with its sections down the left: the board, tasks, notes, Claude Code, updates, privacy.
+// It keeps one size whichever section is open, and everything it shows is loaded before it's drawn (and kept
+// between openings), so nothing jumps in after it opens.
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ago } from '../lib'
-import { MessageSquare, Sparkles } from 'lucide-react'
-import { EDITORS, get, post, type Config, type TelemetryStatus, type TodoState, type UpdateStatus } from '../api'
+import { MessageSquare, Sparkles, X } from 'lucide-react'
+import { EDITORS, get, post, type Config, type TelemetryStatus, type TodoState, type Tracker, type UpdateStatus } from '../api'
 import { useBoard } from '../board'
 import { STICKY_COLORS } from '../cards/CardShell'
+import { placeOf } from '../components/Viewer'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
@@ -24,6 +27,8 @@ const GAPS = [
   { value: 40, label: 'Roomy' },
 ]
 
+type Section = 'board' | 'tasks' | 'notes' | 'claude' | 'updates' | 'privacy'
+
 /** One setting: its name (and a short line under it) on the left, the control on the right. */
 function Row({ name, hint, children }: { name: string; hint?: string; children: React.ReactNode }) {
   return (
@@ -37,36 +42,46 @@ function Row({ name, hint, children }: { name: string; hint?: string; children: 
   )
 }
 
+function OnOff({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <ToggleGroup type="single" variant="outline" size="sm" value={on ? 'on' : 'off'} onValueChange={v => v && onChange(v === 'on')}>
+      <ToggleGroupItem value="on" className="px-3">
+        On
+      </ToggleGroupItem>
+      <ToggleGroupItem value="off" className="px-3">
+        Off
+      </ToggleGroupItem>
+    </ToggleGroup>
+  )
+}
+
 export function SettingsDialog() {
   const board = useBoard()
   const [cfg, setCfg] = useState<Config | null>(null)
-  const [token, setToken] = useState('')
-  const [replacing, setReplacing] = useState(false)
-  const [notesDir, setNotesDir] = useState('')
-  const [trackers, setTrackers] = useState('')
-  const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null)
   const [usage, setUsage] = useState<TelemetryStatus | null>(null)
-  const [showSent, setShowSent] = useState(false)
-  const chooseUsage = async (choice: 'yes' | 'no') => {
-    try {
-      setUsage(await post<TelemetryStatus>('/api/telemetry', { choice }))
-      setMsg({ t: choice === 'yes' ? 'Thanks: usage counts are on.' : 'Usage counts are off, and anything counted is gone.' })
-    } catch (e: any) {
-      setMsg({ t: e.message, bad: true })
-    }
-  }
+  const [upd, setUpd] = useState<UpdateStatus | null>(null)
+  const [section, setSection] = useState<Section>('board')
+  const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null)
 
+  // loaded together (at start, and again on each opening), drawn once all three are here
+  const load = useCallback(async () => {
+    const [c, u, up] = await Promise.all([
+      get<Config>('/api/config'),
+      get<TelemetryStatus>('/api/telemetry').catch(() => null),
+      get<UpdateStatus>('/api/update').catch(() => null),
+    ])
+    setCfg(c)
+    setUsage(u)
+    setUpd(up)
+  }, [])
+  useEffect(() => {
+    load().catch(() => {})
+  }, [load])
   useEffect(() => {
     if (!board.settingsOpen) return
     setMsg(null)
-    setShowSent(false)
-    get<TelemetryStatus>('/api/telemetry').then(setUsage, () => setUsage(null))
-    get<Config>('/api/config').then(c => {
-      setCfg(c)
-      setNotesDir(c.notesDir)
-      setTrackers(c.trackers.join('\n'))
-    })
-  }, [board.settingsOpen])
+    load().catch(() => {})
+  }, [board.settingsOpen, load])
 
   const save = async (patch: Record<string, unknown>, done: string) => {
     try {
@@ -78,226 +93,86 @@ export function SettingsDialog() {
     }
   }
 
+  const sections: { id: Section; label: string; dot?: boolean }[] = [
+    { id: 'board', label: 'Board' },
+    { id: 'tasks', label: 'Tasks' },
+    { id: 'notes', label: 'Notes' },
+    { id: 'claude', label: 'Claude Code' },
+    { id: 'updates', label: 'Updates', dot: !!upd?.available },
+    ...(usage?.available ? [{ id: 'privacy' as Section, label: 'Privacy' }] : []),
+  ]
+
   return (
     <Dialog open={board.settingsOpen} onOpenChange={board.setSettingsOpen}>
-      <DialogContent className="glass-panel max-h-[calc(100vh-48px)] grid-cols-1 overflow-y-auto sm:max-w-[560px]">
-        <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>Everything stays on this PC.</DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-1 gap-6">
-          <section className="grid gap-3">
-            <h3 className="text-[14px] font-medium">Board</h3>
-            <Row name="Theme">
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                value={cfg?.theme ?? 'system'}
-                onValueChange={v => v && save({ theme: v }, 'Saved.')}
+      <DialogContent showCloseButton={false} className="glass-panel settings flex h-[min(560px,calc(100vh-48px))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]">
+        <DialogTitle className="sr-only">Settings</DialogTitle>
+        <DialogDescription className="sr-only">Everything stays on this PC.</DialogDescription>
+        <div className="flex min-h-0 flex-1">
+          <nav className="settings-nav" aria-label="Settings">
+            <p className="px-3 pt-1 pb-3 text-[15px] font-medium">Settings</p>
+            {sections.map(x => (
+              <button
+                key={x.id}
+                type="button"
+                aria-current={section === x.id ? 'page' : undefined}
+                className={cn('settings-tab', section === x.id && 'is-on')}
+                onClick={() => {
+                  setSection(x.id)
+                  setMsg(null)
+                }}
               >
-                {THEMES.map(t => (
-                  <ToggleGroupItem key={t.value} value={t.value} className="px-3">
-                    {t.label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Row>
-            <Row name="New sticky notes" hint="Each note can still get its own colour">
-              <div className="flex gap-2" role="radiogroup" aria-label="New sticky notes">
-                {STICKY_COLORS.map(c => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={cfg?.stickyColor === c.value}
-                    aria-label={c.label}
-                    title={c.label}
-                    className={cn('sticky-swatch', `paper-${c.value}`, cfg?.stickyColor === c.value && 'is-on')}
-                    onClick={() => save({ stickyColor: c.value }, `New sticky notes are ${c.label.toLowerCase()}.`)}
-                  />
-                ))}
-              </div>
-            </Row>
-            <Row name="Space between cards" hint="When you tidy (Ctrl+Alt+T)">
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                value={String(cfg?.tidyGap ?? 24)}
-                onValueChange={v => v && save({ tidyGap: Number(v) }, 'Saved.')}
-              >
-                {GAPS.map(g => (
-                  <ToggleGroupItem key={g.value} value={String(g.value)} className="px-3">
-                    {g.label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Row>
-            <Row name="Open notes in" hint="For “Open in…” on notes and text files">
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                value={cfg?.editor ?? 'notepad'}
-                onValueChange={v => v && save({ editor: v }, 'Saved.')}
-              >
-                {EDITORS.map(ed => (
-                  <ToggleGroupItem key={ed.value} value={ed.value} className="px-3">
-                    {ed.label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Row>
-            <Row name="Single-letter shortcuts" hint="N, L, T… Off keeps only the Ctrl ones">
-              <ToggleGroup
-                type="single"
-                variant="outline"
-                size="sm"
-                value={cfg?.singleKeys === false ? 'off' : 'on'}
-                onValueChange={v => v && save({ singleKeys: v === 'on' }, v === 'on' ? 'Single-letter shortcuts on.' : 'Single-letter shortcuts off.')}
-              >
-                <ToggleGroupItem value="on" className="px-3">
-                  On
-                </ToggleGroupItem>
-                <ToggleGroupItem value="off" className="px-3">
-                  Off
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </Row>
-          </section>
-          <Updates />
-          <section className="grid gap-2">
-            <h3 className="text-[14px] font-medium">Todoist</h3>
-            {cfg?.hasTodoistToken && !replacing ? (
-              <div className="flex items-center gap-2">
-                <span className="flex items-center gap-2 text-[13.5px]">
-                  <span className="size-2 rounded-full bg-emerald-400" /> Connected
-                </span>
-                <span className="flex-1" />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={async () => {
-                    const r = await get<TodoState>('/api/todoist?force=1')
-                    setMsg(r.error ? { t: r.error, bad: true } : { t: `Todoist works: ${r.tasks.length} due today or overdue.` })
-                  }}
-                >
-                  Test
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setReplacing(true)}>
-                  Replace token
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => save({ todoistToken: '' }, 'Todoist disconnected.')}>
-                  Disconnect
-                </Button>
-              </div>
-            ) : (
-              <>
-                <p className="text-[13px] text-muted-foreground">
-                  Your API token is in Todoist under Settings → Integrations → Developer (
-                  <a className="underline underline-offset-4" href="https://app.todoist.com/app/settings/integrations/developer" target="_blank" rel="noopener noreferrer">
-                    open
-                  </a>
-                  ). It only goes to api.todoist.com.
-                </p>
-                <form
-                  className="flex gap-2"
-                  onSubmit={async e => {
-                    e.preventDefault()
-                    if (token.trim()) await save({ todoistToken: token.trim() }, 'Todoist connected.')
-                    setToken('')
-                    setReplacing(false)
-                  }}
-                >
-                  <Input type="password" autoComplete="off" placeholder="Paste your Todoist API token" value={token} onChange={e => setToken(e.target.value)} />
-                  <Button disabled={!token.trim()}>Save</Button>
-                  {replacing && (
-                    <Button type="button" variant="ghost" onClick={() => setReplacing(false)}>
-                      Cancel
-                    </Button>
-                  )}
-                </form>
-              </>
-            )}
-          </section>
-          <section className="grid gap-2">
-            <h3 className="text-[14px] font-medium">Notes folder</h3>
-            <form
-              className="flex gap-2"
-              onSubmit={e => {
-                e.preventDefault()
-                save({ notesDir }, 'Notes folder saved.')
-              }}
+                {x.label}
+                {x.dot && <span className="ml-auto size-1.5 rounded-full bg-sky-400" aria-label="Update available" />}
+              </button>
+            ))}
+            <span className="flex-1" />
+            <p className="px-3 text-[11.5px] text-muted-foreground">Cockpit {cfg?.version}</p>
+          </nav>
+          <div className="relative flex min-w-0 flex-1 flex-col">
+            <button
+              type="button"
+              aria-label="Close"
+              className="absolute top-3 right-3 grid size-7 place-items-center rounded-md text-muted-foreground transition-[background-color,color] duration-150 hover:bg-ink/[0.08] hover:text-foreground"
+              onClick={() => board.setSettingsOpen(false)}
             >
-              <Input value={notesDir} onChange={e => setNotesDir(e.target.value)} />
-              <Button variant="secondary">Save</Button>
-            </form>
-          </section>
-          {/* trackers come from the tracker mod for Claude Code: shown once there is one, or one is listed */}
-          {(board.trackers.length > 0 || trackers.trim()) && (
-          <section className="grid gap-2">
-            <h3 className="text-[14px] font-medium">Trackers</h3>
-            <p className="text-[13px] text-muted-foreground">More tracker.json files (or folders holding one), one per line.</p>
-            <textarea
-              className="min-h-24 rounded-md border border-input bg-ink/[0.03] px-3 py-2 font-mono text-[12px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              value={trackers}
-              onChange={e => setTrackers(e.target.value)}
-            />
-            <Button variant="secondary" className="w-fit" onClick={() => save({ trackers: trackers.split('\n').map(s => s.trim()).filter(Boolean) }, 'Trackers saved.')}>
-              Save
-            </Button>
-          </section>
-          )}
-          {usage?.available && (
-            <section className="grid gap-3">
-              <h3 className="text-[14px] font-medium">Privacy</h3>
-              <Row name="Anonymous usage counts" hint="How often features are used. Never what's on your board">
-                <ToggleGroup
-                  type="single"
-                  variant="outline"
-                  size="sm"
-                  value={usage.choice === 'yes' ? 'on' : 'off'}
-                  onValueChange={v => v && chooseUsage(v === 'on' ? 'yes' : 'no')}
-                >
-                  <ToggleGroupItem value="on" className="px-3">
-                    On
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="off" className="px-3">
-                    Off
-                  </ToggleGroupItem>
-                </ToggleGroup>
-              </Row>
-              <Button variant="ghost" size="sm" className="w-fit px-2 text-muted-foreground" onClick={() => setShowSent(!showSent)}>
-                {showSent ? 'Hide' : "See what's sent"}
-              </Button>
-              {showSent && (
-                <pre className="max-h-56 overflow-auto rounded-md bg-ink/[0.03] p-3 font-mono text-[11.5px] text-muted-foreground">
-                  {usage.preview.length ? JSON.stringify(usage.preview, null, 2) : usage.choice === 'yes' ? 'Nothing yet. Each day is sent the day after.' : 'Nothing: usage counts are off.'}
-                </pre>
+              <X className="size-4" strokeWidth={1.75} />
+            </button>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-5 pb-4">
+              {!cfg ? null : section === 'board' ? (
+                <BoardSection cfg={cfg} save={save} />
+              ) : section === 'tasks' ? (
+                <TasksSection cfg={cfg} save={save} setMsg={setMsg} />
+              ) : section === 'notes' ? (
+                <NotesSection cfg={cfg} save={save} />
+              ) : section === 'claude' ? (
+                <ClaudeSection cfg={cfg} save={save} />
+              ) : section === 'updates' ? (
+                <Updates st={upd} setSt={setUpd} />
+              ) : (
+                <PrivacySection usage={usage} setUsage={setUsage} setMsg={setMsg} />
               )}
-            </section>
-          )}
-          {msg && <p className={msg.bad ? 'text-[13px] text-destructive' : 'text-[13px] text-muted-foreground'}>{msg.t}</p>}
-          <div className="flex items-center gap-3">
-            <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">Cockpit {cfg?.version}</p>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="gap-1.5"
-              onClick={() => {
-                board.setSettingsOpen(false)
-                board.openChangelog()
-              }}
-            >
-              <Sparkles className="size-3.5" strokeWidth={1.75} />
-              What's new
-            </Button>
-            <Button size="sm" variant="ghost" className="gap-1.5" onClick={board.sendFeedback}>
-              <MessageSquare className="size-3.5" strokeWidth={1.75} />
-              Send feedback
-            </Button>
+            </div>
+            <div className="flex min-h-12 items-center gap-2 border-t border-ink/[0.06] px-4 py-2">
+              <p className={cn('min-w-0 flex-1 truncate text-[12.5px]', msg?.bad ? 'text-destructive' : 'text-muted-foreground')} aria-live="polite">
+                {msg?.t || 'Everything stays on this PC.'}
+              </p>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="gap-1.5"
+                onClick={() => {
+                  board.setSettingsOpen(false)
+                  board.openChangelog()
+                }}
+              >
+                <Sparkles className="size-3.5" strokeWidth={1.75} />
+                What's new
+              </Button>
+              <Button size="sm" variant="ghost" className="gap-1.5" onClick={board.sendFeedback}>
+                <MessageSquare className="size-3.5" strokeWidth={1.75} />
+                Send feedback
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
@@ -305,19 +180,237 @@ export function SettingsDialog() {
   )
 }
 
+type Save = (patch: Record<string, unknown>, done: string) => Promise<void>
+type SetMsg = (m: { t: string; bad?: boolean } | null) => void
+
+function Heading({ children, hint }: { children: React.ReactNode; hint?: React.ReactNode }) {
+  return (
+    <div className="mb-4 pr-8">
+      <h3 className="text-[15px] font-medium">{children}</h3>
+      {hint && <p className="mt-0.5 text-[13px] text-muted-foreground">{hint}</p>}
+    </div>
+  )
+}
+
+function BoardSection({ cfg, save }: { cfg: Config; save: Save }) {
+  return (
+    <section className="grid gap-4">
+      <Heading>Board</Heading>
+      <Row name="Theme">
+        <ToggleGroup type="single" variant="outline" size="sm" value={cfg.theme ?? 'system'} onValueChange={v => v && save({ theme: v }, 'Saved.')}>
+          {THEMES.map(t => (
+            <ToggleGroupItem key={t.value} value={t.value} className="px-3">
+              {t.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </Row>
+      <Row name="New sticky notes" hint="Each note can still get its own colour">
+        <div className="flex gap-2" role="radiogroup" aria-label="New sticky notes">
+          {STICKY_COLORS.map(c => (
+            <button
+              key={c.value}
+              type="button"
+              role="radio"
+              aria-checked={cfg.stickyColor === c.value}
+              aria-label={c.label}
+              title={c.label}
+              className={cn('sticky-swatch', `paper-${c.value}`, cfg.stickyColor === c.value && 'is-on')}
+              onClick={() => save({ stickyColor: c.value }, `New sticky notes are ${c.label.toLowerCase()}.`)}
+            />
+          ))}
+        </div>
+      </Row>
+      <Row name="Space between cards" hint="When you tidy (Ctrl+Alt+T)">
+        <ToggleGroup type="single" variant="outline" size="sm" value={String(cfg.tidyGap ?? 24)} onValueChange={v => v && save({ tidyGap: Number(v) }, 'Saved.')}>
+          {GAPS.map(g => (
+            <ToggleGroupItem key={g.value} value={String(g.value)} className="px-3">
+              {g.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </Row>
+      <Row name="Open notes in" hint="For “Open in…” on notes and text files">
+        <ToggleGroup type="single" variant="outline" size="sm" value={cfg.editor ?? 'notepad'} onValueChange={v => v && save({ editor: v }, 'Saved.')}>
+          {EDITORS.map(ed => (
+            <ToggleGroupItem key={ed.value} value={ed.value} className="px-3">
+              {ed.label}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </Row>
+      <Row name="Single-letter shortcuts" hint="N, L, T… Off keeps only the Ctrl ones">
+        <OnOff on={cfg.singleKeys !== false} onChange={on => save({ singleKeys: on }, on ? 'Single-letter shortcuts on.' : 'Single-letter shortcuts off.')} />
+      </Row>
+    </section>
+  )
+}
+
+function TasksSection({ cfg, save, setMsg }: { cfg: Config; save: Save; setMsg: SetMsg }) {
+  const [token, setToken] = useState('')
+  const [replacing, setReplacing] = useState(false)
+  return (
+    <section className="grid gap-3">
+      <Heading hint="The Today card (T) keeps a simple list on this PC. Connect Todoist to use your Todoist tasks there instead.">Tasks</Heading>
+      {cfg.hasTodoistToken && !replacing ? (
+        <div className="flex items-center gap-2">
+          <span className="flex items-center gap-2 text-[13.5px]">
+            <span className="size-2 rounded-full bg-emerald-400" /> Todoist connected
+          </span>
+          <span className="flex-1" />
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={async () => {
+              const r = await get<TodoState>('/api/todoist?force=1')
+              setMsg(r.error ? { t: r.error, bad: true } : { t: `Todoist works: ${r.tasks.length} due today or overdue.` })
+            }}
+          >
+            Test
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setReplacing(true)}>
+            Replace token
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => save({ todoistToken: '' }, 'Todoist disconnected: Today uses the list on this PC.')}>
+            Disconnect
+          </Button>
+        </div>
+      ) : (
+        <>
+          <p className="text-[13px] text-muted-foreground">
+            Your Todoist API token is under Settings → Integrations → Developer in Todoist (
+            <a className="underline underline-offset-4" href="https://app.todoist.com/app/settings/integrations/developer" target="_blank" rel="noopener noreferrer">
+              open
+            </a>
+            ). It only goes to api.todoist.com.
+          </p>
+          <form
+            className="flex gap-2"
+            onSubmit={async e => {
+              e.preventDefault()
+              if (token.trim()) await save({ todoistToken: token.trim() }, 'Todoist connected.')
+              setToken('')
+              setReplacing(false)
+            }}
+          >
+            <Input type="password" autoComplete="off" placeholder="Paste your Todoist API token" value={token} onChange={e => setToken(e.target.value)} />
+            <Button disabled={!token.trim()}>Connect</Button>
+            {replacing && (
+              <Button type="button" variant="ghost" onClick={() => setReplacing(false)}>
+                Cancel
+              </Button>
+            )}
+          </form>
+        </>
+      )}
+    </section>
+  )
+}
+
+function NotesSection({ cfg, save }: { cfg: Config; save: Save }) {
+  const [notesDir, setNotesDir] = useState(cfg.notesDir)
+  return (
+    <section className="grid gap-3">
+      <Heading hint="Sticky notes, the journal and drafts are plain Markdown files in this folder.">Notes</Heading>
+      <form
+        className="flex gap-2"
+        onSubmit={e => {
+          e.preventDefault()
+          save({ notesDir }, 'Notes folder saved.')
+        }}
+      >
+        <Input value={notesDir} onChange={e => setNotesDir(e.target.value)} aria-label="Notes folder" />
+        <Button variant="secondary" disabled={notesDir.trim() === cfg.notesDir}>
+          Save
+        </Button>
+      </form>
+    </section>
+  )
+}
+
+/** Claude Code: Outputs come by themselves; trackers too, once a chat works in a folder that has one. */
+function ClaudeSection({ cfg, save }: { cfg: Config; save: Save }) {
+  const board = useBoard()
+  const remove = async (t: Tracker) => {
+    try {
+      await post('/api/trackers/remove', { file: t.file })
+      board.toast(`${t.name} is off the list`)
+    } catch (e: any) {
+      board.toast(e.message)
+    }
+  }
+  return (
+    <section className="grid gap-5">
+      <Heading hint="What your Claude Code chats make shows up under Outputs by itself, through the hook the installer adds.">Claude Code</Heading>
+      <div className="grid gap-2">
+        <h4 className="text-[13.5px] font-medium">Trackers</h4>
+        <p className="text-[12.5px] text-muted-foreground">A tracker a chat works in (from the tracker mod) is added here by itself. Put one on the board from Ctrl+K.</p>
+        {board.trackers.length > 0 ? (
+          <ul className="grid">
+            {board.trackers.map(t => (
+              <li key={t.file} className="group/row flex items-center gap-3 border-b border-ink/[0.06] py-2 last:border-0">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px]">{t.name}</div>
+                  <div className="truncate text-[12px] text-muted-foreground" title={t.file}>
+                    {t.ok ? `${t.open.length} open${t.counts.yours ? ` · ${t.counts.yours} for you` : ''}` : t.error} · {placeOf(t.file.replace(/[\\/]\.claude(?=[\\/][^\\/]*$)/, ''))}
+                  </div>
+                </div>
+                <Button size="sm" variant="ghost" className="opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100" onClick={() => remove(t)}>
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-md bg-ink/[0.03] px-3 py-2.5 text-[13px] text-muted-foreground">None yet.</p>
+        )}
+      </div>
+      <Row name="Look for more trackers" hint="In Projects, Desktop and synced OneDrive folders">
+        <OnOff on={cfg.scanTrackers} onChange={on => save({ scanTrackers: on }, on ? 'Looking for trackers in your folders.' : 'Only trackers your chats use are listed.')} />
+      </Row>
+    </section>
+  )
+}
+
+function PrivacySection({ usage, setUsage, setMsg }: { usage: TelemetryStatus | null; setUsage: (u: TelemetryStatus) => void; setMsg: SetMsg }) {
+  const [showSent, setShowSent] = useState(false)
+  if (!usage) return null
+  const choose = async (choice: 'yes' | 'no') => {
+    try {
+      setUsage(await post<TelemetryStatus>('/api/telemetry', { choice }))
+      setMsg({ t: choice === 'yes' ? 'Thanks: usage counts are on.' : 'Usage counts are off, and anything counted is gone.' })
+    } catch (e: any) {
+      setMsg({ t: e.message, bad: true })
+    }
+  }
+  return (
+    <section className="grid gap-3">
+      <Heading>Privacy</Heading>
+      <Row name="Anonymous usage counts" hint="How often features are used. Never what's on your board">
+        <OnOff on={usage.choice === 'yes'} onChange={on => choose(on ? 'yes' : 'no')} />
+      </Row>
+      <Button variant="ghost" size="sm" className="w-fit px-2 text-muted-foreground" onClick={() => setShowSent(!showSent)}>
+        {showSent ? 'Hide' : "See what's sent"}
+      </Button>
+      {showSent && (
+        <pre className="max-h-56 overflow-auto rounded-md bg-ink/[0.03] p-3 font-mono text-[11.5px] text-muted-foreground">
+          {usage.preview.length ? JSON.stringify(usage.preview, null, 2) : usage.choice === 'yes' ? 'Nothing yet. Each day is sent the day after.' : 'Nothing: usage counts are off.'}
+        </pre>
+      )}
+    </section>
+  )
+}
+
 /**
  * Updates: whether this copy is the latest, with Update now when it isn't. An installed copy checks about once a
  * day (switchable); a copy run from source is updated with git.
  */
-function Updates() {
+function Updates({ st, setSt }: { st: UpdateStatus | null; setSt: (s: UpdateStatus) => void }) {
   const board = useBoard()
-  const [st, setSt] = useState<UpdateStatus | null>(null)
   const [busy, setBusy] = useState('')
   const [updating, setUpdating] = useState('')
-  useEffect(() => {
-    get<UpdateStatus>('/api/update').then(setSt, () => setSt(null))
-  }, [])
-  if (!st) return null
+  if (!st) return <Heading hint="Couldn't ask Cockpit about updates.">Updates</Heading>
   const checkNow = async () => {
     setBusy('check')
     try {
@@ -341,21 +434,14 @@ function Updates() {
     }
   }
   return (
-    <section className="grid gap-3">
-      <h3 className="text-[14px] font-medium">Updates</h3>
+    <section className="grid gap-4">
+      <Heading>Updates</Heading>
       {!st.installed ? (
         <p className="text-[13px] text-muted-foreground">Running from source: update with git pull, then npm run build.</p>
       ) : (
         <>
           <Row name="Check for updates" hint="About once a day, from GitHub">
-            <ToggleGroup type="single" variant="outline" size="sm" value={st.enabled ? 'on' : 'off'} onValueChange={v => v && setAuto(v === 'on')}>
-              <ToggleGroupItem value="on" className="px-3">
-                On
-              </ToggleGroupItem>
-              <ToggleGroupItem value="off" className="px-3">
-                Off
-              </ToggleGroupItem>
-            </ToggleGroup>
+            <OnOff on={st.enabled} onChange={setAuto} />
           </Row>
           <div className="flex items-center gap-3">
             <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">

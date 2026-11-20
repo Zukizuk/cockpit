@@ -131,21 +131,61 @@ function cockpitData() {
 }
 
 /** The hook: stdin is Claude Code's JSON ({ session_id, transcript_path, cwd, ... }). */
-export async function run(input, { data = cockpitData() } = {}) {
-  if (!data || !input?.transcript_path) return null
-  const turn = readLastTurn(input.transcript_path)
-  if (!turn) return null
-  const cwd = input.cwd || ''
-  const items = turnItems(turn, { cwd })
-  if (!items.length) return null
+/**
+ * The tracker this chat works in (tracker.json, or .claude/tracker.json, in its folder or up to two above it), when
+ * Cockpit doesn't know it yet: Cockpit lists it from then on, as it lists the chat's outputs.
+ */
+export function newTracker(cwd, data) {
+  if (!cwd) return ''
+  let file = ''
+  let dir = path.resolve(cwd)
+  for (let i = 0; i < 3 && !file; i++) {
+    for (const f of [path.join(dir, 'tracker.json'), path.join(dir, '.claude', 'tracker.json')]) {
+      try {
+        if (fs.statSync(f).isFile() && fs.readFileSync(f, 'utf8').slice(0, 4000).includes('"items"')) {
+          file = f
+          break
+        }
+      } catch {
+        // not here
+      }
+    }
+    const up = path.dirname(dir)
+    if (up === dir) break
+    dir = up
+  }
+  if (!file) return ''
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(data, 'config.json'), 'utf8'))
+    const known = [...(cfg.trackers || []), ...(cfg.hiddenTrackers || [])].map(t => path.resolve(String(t)).toLowerCase())
+    if (known.includes(file.toLowerCase()) || known.includes(path.dirname(file).toLowerCase())) return ''
+  } catch {
+    // no settings yet: tell Cockpit
+  }
+  return file
+}
+
+function drop(data, payload) {
   const inbox = path.join(data, 'inbox')
   fs.mkdirSync(inbox, { recursive: true })
-  const outputs = { from: `Claude · ${baseName(cwd) || 'chat'}`, session: String(input.session_id || ''), cwd, project: baseName(cwd), items }
   const name = `claude-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`
   // written beside, then renamed: Cockpit only ever sees a whole file
-  fs.writeFileSync(path.join(inbox, name + '.tmp'), JSON.stringify({ outputs }))
+  fs.writeFileSync(path.join(inbox, name + '.tmp'), JSON.stringify(payload))
   fs.renameSync(path.join(inbox, name + '.tmp'), path.join(inbox, name))
   return name
+}
+
+export async function run(input, { data = cockpitData() } = {}) {
+  if (!data || !input?.transcript_path) return null
+  const cwd = input.cwd || ''
+  const tracker = newTracker(cwd, data)
+  if (tracker) drop(data, { tracker })
+  const turn = readLastTurn(input.transcript_path)
+  if (!turn) return null
+  const items = turnItems(turn, { cwd })
+  if (!items.length) return null
+  const outputs = { from: `Claude · ${baseName(cwd) || 'chat'}`, session: String(input.session_id || ''), cwd, project: baseName(cwd), items }
+  return drop(data, { outputs })
 }
 
 const isMain = !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)

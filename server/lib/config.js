@@ -41,6 +41,8 @@ export function defaults() {
     trackerConfig: path.join(HOME, '.claude', 'mods-data', 'tracker', 'config.json'),
     /** Extra tracker.json files (or folders holding one) beyond the hub's and the tracker mod's config (both optional Claude Code integrations). */
     trackers: [],
+    /** Trackers taken off the list by hand: not read, and not added back by a chat or the scan. */
+    hiddenTrackers: [],
     todoistToken: '',
     /** Sessions active within this many days are listed. */
     sessionsDays: 3,
@@ -80,6 +82,7 @@ export function loadConfig() {
   for (const k of PATH_KEYS) if (typeof raw[k] === 'string' && raw[k].trim()) cfg[k] = raw[k].trim()
   if (typeof raw.todoistToken === 'string') cfg.todoistToken = raw.todoistToken.trim()
   if (Array.isArray(raw.trackers)) cfg.trackers = raw.trackers.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim())
+  if (Array.isArray(raw.hiddenTrackers)) cfg.hiddenTrackers = raw.hiddenTrackers.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim())
   if (typeof raw.kokoroHost === 'string') cfg.kokoroHost = raw.kokoroHost.trim()
   const days = Number(raw.sessionsDays)
   if (Number.isFinite(days) && days >= 1 && days <= 30) cfg.sessionsDays = days
@@ -104,6 +107,7 @@ export function saveConfig(patch) {
   }
   if (typeof patch.todoistToken === 'string') raw.todoistToken = patch.todoistToken.trim()
   if (Array.isArray(patch.trackers)) raw.trackers = patch.trackers.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim())
+  if (Array.isArray(patch.hiddenTrackers)) raw.hiddenTrackers = patch.hiddenTrackers.filter(t => typeof t === 'string' && t.trim()).map(t => t.trim()).slice(-200)
   if (patch.sessionsDays !== undefined) {
     const d = Number(patch.sessionsDays)
     if (!Number.isFinite(d) || d < 1 || d > 30) throw new UserError('sessionsDays must be between 1 and 30')
@@ -120,6 +124,10 @@ export function saveConfig(patch) {
   if (patch.tidyGap !== undefined) {
     if (!TIDY_GAPS.includes(patch.tidyGap)) throw new UserError(`tidyGap is one of ${TIDY_GAPS.join(', ')}`)
     raw.tidyGap = patch.tidyGap
+  }
+  if (patch.scanTrackers !== undefined) {
+    if (typeof patch.scanTrackers !== 'boolean') throw new UserError('scanTrackers is true or false')
+    raw.scanTrackers = patch.scanTrackers
   }
   if (patch.updates !== undefined) {
     if (typeof patch.updates !== 'boolean') throw new UserError('updates is true or false')

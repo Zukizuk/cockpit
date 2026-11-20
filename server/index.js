@@ -16,6 +16,8 @@ import { listProjects, projectFile, readProject } from './lib/projects.js'
 import { listSessions, readTranscript } from './lib/sessions.js'
 import { readTrackers } from './lib/tracker.js'
 import * as todoist from './lib/todoist.js'
+import * as tasks from './lib/tasks.js'
+import * as folders from './lib/folders.js'
 import { readOffice } from './lib/office.js'
 import * as outputs from './lib/outputs.js'
 import { hasBoard, readBoard, saveBoard, welcomeBoard } from './lib/board.js'
@@ -164,7 +166,18 @@ function noteNewEntries(announce) {
   }
 }
 
-/** ~/.cockpit/inbox/*.json: requests written by other programs ({path} | {url} | {left, right}). */
+/** A tracker a Claude Code chat works in (from the Outputs hook): listed from now on, unless it was taken off. */
+function addTracker(file) {
+  const cfg = loadConfig()
+  const key = p => path.resolve(String(p)).toLowerCase()
+  if (typeof file !== 'string' || !path.isAbsolute(file) || !fs.existsSync(file)) return
+  if ([...cfg.trackers, ...cfg.hiddenTrackers].some(t => key(t) === key(file) || key(t) === key(path.dirname(file)))) return
+  saveConfig({ trackers: [...cfg.trackers, file] })
+  log(`tracker added: ${file}`)
+  broadcast('trackers')
+}
+
+/** ~/.cockpit/inbox/*.json: requests written by other programs ({path} | {url} | {left, right} | {outputs} | {tracker}). */
 const inboxDir = () => path.join(DATA_DIR, 'inbox')
 let inboxBusy = false
 async function drainInbox() {
@@ -188,7 +201,8 @@ async function drainInbox() {
       try {
         fs.rmSync(file, { force: true })
         const from = typeof req.from === 'string' ? req.from : 'Claude'
-        if (req.outputs) outputs.addOutputs(req.outputs)
+        if (req.tracker) addTracker(req.tracker)
+        else if (req.outputs) outputs.addOutputs(req.outputs)
         else if (req.url) await shown.addLink({ url: req.url, from })
         else if (req.left && req.right) shown.addCompare({ left: req.left, right: req.right, from })
         else if (req.path) shown.addShown({ path: req.path, from })
@@ -297,6 +311,7 @@ function countOutsideOpen(cfg, body, target) {
       usage.recordOpen({ kind: 'file', target, title: e.title, where: 'outside', shownId: e.id })
     } else if (body.kind === 'note') usage.recordOpen({ kind: 'note', target: String(body.path).replace(/\\/g, '/'), where: 'outside' })
     else if (body.kind === 'output') usage.recordOpen({ kind: 'file', target, where: 'outside' })
+    else if (body.kind === 'path' && !folders.isFolder(target)) usage.recordOpen({ kind: 'file', target, where: 'outside' })
   } catch {
     // nothing to count
   }
@@ -311,6 +326,12 @@ function resolveOpenTarget(cfg, body) {
   if (body.kind === 'note') return notes.resolveNote(cfg, body.path)
   if (body.kind === 'notes-folder') return notes.ensureNotes(cfg)
   if (body.kind === 'project') return projectFile(cfg, body.id)
+  // a file or folder on a folder card: any full path that is there
+  if (body.kind === 'path') {
+    const p = String(body.path || '')
+    if (!path.isAbsolute(p) || !fs.existsSync(p)) throw new UserError('That is no longer there', 404)
+    return path.resolve(p)
+  }
   throw new UserError('Nothing to open')
 }
 
@@ -365,6 +386,8 @@ async function api(req, res, url) {
       const body = await readBody(req)
       if (body.url) return json(res, 200, await shown.addLink({ url: body.url, title: body.title, tags: body.tags, from: 'you' }))
       if (body.left || body.right) return json(res, 200, shown.addCompare({ left: body.left, right: body.right, from: 'you' }))
+      // a folder becomes a folder card (its files, as a tree), not an entry
+      if (body.path && folders.isFolder(body.path)) return json(res, 200, { folder: folders.folderPath(body.path) })
       return json(res, 200, shown.addShown({ path: body.path, content: body.content, format: body.format, title: body.title, tags: body.tags, from: 'you' }))
     }
     if (a === 'meta' && method === 'GET') {
@@ -609,6 +632,15 @@ async function api(req, res, url) {
   if (area === 'projects' && method === 'GET') return json(res, 200, a ? readProject(cfg, a) : listProjects(cfg))
   if (area === 'sessions' && method === 'GET') return json(res, 200, a ? readTranscript(cfg, a) : listSessions(cfg))
   if (area === 'trackers' && method === 'GET') return json(res, 200, readTrackers(cfg))
+  // taken off the list: no longer read, and not added back by a chat or the scan
+  if (area === 'trackers' && a === 'remove' && method === 'POST') {
+    const file = String((await readBody(req)).file || '')
+    if (!file) throw new UserError('Which tracker?')
+    const key = p => path.resolve(String(p)).toLowerCase()
+    saveConfig({ trackers: cfg.trackers.filter(t => key(t) !== key(file) && key(t) !== key(path.dirname(file))), hiddenTrackers: [...cfg.hiddenTrackers.filter(t => key(t) !== key(file)), file] })
+    broadcast('trackers')
+    return json(res, 200, readTrackers(loadConfig()))
+  }
 
   if (area === 'todoist') {
     if (!a && method === 'GET') {
@@ -622,11 +654,30 @@ async function api(req, res, url) {
       await todoist.closeTask(cfg.todoistToken, (await readBody(req)).id)
       return json(res, 200, { ok: true })
     }
-    if (a === 'add' && method === 'POST') {
-      await todoist.quickAdd(cfg.todoistToken, (await readBody(req)).text)
+    if (a === 'add' && method === 'POST') return json(res, 200, { ok: true, task: await todoist.quickAdd(cfg.todoistToken, (await readBody(req)).text) })
+    if (a === 'rename' && method === 'POST') {
+      const body = await readBody(req)
+      await todoist.renameTask(cfg.todoistToken, body.id, body.content)
+      return json(res, 200, { ok: true })
+    }
+    if (a === 'delete' && method === 'POST') {
+      await todoist.deleteTask(cfg.todoistToken, (await readBody(req)).id)
       return json(res, 200, { ok: true })
     }
   }
+
+  // the Today card's own list, when Todoist isn't connected
+  if (area === 'tasks') {
+    if (!a && method === 'GET') return json(res, 200, tasks.listTasks())
+    if (!a && method === 'POST') {
+      const body = await readBody(req)
+      return json(res, 200, tasks.addTask(body.content, body.id))
+    }
+    if (a && !b && method === 'POST') return json(res, 200, tasks.updateTask(a, await readBody(req)))
+    if (a && b === 'remove' && method === 'POST') return json(res, 200, tasks.removeTask(a))
+  }
+
+  if (area === 'folder' && method === 'GET') return json(res, 200, folders.listFolder(url.searchParams.get('path')))
 
   return json(res, 404, { error: 'No such API' })
 }

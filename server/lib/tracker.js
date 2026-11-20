@@ -60,7 +60,7 @@ export function discoveredTrackers(home, now = Date.now()) {
 
 export function trackerFiles(cfg, home) {
   const out = []
-  const seen = new Set()
+  const seen = new Set((cfg.hiddenTrackers || []).map(t => resolveTrackerFile(t).toLowerCase()))
   const add = (p, nameHint) => {
     if (typeof p !== 'string' || !p.trim()) return
     const file = resolveTrackerFile(p.trim())
@@ -69,7 +69,8 @@ export function trackerFiles(cfg, home) {
     seen.add(key)
     out.push({ file, nameHint })
   }
-  add(path.join(cfg.hubDir, 'tracker.json'))
+  // the hub's own tracker, only on a PC that has one
+  if (fs.existsSync(path.join(cfg.hubDir, 'tracker.json'))) add(path.join(cfg.hubDir, 'tracker.json'))
   try {
     const conf = JSON.parse(fs.readFileSync(cfg.trackerConfig, 'utf8'))
     for (const t of conf.trackers ?? []) add(t?.path, t?.name)

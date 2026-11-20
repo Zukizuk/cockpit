@@ -1,6 +1,6 @@
 // Draws one item, whatever it is, in a card on the board or full screen: articles, markdown, code, tables,
 // Word, Excel, PowerPoint, images, PDF, HTML, media. What can't be drawn gets a big "open it in its own program".
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import {
   AppWindow, FileCode2, FileSpreadsheet, FileText, FileType2, Film, Globe, Image as ImageIcon, NotebookText, Presentation, SquareSplitHorizontal,
@@ -20,6 +20,16 @@ export const tidyPath = (p: string) => p.replace(/^[A-Za-z]:[\\/]Users[\\/][^\\/
 
 /** The folder a file is in, tidied: what a card's subtitle shows. */
 export const folderOf = (p: string) => tidyPath(p.replace(/[\\/][^\\/]*$/, ''))
+
+/** Where a file or folder is, in a few words: the two folders it's in ("Coupa › Savings Tracker"), not the whole path. */
+export function placeOf(p: string) {
+  const parts = tidyPath(p).split(/[\\/]/).filter(Boolean)
+  parts.pop()
+  return parts
+    .slice(-2)
+    .map(x => (x === '~' ? 'Home' : x))
+    .join(' › ')
+}
 
 export function kindLabel(e: ShownEntry) {
   if (e.format === 'article' || e.format === 'link') return 'Article'
@@ -90,14 +100,44 @@ function SheetView({ read }: { read: ShownRead }) {
       live = false
     }
   }, [missing, open, read.entry.id])
+  // the rest of the workbook loads quietly once the open sheet is drawn, so switching sheets is instant
+  const allLoaded = sheets.every(s => s.rows)
+  useEffect(() => {
+    if (missing || allLoaded) return
+    let live = true
+    const t = setTimeout(async () => {
+      for (let i = 0; i < sheets.length && live; i++) {
+        if (sheets[i].rows) continue
+        try {
+          const r = await get<ShownRead>(`/api/shown/${read.entry.id}?sheet=${i}`)
+          if (live) setSheets(ss => ss.map((s, j) => (j === i && !s.rows ? { ...s, rows: r.sheets?.[i]?.rows || [] } : s)))
+        } catch {
+          return
+        }
+        await new Promise(res => setTimeout(res, 60))
+      }
+    }, 400)
+    return () => {
+      live = false
+      clearTimeout(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missing, allLoaded, read.entry.id])
+  // the tab shows as picked at once; the (possibly large) table follows without holding up the click
+  const [picked, setPicked] = useState(at)
+  useEffect(() => setPicked(at), [at])
   const pick = (i: number) => {
-    setAt(i)
-    setAll(false)
+    setPicked(i)
+    startTransition(() => {
+      setAt(i)
+      setAll(false)
+    })
   }
   const sheet = sheets[open]
+  const loaded = sheet?.rows
+  const drawn = useMemo(() => (all ? loaded || [] : (loaded || []).slice(0, FIRST_ROWS)), [loaded, all])
   if (!sheet) return <p className="text-muted-foreground">This workbook is empty.</p>
   const rows = sheet.rows || []
-  const drawn = all ? rows : rows.slice(0, FIRST_ROWS)
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
       {sheets.length > 1 && (
@@ -106,7 +146,7 @@ function SheetView({ read }: { read: ShownRead }) {
             <button
               key={s.name}
               onClick={() => pick(i)}
-              className={cn('h-7 rounded-md px-2.5 text-[13px] text-muted-foreground transition-[background-color,color] duration-150 hover:bg-ink/5 hover:text-foreground', i === at && 'bg-ink/10 text-foreground')}
+              className={cn('h-7 rounded-md px-2.5 text-[13px] text-muted-foreground transition-[background-color,color] duration-150 hover:bg-ink/5 hover:text-foreground', i === picked && 'bg-ink/10 text-foreground')}
             >
               {s.name}
             </button>
@@ -115,20 +155,7 @@ function SheetView({ read }: { read: ShownRead }) {
       )}
       <div className="table-scroll min-h-0 flex-1">
         {loading && !sheet.rows && <p className="p-2 text-[13px] text-muted-foreground">Opening {sheet.name}…</p>}
-        <table className="data">
-          <tbody>
-            {drawn.map((r, i) => (
-              <tr key={i}>
-                <td className="rownum">{i + 1}</td>
-                {Array.from({ length: sheet.cols }, (_, c) => (
-                  <td key={c} className={/^-?[\d,. ]+%?$/.test(r[c] || '') ? 'num' : ''}>
-                    {r[c] ?? ''}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <SheetTable rows={drawn} cols={sheet.cols} />
       </div>
       {drawn.length < rows.length && (
         <button type="button" className="w-fit text-[12.5px] text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => setAll(true)}>
@@ -143,6 +170,27 @@ function SheetView({ read }: { read: ShownRead }) {
     </div>
   )
 }
+
+const NUM = /^-?[\d,. ]+%?$/
+/** One sheet's cells, drawn again only when the rows themselves change. */
+const SheetTable = memo(function SheetTable({ rows, cols }: { rows: string[][]; cols: number }) {
+  return (
+    <table className="data">
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={i}>
+            <td className="rownum">{i + 1}</td>
+            {Array.from({ length: cols }, (_, c) => (
+              <td key={c} className={NUM.test(r[c] || '') ? 'num' : ''}>
+                {r[c] ?? ''}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+})
 
 function SlidesView({ slides }: { slides: NonNullable<ShownRead['slides']> }) {
   if (!slides.length) return <p className="text-muted-foreground">No slides with text.</p>
