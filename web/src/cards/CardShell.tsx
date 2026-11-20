@@ -89,17 +89,21 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     )
   // a card that fits its content keeps the height it's dragged to; a drag that only changed the width leaves it
   // fitting its content
+  // Only a drag that really changed the height fixes it (a click on a handle, or a drag that only changed the width,
+  // used to leave the card stuck at the height it had then, cutting it off as soon as it held more).
   const resizeStart = () => {
     board.remember()
     if (!fits) return
     resizingRef.current = true
     startH.current = (nodeId && rf.getNode(nodeId)?.measured?.height) || 0
-    setSized(true)
+    // a press on a handle that never becomes a drag gets no resize end: let go of it here
+    addEventListener('pointerup', () => setTimeout(() => (resizingRef.current = false), 50), { once: true })
   }
   const resizeEnd = (_e: unknown, p: { height: number }) => {
     if (!resizingRef.current) return board.persist()
     resizingRef.current = false
-    if (Math.abs(p.height - startH.current) < 4) setSized(false)
+    if (Math.abs(p.height - startH.current) >= 4) setSized(true)
+    else rf.setNodes(ns => ns.map(n => (n.id === nodeId ? { ...n, height: undefined } : n)))
     board.persist()
   }
   const toggleFold = () => {

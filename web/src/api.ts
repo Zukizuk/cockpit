@@ -445,4 +445,6 @@ export interface TelemetryStatus {
   ask: boolean
   /** Exactly what would be sent next. */
   preview: unknown[]
+  /** The last batch sent: when, and which days. */
+  lastSent: { at: number; days: string[] } | null
 }

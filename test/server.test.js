@@ -890,8 +890,11 @@ test('updates: versions compare by number; a release is read for its zip and che
   assert.equal(u.parseRelease({ tag_name: 'v1', assets: [] }), null, 'a release without the Windows zip is no update')
   assert.equal(u.isInstalled(), false, 'the tests run from a clone')
   let asked = false
-  const s = await u.check({ updates: true }, { force: true, get: async () => ((asked = true), { ok: true, json: async () => ({}) }) })
-  assert.equal(asked, false, 'a clone never asks GitHub')
+  const get = async () => ((asked = true), { ok: true, json: async () => ({}) })
+  await u.check({ updates: true }, { get })
+  assert.equal(asked, false, 'a clone never asks GitHub by itself')
+  const s = await u.check({ updates: true }, { force: true, get })
+  assert.equal(asked, true, 'but does when Check now is pressed')
   assert.equal(s.available, false)
   await assert.rejects(u.apply({ updates: true }), /git pull/)
 })

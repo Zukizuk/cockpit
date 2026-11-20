@@ -2247,8 +2247,6 @@ table.data tbody tr:hover td {
   width: 168px;
   flex-shrink: 0;
   padding: 16px 8px 12px;
-  border-right: 1px solid oklch(var(--contrast) / 0.06);
-  background: oklch(var(--contrast) / 0.02);
 }
 
 .settings-tab {

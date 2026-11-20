@@ -551,7 +551,7 @@ function OutputsSheet() {
       <SheetContent side="right" className="glass-panel w-[min(460px,calc(100vw-24px))] gap-0 sm:max-w-none">
         <SheetHeader className="pb-2">
           <SheetTitle>Outputs</SheetTitle>
-          <SheetDescription>What Claude made, one group per chat, newest turn on top.</SheetDescription>
+          <SheetDescription className="sr-only">What Claude made, one group per chat, newest turn on top.</SheetDescription>
           {board.outputs.length > 0 && (
             <Button size="sm" variant="ghost" className="absolute top-3.5 right-12 h-7 text-[12.5px] text-muted-foreground" onClick={clearAll}>
               Clear all

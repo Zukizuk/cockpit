@@ -32,9 +32,12 @@ export const sizeFor = (type: CardType, ref = '') => (isSticky(type, ref) ? STIC
 export function minSize(type: CardType, ref = '') {
   if (isSticky(type, ref)) return { w: 200, h: 140 }
   if (type === 'later') return { w: 380, h: 260 }
-  if (type === 'snippets') return { w: 320, h: 0 }
+  if (type === 'snippets') return { w: 320, h: SNIPPETS_MIN_H }
   return { w: 260, h: 150 }
 }
+
+/** Snippets is never made shorter than its header and the box to paste into. */
+export const SNIPPETS_MIN_H = 160
 
 /** A folded card is just its header: the title line and what it's about. */
 export const FOLDED_H = 46
@@ -50,13 +53,15 @@ export const resizingRef = { current: false }
 /** Whether a card sizes itself to its content right now. */
 export const fitsContent = (n: { type?: string; data: CardData }) => AUTO_HEIGHT.has(n.type as CardType) && !n.data.sized
 
+const keepsSize = (c: BoardCard) => !!c.sized && !(c.type === 'snippets' && c.h < SNIPPETS_MIN_H)
+
 export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(c.sized ? { sized: true } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}) },
   width: c.w,
-  height: c.folded ? FOLDED_H : AUTO_HEIGHT.has(c.type) && !c.sized ? undefined : c.h,
+  height: c.folded ? FOLDED_H : AUTO_HEIGHT.has(c.type) && !keepsSize(c) ? undefined : c.h,
   dragHandle: '.card-drag',
   ...(c.locked ? { draggable: false, deletable: false } : {}),
 })

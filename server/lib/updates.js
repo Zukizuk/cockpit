@@ -5,7 +5,7 @@
 //   - when there's a newer one, Settings says so and offers Update now
 //   - Update now downloads the release zip, checks its SHA-256 against the one GitHub publishes, unzips it and runs
 //     its installer with -Update, apart from this server (which the installer stops and starts again)
-// A copy run from a clone never checks: it's updated with git.
+// A copy run from a clone never checks by itself (it's updated with git), only when asked (Check now).
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -78,7 +78,7 @@ export function status(cfg) {
 
 /** Asks GitHub for the latest release (at most once in CHECK_EVERY, unless forced). */
 export async function check(cfg, { force = false, get = fetch } = {}) {
-  if (!isInstalled() || cfg.updates === false || !repoPath()) return status(cfg)
+  if (!repoPath() || (!force && (!isInstalled() || cfg.updates === false))) return status(cfg)
   const s = readState()
   if (!force && s.checkedAt && Date.now() - s.checkedAt < CHECK_EVERY) return status(cfg)
   try {

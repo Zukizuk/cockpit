@@ -152,7 +152,7 @@ export function SettingsDialog() {
                 <PrivacySection usage={usage} setUsage={setUsage} setMsg={setMsg} />
               )}
             </div>
-            <div className="flex min-h-12 items-center gap-2 border-t border-ink/[0.06] px-4 py-2">
+            <div className="flex min-h-12 items-center gap-2 px-4 py-2">
               <p className={cn('min-w-0 flex-1 truncate text-[12.5px]', msg?.bad ? 'text-destructive' : 'text-muted-foreground')} aria-live="polite">
                 {msg?.t || 'Everything stays on this PC.'}
               </p>
@@ -395,8 +395,15 @@ function PrivacySection({ usage, setUsage, setMsg }: { usage: TelemetryStatus | 
       </Button>
       {showSent && (
         <pre className="max-h-56 overflow-auto rounded-md bg-ink/[0.03] p-3 font-mono text-[11.5px] text-muted-foreground">
-          {usage.preview.length ? JSON.stringify(usage.preview, null, 2) : usage.choice === 'yes' ? 'Nothing yet. Each day is sent the day after.' : 'Nothing: usage counts are off.'}
+          {usage.preview.length ? JSON.stringify(usage.preview, null, 2) : usage.choice === 'yes' ? 'Nothing waiting. Today is sent tomorrow.' : 'Nothing: usage counts are off.'}
         </pre>
+      )}
+      {usage.choice === 'yes' && (
+        <p className="text-[12.5px] text-muted-foreground">
+          {usage.lastSent
+            ? `Last sent ${ago(new Date(usage.lastSent.at).toISOString())}: ${usage.lastSent.days.map(d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })).join(', ')}. Once sent, a day is gone from this PC.`
+            : 'Nothing sent yet. Each day is sent once it has ended.'}
+        </p>
       )}
     </section>
   )
@@ -433,40 +440,46 @@ function Updates({ st, setSt }: { st: UpdateStatus | null; setSt: (s: UpdateStat
       setBusy('')
     }
   }
+  const checked = st.checkedAt ? `Last checked ${ago(new Date(st.checkedAt).toISOString())}.` : 'Not checked yet.'
   return (
     <section className="grid gap-4">
       <Heading>Updates</Heading>
-      {!st.installed ? (
-        <p className="text-[13px] text-muted-foreground">Running from source: update with git pull, then npm run build.</p>
-      ) : (
-        <>
-          <Row name="Check for updates" hint="About once a day, from GitHub">
-            <OnOff on={st.enabled} onChange={setAuto} />
-          </Row>
-          <div className="flex items-center gap-3">
-            <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">
-              {st.available
-                ? `Cockpit ${st.latest?.version} is available (you have ${st.current}).`
-                : st.error || `Cockpit ${st.current} is the latest${st.checkedAt ? `, checked ${ago(new Date(st.checkedAt).toISOString())}` : ''}.`}
-            </p>
-            {st.available ? (
-              <>
-                {st.latest?.page && (
-                  <Button size="sm" variant="ghost" onClick={() => board.openLink(st.latest!.page)}>
-                    What's new
-                  </Button>
-                )}
-                <Button size="sm" onClick={updateNow} disabled={!!busy}>
-                  {busy === 'update' ? 'Downloading…' : 'Update now'}
-                </Button>
-              </>
-            ) : (
-              <Button size="sm" variant="secondary" onClick={checkNow} disabled={!!busy}>
-                {busy === 'check' ? 'Checking…' : 'Check now'}
-              </Button>
-            )}
-          </div>
-        </>
+      <div className="grid gap-3 rounded-lg bg-ink/[0.04] p-4">
+        <div>
+          <p className="text-[14px] font-medium">{st.available ? `Cockpit ${st.latest?.version} is ready to install` : st.checkedAt ? "You're up to date" : `You have Cockpit ${st.current}`}</p>
+          <p className="text-[12.5px] text-muted-foreground">
+            {st.available ? `You have ${st.current}. Your notes and board stay as they are.` : st.checkedAt ? `Cockpit ${st.current}. ${checked}` : checked}
+          </p>
+          {st.error && <p className="mt-1 text-[12.5px] text-destructive">{st.error}</p>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {st.available && st.installed && (
+            <Button size="sm" onClick={updateNow} disabled={!!busy}>
+              {busy === 'update' ? 'Downloading…' : `Install ${st.latest?.version}`}
+            </Button>
+          )}
+          {st.available && st.latest?.page && (
+            <Button size="sm" variant="ghost" onClick={() => board.openLink(st.latest!.page)}>
+              What's new
+            </Button>
+          )}
+          {!st.available && (
+            <Button size="sm" variant="secondary" onClick={checkNow} disabled={!!busy}>
+              {busy === 'check' ? 'Checking…' : 'Check for updates'}
+            </Button>
+          )}
+        </div>
+        {!st.installed && (
+          <p className="text-[12.5px] text-muted-foreground">
+            This copy runs from its code folder (a git clone), so it can't install updates itself. To update it, run <code>git pull</code> and{' '}
+            <code>npm run build</code> there. A copy installed with Install.cmd installs them with one click.
+          </p>
+        )}
+      </div>
+      {st.installed && (
+        <Row name="Look for updates every day" hint="A dot on Settings when there's a new version">
+          <OnOff on={st.enabled} onChange={setAuto} />
+        </Row>
       )}
       {updating && <Updating version={updating} />}
     </section>

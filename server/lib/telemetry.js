@@ -57,7 +57,7 @@ function writeState(s) {
 export function status(now = Date.now()) {
   const s = readState()
   const available = !!target().key
-  return { available, choice: s.choice, ask: available && s.choice === null && now - s.firstSeen > ASK_AFTER, preview: preview(s) }
+  return { available, choice: s.choice, ask: available && s.choice === null && now - s.firstSeen > ASK_AFTER, preview: preview(s), lastSent: s.lastSent || null }
 }
 
 /** Yes or no (asked once; changeable in Settings). No also forgets anything counted. */
@@ -107,6 +107,8 @@ export async function sendDue({ post = defaultPost, at = new Date() } = {}) {
   await post(`${t.host.replace(/\/$/, '')}/batch/`, { api_key: t.key, batch })
   const fresh = readState()
   for (const e of batch) delete fresh.days[e.properties.day]
+  // what went last (shown in Settings, since a sent day is no longer on this PC)
+  fresh.lastSent = { at: Date.now(), days: batch.map(e => e.properties.day) }
   writeState(fresh)
   return { sent: batch.length }
 }

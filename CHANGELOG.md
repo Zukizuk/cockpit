@@ -2,6 +2,16 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 20 November 2026 (version 0.1.4)
+
+**Improved**
+- Settings > Updates says plainly whether you're up to date, with a **Check for updates** button and **Install** when there's a new version. A copy run from its code folder can check too, and says how to update it.
+- Settings > Privacy says when usage counts were last sent and which days: a day that has been sent is gone from your PC, so the preview alone looked like nothing had gone.
+- Settings is one sheet of glass again, and the Outputs panel lost its line of explanation at the top.
+
+**Fixed**
+- Snippets could get stuck at a fixed height and cut off its own paste box: a click on a resize corner (without dragging) fixed its height. Now only a real drag does, it can't be made shorter than the paste box, and a card already stuck goes back to fitting its content.
+
 ## 20 November 2026 (version 0.1.3)
 
 **New**
