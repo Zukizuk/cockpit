@@ -1,32 +1,60 @@
-// The keyboard shortcuts, one list. Single keys work on the board when nothing is being typed, so they never
-// take a key from a text box, a note or the browser; with a note selected, typing goes into the note. What moves
-// the whole board (Tidy) needs Ctrl, so a stray key can't do it, and every layout change can be undone.
+// The keyboard shortcuts, in four groups: opening things, the selected card, the board, and anywhere. Single keys
+// work on the board when nothing is being typed, so they never take a key from a text box, a note or the browser;
+// with a card selected, typing goes into it. What moves the whole board (Tidy) needs Ctrl, so a stray key can't do
+// it, and every layout change can be undone.
 import { useBoard } from '../board'
 import { Kbd } from '@/components/ui/kbd'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
-export const KEYS: { keys: string[]; what: string }[] = [
-  { keys: ['Ctrl', 'K'], what: 'Add, or find anything kept (also /)' },
-  { keys: ['N'], what: 'New sticky note' },
-  { keys: ['L'], what: 'Later' },
-  { keys: ['O'], what: 'Outputs' },
-  { keys: ['C'], what: 'Snippets: things to copy' },
-  { keys: ['Q'], what: 'Quick access: pinned and often opened (then 1 to 9 opens one); P works too' },
-  { keys: ['T'], what: "Today's tasks" },
-  { keys: ['J'], what: "Today's journal" },
-  { keys: ['0'], what: 'Show everything' },
-  { keys: ['F'], what: 'Fold or unfold the selected card' },
-  { keys: ['Ctrl', 'Alt', 'T'], what: 'Tidy: pack every card from the top-left, sizes kept (locked ones stay)' },
-  { keys: ['Ctrl', 'Shift', 'L'], what: 'Lock the selected card in place, or unlock it' },
-  { keys: ['Ctrl', 'Z'], what: 'Undo a move, resize, tidy or removal (Ctrl Y redoes)' },
-  { keys: ['Enter'], what: "Write in the selected note or card's box (or just start typing)" },
-  { keys: ['F2'], what: 'Give the selected note a title, or rename it' },
-  { keys: ['Space'], what: 'Open the selected card full screen' },
-  { keys: ['Delete'], what: 'Take the selected card off the board' },
-  { keys: ['Esc'], what: 'Leave a note, close, or deselect' },
-  { keys: [','], what: 'Settings' },
-  { keys: ['?'], what: 'This list' },
-  { keys: ['Ctrl', 'Alt', 'K'], what: 'Bring Cockpit up from anywhere in Windows' },
+type Key = { keys: string[]; what: string }
+
+export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
+  {
+    title: 'Open',
+    keys: [
+      { keys: ['Ctrl', 'K'], what: 'Add, or find anything kept (also /)' },
+      { keys: ['N'], what: 'New sticky note' },
+      { keys: ['J'], what: "Today's journal" },
+      { keys: ['L'], what: 'Later' },
+      { keys: ['C'], what: 'Snippets' },
+      { keys: ['T'], what: "Today's tasks" },
+      { keys: ['Q'], what: 'Quick access (then 1 to 9 opens one)' },
+      { keys: ['O'], what: 'Outputs' },
+    ],
+  },
+  {
+    title: 'Selected cards',
+    keys: [
+      { keys: ['Enter'], what: 'Write in the selected one (or just start typing)' },
+      { keys: ['Space'], what: 'Open the selected one full screen' },
+      { keys: ['F2'], what: 'Give a note a title, or rename it' },
+      { keys: ['F'], what: 'Fold or unfold them' },
+      { keys: ['Ctrl', 'Shift', 'L'], what: 'Lock them in place, or unlock them' },
+      { keys: ['Delete'], what: 'Take them off the board' },
+    ],
+  },
+  {
+    title: 'The board',
+    keys: [
+      { keys: ['Scroll'], what: 'Move around (or hold Space and drag)' },
+      { keys: ['Drag'], what: 'On empty board: select several cards' },
+      { keys: ['Shift', 'Click'], what: 'Add a card to the selection' },
+      { keys: ['Ctrl', '+'], what: 'Zoom in (Ctrl − zooms out)' },
+      { keys: ['Ctrl', '0'], what: 'Back to 100%' },
+      { keys: ['0'], what: 'Show everything' },
+      { keys: ['Ctrl', 'Alt', 'T'], what: 'Tidy: line cards up from the top-left' },
+      { keys: ['Ctrl', 'Z'], what: 'Undo (Ctrl Y redoes)' },
+    ],
+  },
+  {
+    title: 'Anywhere',
+    keys: [
+      { keys: ['Esc'], what: 'Leave a note, close, or deselect' },
+      { keys: [','], what: 'Settings' },
+      { keys: ['?'], what: 'This list' },
+      { keys: ['Ctrl', 'Alt', 'K'], what: 'Bring Cockpit up from anywhere in Windows' },
+    ],
+  },
 ]
 
 export function KeysDialog() {
@@ -40,18 +68,25 @@ export function KeysDialog() {
             {board.prefs.singleKeys ? "Single keys work on the board whenever you're not typing." : 'Single keys are off (Settings); the Ctrl ones still work.'}
           </DialogDescription>
         </DialogHeader>
-        <ul className="grid gap-x-8 sm:grid-cols-2">
-          {KEYS.map(k => (
-            <li key={k.what} className="flex items-center justify-between gap-4 border-b border-ink/[0.06] py-2 text-[13.5px]">
-              <span>{k.what}</span>
-              <span className="flex shrink-0 gap-1">
-                {k.keys.map(key => (
-                  <Kbd key={key}>{key}</Kbd>
+        <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
+          {KEY_GROUPS.map(g => (
+            <section key={g.title}>
+              <h3 className="mb-1 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">{g.title}</h3>
+              <ul>
+                {g.keys.map(k => (
+                  <li key={k.what} className="flex items-center justify-between gap-4 border-b border-ink/[0.06] py-2 text-[13.5px] last:border-0">
+                    <span>{k.what}</span>
+                    <span className="flex shrink-0 gap-1">
+                      {k.keys.map(key => (
+                        <Kbd key={key}>{key}</Kbd>
+                      ))}
+                    </span>
+                  </li>
                 ))}
-              </span>
-            </li>
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       </DialogContent>
     </Dialog>
   )

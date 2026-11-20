@@ -28,7 +28,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   /* white on the dark theme, black on the light one: bg-ink/10 is a hover or a line in either */
-  --color-ink: oklch(var(--ink));
+  --color-ink: oklch(var(--contrast));
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -50,15 +50,15 @@
   --secondary-foreground: oklch(0.93 0 0);
   --muted: oklch(0.26 0 0);
   --muted-foreground: oklch(0.66 0 0);
-  --accent: oklch(var(--ink) / 0.07);
+  --accent: oklch(var(--contrast) / 0.07);
   --accent-foreground: oklch(0.96 0 0);
   --destructive: oklch(0.68 0.19 22);
-  --border: oklch(var(--ink) / 0.09);
-  --input: oklch(var(--ink) / 0.12);
+  --border: oklch(var(--contrast) / 0.09);
+  --input: oklch(var(--contrast) / 0.12);
   --ring: oklch(0.62 0 0);
 
   /* the contrast colour for overlays, lines and hovers: white on the dark theme, black on the light one */
-  --ink: 1 0 0;
+  --contrast: 1 0 0;
   /* floating things (menus, dialogs, panels) and the surfaces inside cards */
   --glass: oklch(0.21 0 0 / 0.66);
   --glass-solid: oklch(0.21 0 0 / 0.9);
@@ -75,8 +75,8 @@
   /* the board's dots */
   --dots: oklch(1 0 0 / 0.22);
 
-  --line: oklch(var(--ink) / 0.07);
-  --code-bg: oklch(var(--ink) / 0.045);
+  --line: oklch(var(--contrast) / 0.07);
+  --code-bg: oklch(var(--contrast) / 0.045);
   --code-ink: oklch(0.8 0.1 25);
   --add-bg: oklch(0.72 0.15 150 / 0.13);
   --add-ink: oklch(0.85 0.1 150);
@@ -93,8 +93,8 @@
   --serif: Charter, 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
 
   /* elevation (dark: one ring, plus a soft drop that reads on the near-black board) */
-  --ring-1: 0 0 0 1px oklch(var(--ink) / 0.08);
-  --ring-2: 0 0 0 1px oklch(var(--ink) / 0.14);
+  --ring-1: 0 0 0 1px oklch(var(--contrast) / 0.08);
+  --ring-2: 0 0 0 1px oklch(var(--contrast) / 0.14);
   --lift: 0 18px 50px -18px oklch(0 0 0 / 0.75), 0 2px 8px -2px oklch(0 0 0 / 0.5);
 
   /* the note editor (a sticky note's paper sets its own) */
@@ -102,11 +102,11 @@
   --ed-mono: 'Cascadia Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
   --ed-text: oklch(0.93 0 0);
   --ed-muted: oklch(0.66 0 0);
-  --ed-faint: oklch(var(--ink) / 0.34);
+  --ed-faint: oklch(var(--contrast) / 0.34);
   --ed-link: oklch(0.9 0 0);
   --ed-code: oklch(0.8 0.1 25);
-  --ed-selection: oklch(var(--ink) / 0.18);
-  --ed-match: oklch(var(--ink) / 0.08);
+  --ed-selection: oklch(var(--contrast) / 0.18);
+  --ed-match: oklch(var(--contrast) / 0.08);
 
   /* strong curves (emil-design-eng): ease-out for things arriving, ease-in-out for things moving */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -116,7 +116,7 @@
 /* The light theme (Settings > Theme): the same calm board on white. Overlays, lines and hovers follow --ink. */
 :root[data-theme='light'] {
   color-scheme: light;
-  --ink: 0 0 0;
+  --contrast: 0 0 0;
   --background: oklch(0.962 0 0);
   --foreground: oklch(0.21 0 0);
   --card: oklch(0.997 0 0);
@@ -179,11 +179,11 @@
     overflow: hidden;
   }
   ::selection {
-    background: oklch(var(--ink) / 0.18);
+    background: oklch(var(--contrast) / 0.18);
   }
   * {
     scrollbar-width: thin;
-    scrollbar-color: oklch(var(--ink) / 0.16) transparent;
+    scrollbar-color: oklch(var(--contrast) / 0.16) transparent;
   }
 }
 
@@ -198,7 +198,7 @@
   background: var(--glass) !important;
   backdrop-filter: blur(28px) saturate(160%);
   box-shadow:
-    0 0 0 1px oklch(var(--ink) / 0.09),
+    0 0 0 1px oklch(var(--contrast) / 0.09),
     inset 0 1px 0 oklch(1 0 0 / 0.06),
     var(--glass-shadow);
   border: 0 !important;
@@ -249,8 +249,8 @@
 
 .react-flow {
   --xy-background-color: var(--background);
-  --xy-selection-background-color: oklch(var(--ink) / 0.05);
-  --xy-selection-border: 1px solid oklch(var(--ink) / 0.2);
+  --xy-selection-background-color: oklch(var(--contrast) / 0.05);
+  --xy-selection-border: 1px solid oklch(var(--contrast) / 0.2);
 }
 
 .react-flow__node {
@@ -280,7 +280,7 @@
 }
 
 .card.is-selected {
-  box-shadow: 0 0 0 1px oklch(var(--ink) / 0.26), var(--lift);
+  box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.26), var(--lift);
 }
 
 .card.is-flash {
@@ -305,10 +305,10 @@
 
 @keyframes card-flash {
   0% {
-    box-shadow: 0 0 0 4px oklch(var(--ink) / 0.28), var(--lift);
+    box-shadow: 0 0 0 4px oklch(var(--contrast) / 0.28), var(--lift);
   }
   100% {
-    box-shadow: 0 0 0 1px oklch(var(--ink) / 0.26), var(--lift);
+    box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.26), var(--lift);
   }
 }
 
@@ -397,7 +397,7 @@
   height: 9px !important;
   border: 0 !important;
   border-radius: 3px;
-  background: oklch(var(--ink) / 0.35) !important;
+  background: oklch(var(--contrast) / 0.35) !important;
 }
 
 /* ---- dock, toast -------------------------------------------------------------------------------------------- */
@@ -413,6 +413,81 @@
   gap: 2px;
   padding: 5px;
   border-radius: 15px; /* 10px buttons + 5px inset */
+}
+
+.dock-sticky {
+  display: block;
+  width: 17px;
+  height: 17px;
+  border-radius: 2px;
+  background: linear-gradient(-45deg, transparent 4px, var(--paper) 4px);
+  box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.22), 0 1px 2px oklch(0 0 0 / 0.25);
+  rotate: -4deg;
+  transition-property: translate, rotate, scale;
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-out);
+}
+
+button:hover > .dock-sticky {
+  translate: 0 -5px;
+  rotate: -9deg;
+  scale: 1.12;
+}
+
+/* bottom right: zoom out and in, and ? for the shortcuts (as FigJam) */
+.corner-tools {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.corner-pill {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 4px;
+  border-radius: 999px;
+}
+
+.corner-round {
+  width: 40px;
+  justify-content: center;
+}
+
+.corner-sep {
+  width: 1px;
+  height: 18px;
+  background: oklch(var(--contrast) / 0.1);
+}
+
+.corner-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+  outline: none;
+  transition-property: background-color, color, scale;
+  transition-duration: 150ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.corner-btn:hover {
+  background: oklch(var(--contrast) / 0.08);
+  color: var(--foreground);
+}
+
+.corner-btn:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+.corner-btn:active {
+  scale: 0.96;
 }
 
 .dock-dot {
@@ -458,7 +533,7 @@
 }
 
 .focus-bar-btn:hover {
-  background: oklch(var(--ink) / 0.08);
+  background: oklch(var(--contrast) / 0.08);
 }
 
 .focus-bar-btn:active {
@@ -499,7 +574,7 @@
   height: 28px;
   padding: 0 11px;
   border-radius: 7px; /* 12px toast, 5px inset */
-  background: oklch(var(--ink) / 0.09);
+  background: oklch(var(--contrast) / 0.09);
   font-size: 13px;
   font-weight: 600;
   transition-property: background-color, scale;
@@ -508,7 +583,7 @@
 }
 
 .toast-btn:hover {
-  background: oklch(var(--ink) / 0.15);
+  background: oklch(var(--contrast) / 0.15);
 }
 
 .toast-btn:active {
@@ -529,12 +604,12 @@
 .snip-new {
   border-radius: 10px;
   background: var(--sunken);
-  box-shadow: inset 0 0 0 1px oklch(var(--ink) / 0.07);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.07);
   transition: box-shadow 150ms ease-out;
 }
 
 .snip-new:focus-within {
-  box-shadow: inset 0 0 0 1px oklch(var(--ink) / 0.16);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.16);
 }
 
 .snip-field {
@@ -552,7 +627,7 @@
 }
 
 .snip-field::placeholder {
-  color: oklch(var(--ink) / 0.38);
+  color: oklch(var(--contrast) / 0.38);
 }
 
 .snip-field.mono {
@@ -580,18 +655,18 @@
   border: 0;
   border-radius: 6px;
   outline: none;
-  background: oklch(var(--ink) / 0.06);
+  background: oklch(var(--contrast) / 0.06);
   color: var(--foreground);
   font-size: 12.5px;
   transition: background-color 150ms ease-out;
 }
 
 .snip-name:focus {
-  background: oklch(var(--ink) / 0.1);
+  background: oklch(var(--contrast) / 0.1);
 }
 
 .snip-name::placeholder {
-  color: oklch(var(--ink) / 0.38);
+  color: oklch(var(--contrast) / 0.38);
 }
 
 .snip-row .snip-name {
@@ -616,7 +691,7 @@
 
 .snip-keep:hover,
 .snip-keep[data-state='open'] {
-  background: oklch(var(--ink) / 0.08);
+  background: oklch(var(--contrast) / 0.08);
   color: var(--foreground);
 }
 
@@ -659,7 +734,7 @@
 .snip-row:hover,
 .snip-row:focus-visible,
 .snip-row:has([data-state='open']) {
-  background: oklch(var(--ink) / 0.05);
+  background: oklch(var(--contrast) / 0.05);
 }
 
 .snip-title,
@@ -784,7 +859,7 @@
 
 .snip-more:hover,
 .snip-more[data-state='open'] {
-  background: oklch(var(--ink) / 0.08);
+  background: oklch(var(--contrast) / 0.08);
   color: var(--foreground);
 }
 
@@ -821,7 +896,7 @@
   letter-spacing: 0;
   text-transform: none;
   font-size: 12px;
-  color: oklch(var(--ink) / 0.5);
+  color: oklch(var(--contrast) / 0.5);
 }
 
 .quick .out-detail {
@@ -842,7 +917,7 @@
 }
 
 .out-row:hover {
-  background: oklch(var(--ink) / 0.05);
+  background: oklch(var(--contrast) / 0.05);
 }
 
 .out-detail {
@@ -868,7 +943,7 @@
   min-width: 0;
   padding: 8px 4px 6px;
   border-radius: 14px;
-  background: oklch(var(--ink) / 0.03);
+  background: oklch(var(--contrast) / 0.03);
   box-shadow: var(--ring-1);
 }
 
@@ -886,7 +961,7 @@
 .turn-divider::after {
   content: '';
   flex: 1;
-  border-top: 1px dashed oklch(var(--ink) / 0.14);
+  border-top: 1px dashed oklch(var(--contrast) / 0.14);
 }
 
 .turn-divider.first {
@@ -929,7 +1004,7 @@
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  background: oklch(var(--ink) / 0.04);
+  background: oklch(var(--contrast) / 0.04);
   border-bottom: 1px solid var(--line);
 }
 
@@ -1207,7 +1282,7 @@
 }
 
 .card.is-sticky.is-selected {
-  outline: 1.5px solid oklch(var(--ink) / 0.55);
+  outline: 1.5px solid oklch(var(--contrast) / 0.55);
   outline-offset: 3px;
 }
 
@@ -1285,7 +1360,7 @@
   padding: 0 6px;
   border-radius: 6px;
   background: oklch(0 0 0 / 0.25);
-  box-shadow: 0 0 0 1px oklch(var(--ink) / 0.12) inset;
+  box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.12) inset;
   font-size: 13px;
   font-weight: 500;
   color: inherit;
@@ -1379,11 +1454,11 @@
 }
 
 .sticky-swatch[data-highlighted] {
-  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.18), 0 0 0 2px oklch(var(--ink) / 0.3);
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.18), 0 0 0 2px oklch(var(--contrast) / 0.3);
 }
 
 .sticky-swatch.is-on {
-  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.18), 0 0 0 2px var(--surface-ring), 0 0 0 3.5px oklch(var(--ink) / 0.75);
+  box-shadow: inset 0 0 0 1px oklch(0 0 0 / 0.18), 0 0 0 2px var(--surface-ring), 0 0 0 3.5px oklch(var(--contrast) / 0.75);
 }
 
 /* ---- Later: two lines a row; on hover the second line is its buttons ------------------------------------ */
@@ -1416,7 +1491,7 @@
 .later-row[data-state='open'],
 .later-row.is-menu,
 .later-row.is-editing {
-  background: oklch(var(--ink) / 0.05);
+  background: oklch(var(--contrast) / 0.05);
 }
 
 .later-icon {
@@ -1514,7 +1589,7 @@
 }
 
 .later-btn:hover {
-  background: oklch(var(--ink) / 0.08);
+  background: oklch(var(--contrast) / 0.08);
   color: var(--foreground);
 }
 
@@ -1537,7 +1612,7 @@
   border-radius: 6px;
   outline: none;
   background: var(--sunken);
-  box-shadow: inset 0 0 0 1px oklch(var(--ink) / 0.14);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.14);
   color: var(--foreground);
   font-size: 13.5px;
   line-height: 20px;
@@ -1578,7 +1653,7 @@
 .image-view img,
 .md img {
   border-radius: 6px;
-  outline: 1px solid oklch(var(--ink) / 0.1);
+  outline: 1px solid oklch(var(--contrast) / 0.1);
   outline-offset: -1px;
 }
 
@@ -1667,7 +1742,7 @@
   width: 200px;
   padding: 0 10px;
   border-radius: 7px;
-  background: oklch(var(--ink) / 0.05);
+  background: oklch(var(--contrast) / 0.05);
   outline: none;
 }
 
@@ -1717,7 +1792,7 @@ table.data .rownum {
 }
 
 table.data tbody tr:hover td {
-  background: oklch(var(--ink) / 0.035);
+  background: oklch(var(--contrast) / 0.035);
 }
 
 /* compare (older items) */
@@ -1886,7 +1961,7 @@ table.data tbody tr:hover td {
 
 .md blockquote {
   padding-left: 1em;
-  border-left: 3px solid oklch(var(--ink) / 0.25);
+  border-left: 3px solid oklch(var(--contrast) / 0.25);
   color: var(--md-quote);
 }
 
@@ -1895,7 +1970,7 @@ table.data tbody tr:hover td {
   font-size: 0.86em;
   padding: 0.14em 0.38em;
   border-radius: 5px;
-  background: oklch(var(--ink) / 0.07);
+  background: oklch(var(--contrast) / 0.07);
   color: var(--code-ink);
 }
 
@@ -1949,7 +2024,7 @@ table.data tbody tr:hover td {
 }
 
 .md th {
-  background: oklch(var(--ink) / 0.04);
+  background: oklch(var(--contrast) / 0.04);
   text-align: left;
   font-weight: 600;
 }
@@ -1976,12 +2051,12 @@ table.data tbody tr:hover td {
 .md a {
   color: inherit;
   text-decoration: underline;
-  text-decoration-color: oklch(var(--ink) / 0.3);
+  text-decoration-color: oklch(var(--contrast) / 0.3);
   text-underline-offset: 3px;
 }
 
 .md a:hover {
-  text-decoration-color: oklch(var(--ink) / 0.8);
+  text-decoration-color: oklch(var(--contrast) / 0.8);
 }
 
 .mermaid-diagram {

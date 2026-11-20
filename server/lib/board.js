@@ -26,7 +26,7 @@ const WELCOME = [
   ['yellow', 'Welcome to Cockpit', 'A board for the links, files and notes you want in front of you. Everything stays on this PC.', 'Delete these notes whenever you like.'],
   ['green', 'Paste anything', 'Paste a link or a file path anywhere on the board. Links go to Later, to read when you have time.'],
   ['pink', 'Sticky notes', 'Press N for a new one, or select one and just type. Click the top of a note to give it a title.'],
-  ['orange', 'Finding your way', 'Ctrl+K adds or finds anything. Right-click the board for more. Press ? for every shortcut.'],
+  ['orange', 'Finding your way', 'Scroll to move around, and drag on empty board to select several cards. Ctrl+K adds or finds anything; right-click the board for more; ? lists every shortcut.'],
 ].map(([color, title, ...paragraphs]) => ({ color, title, text: paragraphs.join('\n\n') }))
 
 export function hasBoard() {

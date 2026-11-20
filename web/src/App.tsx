@@ -1,9 +1,9 @@
 // Cockpit: a free-form board. Paste a link or path anywhere (or press +) and it lands as a card you can read,
 // move, resize and put beside anything else. A small dock is the only chrome.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, useNodesState, useReactFlow, type NodeChange } from '@xyflow/react'
+import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, SelectionMode, useNodesState, useReactFlow, useStore, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
+import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus } from './api'
 import { BoardProvider, fitsContent, foldNode, isSticky, resizingRef, toNode, useBoard, type CardNode } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -52,6 +52,7 @@ export function App() {
           <KeysDialog />
           <FocusBar />
           <UsageAsk />
+          <CornerTools />
           <Toast />
           <Badge />
           <UrlState />
@@ -165,6 +166,14 @@ function Canvas({ initial }: { initial: Board }) {
         else board.undo()
         return
       }
+      // Zoom the board, not the page (as Figma): Ctrl + and Ctrl −, Ctrl 0 for 100%
+      if (ctrl && !e.altKey && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) {
+        e.preventDefault()
+        if (e.key === '0') rf.zoomTo(1, { duration: 200 })
+        else if (e.key === '-') rf.zoomOut({ duration: 200 })
+        else rf.zoomIn({ duration: 200 })
+        return
+      }
       // Tidy, as Figma's Tidy up: Ctrl+Alt+T
       if (ctrl && e.altKey && key === 't') {
         e.preventDefault()
@@ -231,9 +240,13 @@ function Canvas({ initial }: { initial: Board }) {
           }, err => board.toast(err.message)),
         '0': () => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 }),
         f: () => {
-          if (!one) return board.toast('Select a card first, then F folds it')
+          // every selected card (sticky notes don't fold); all fold, unless they all are already
+          const cards = picked.filter(n => !isSticky(n.type, n.data.ref))
+          if (!cards.length) return board.toast('Select a card first, then F folds it')
+          const fold = !cards.every(n => n.data.folded)
+          const ids = new Set(cards.map(n => n.id))
           board.remember()
-          rf.setNodes(ns => ns.map(n => (n.id === one.id ? foldNode(n, !n.data.folded) : n)))
+          rf.setNodes(ns => ns.map(n => (ids.has(n.id) ? foldNode(n, fold) : n)))
           board.persist()
         },
         ',': () => board.setSettingsOpen(true),
@@ -358,8 +371,12 @@ function Canvas({ initial }: { initial: Board }) {
         zoomOnScroll={false}
         zoomOnPinch={false}
         zoomActivationKeyCode={null}
-        panOnDrag
-        selectionOnDrag={false}
+        // as FigJam: dragging on empty board selects (a box), scrolling moves around, and so does dragging with the
+        // middle button or with Space held; Shift or Ctrl adds a card to the selection
+        panOnDrag={[1]}
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
         deleteKeyCode={['Delete']}
         onMoveEnd={() => board.persist()}
         onNodeDragStart={() => board.remember()}
@@ -417,6 +434,37 @@ function DockButton({ label, shortcut, onClick, children, active }: { label: str
   )
 }
 
+/** Bottom right, as FigJam: zoom out and in (the tooltip says the zoom; Ctrl 0 goes back to 100%), and ? for the
+ * keyboard shortcuts. */
+function CornerTools() {
+  const board = useBoard()
+  const rf = useReactFlow()
+  const zoom = Math.round(useStore(s => s.transform[2]) * 100)
+  const tool = (label: string, keys: string, onClick: () => void, children: React.ReactNode) => (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button type="button" aria-label={label} onClick={onClick} className="corner-btn">
+          {children}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={8}>
+        {label}
+        <span className="ml-2 opacity-60">{keys}</span>
+      </TooltipContent>
+    </Tooltip>
+  )
+  return (
+    <div className="corner-tools">
+      <div className="corner-pill glass" role="group" aria-label={`Zoom, ${zoom}%`}>
+        {tool(`Zoom out (${zoom}%)`, 'Ctrl −', () => rf.zoomOut({ duration: 200 }), <Minus className="size-[16px]" strokeWidth={1.75} />)}
+        <span className="corner-sep" />
+        {tool(`Zoom in (${zoom}%)`, 'Ctrl +', () => rf.zoomIn({ duration: 200 }), <Plus className="size-[16px]" strokeWidth={1.75} />)}
+      </div>
+      <div className="corner-pill corner-round glass">{tool('Keyboard shortcuts', '?', () => board.setKeysOpen(true), <span className="text-[15px] font-medium">?</span>)}</div>
+    </div>
+  )
+}
+
 function Dock() {
   const board = useBoard()
   const rf = useReactFlow()
@@ -427,7 +475,8 @@ function Dock() {
         <Plus className="size-[18px]" strokeWidth={1.75} />
       </DockButton>
       <DockButton label="New sticky note" shortcut="N" onClick={() => board.newSticky()}>
-        <StickyNote className="size-[16px]" strokeWidth={1.75} />
+        {/* a little sticky note that peeks up on hover (FigJam's toolbar does this) */}
+        <span aria-hidden className={cn('dock-sticky', `paper-${board.prefs.stickyColor}`)} />
       </DockButton>
       <DockButton label="Quick access" shortcut="Q" onClick={() => board.setPinnedOpen(true)} active={board.pinnedOpen}>
         <Pin className="size-[16px]" strokeWidth={1.75} />

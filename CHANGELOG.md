@@ -2,6 +2,21 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 20 November 2026 (version 0.1.2)
+
+**New**
+- **Select several cards** by dragging a box on empty board, as in FigJam. Shift- or Ctrl-click adds one. Move them together; Delete, Lock and F work on all of them. Scroll (or two fingers on a touchpad) moves around the board, and so does dragging with Space held or with the middle button.
+- **Zoom buttons** at the bottom right (− and +), with **?** for the shortcuts beside them. Ctrl + and Ctrl − zoom the board; Ctrl 0 goes back to 100%.
+
+**Improved**
+- The shortcuts list is grouped: Open, Selected cards, The board, Anywhere.
+- The sticky-note button in the dock is a little sticky note, in your colour, that pops up when you point at it.
+- Settings shows just the version at the bottom.
+
+**Fixed**
+- A workbook on the board sometimes jumped back to its first sheet while you were reading another one.
+- Inside sticky notes, some hover shades and lines weren't drawn (since light mode).
+
 ## 19 November 2026 (evening)
 
 **New**

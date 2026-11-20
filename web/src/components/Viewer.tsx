@@ -67,25 +67,34 @@ function SheetView({ read }: { read: ShownRead }) {
   const [at, setAt] = useState(read.sheet ?? 0)
   const [all, setAll] = useState(false)
   const [loading, setLoading] = useState(false)
+  const shownId = useRef(read.entry.id)
+  // The card reads the file again whenever it looks changed (a synced OneDrive folder touches files now and then):
+  // the same workbook stays on the sheet that's open, whose rows load again below.
   useEffect(() => {
+    const same = shownId.current === read.entry.id
+    shownId.current = read.entry.id
     setSheets(read.sheets || [])
-    setAt(read.sheet ?? 0)
+    if (!same) setAt(read.sheet ?? 0)
   }, [read])
-  const pick = async (i: number) => {
+  const open = Math.min(at, Math.max(0, sheets.length - 1))
+  const missing = !!sheets[open] && !sheets[open].rows
+  useEffect(() => {
+    if (!missing) return
+    let live = true
+    setLoading(true)
+    get<ShownRead>(`/api/shown/${read.entry.id}?sheet=${open}`)
+      .then(r => live && setSheets(ss => ss.map((s, j) => (j === open ? { ...s, rows: r.sheets?.[open]?.rows || [] } : s))))
+      .catch(() => live && setSheets(ss => ss.map((s, j) => (j === open ? { ...s, rows: [] } : s))))
+      .finally(() => live && setLoading(false))
+    return () => {
+      live = false
+    }
+  }, [missing, open, read.entry.id])
+  const pick = (i: number) => {
     setAt(i)
     setAll(false)
-    if (sheets[i]?.rows) return
-    setLoading(true)
-    try {
-      const r = await get<ShownRead>(`/api/shown/${read.entry.id}?sheet=${i}`)
-      setSheets(ss => ss.map((s, j) => (j === i ? { ...s, rows: r.sheets?.[i]?.rows || [] } : s)))
-    } catch {
-      setSheets(ss => ss.map((s, j) => (j === i ? { ...s, rows: [] } : s)))
-    } finally {
-      setLoading(false)
-    }
   }
-  const sheet = sheets[Math.min(at, sheets.length - 1)]
+  const sheet = sheets[open]
   if (!sheet) return <p className="text-muted-foreground">This workbook is empty.</p>
   const rows = sheet.rows || []
   const drawn = all ? rows : rows.slice(0, FIRST_ROWS)

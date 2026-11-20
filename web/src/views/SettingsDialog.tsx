@@ -275,9 +275,7 @@ export function SettingsDialog() {
           )}
           {msg && <p className={msg.bad ? 'text-[13px] text-destructive' : 'text-[13px] text-muted-foreground'}>{msg.t}</p>}
           <div className="flex items-center gap-3">
-            <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
-              Cockpit {cfg?.version} · 127.0.0.1:{cfg?.port} · {cfg?.dataDir}
-            </p>
+            <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">Cockpit {cfg?.version}</p>
             <Button
               size="sm"
               variant="ghost"
