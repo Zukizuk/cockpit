@@ -16,8 +16,11 @@ It runs on your PC only (a small local server on `127.0.0.1`) and opens in its o
 3. Open **Cockpit** from the Start menu, or press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>K</kbd> from anywhere.
 
 The installer puts Cockpit in `%LOCALAPPDATA%\Programs\Cockpit`, starts it at login, and (if you use Claude Code)
-offers to connect the two. Run it again to update. To remove Cockpit, run **Uninstall.cmd** in that folder; your
-notes and board are kept.
+offers to connect the two. To remove Cockpit, run **Uninstall.cmd** in that folder; your notes and board are kept.
+
+**Updates:** Cockpit checks GitHub for a new release about once a day. When there is one, a dot appears on the
+Settings button; **Settings → Updates → Update now** downloads it, checks it against the checksum GitHub publishes,
+and installs it. Your notes and board stay as they are. You can turn the daily check off in the same place.
 
 Windows may warn that the installer is from an unknown publisher: the release isn't code-signed yet. Choose
 **More info → Run anyway**, or build it yourself (see [Develop](#develop)).
@@ -47,14 +50,25 @@ Cockpit has an MCP server with two tools:
   on your board, so long answers are read in a proper window instead of the chat.
 - `snippet`: leaves something you'll copy (a command, a connection string, a key) in Snippets instead of the chat.
 
-The installer offers to connect it. To do it by hand:
+**Outputs** lists what each Claude Code turn made, one group per chat: the files it wrote or edited, files its reply
+names that changed during the turn, drafts, commands and links. A small Claude Code hook (`server/claude/outputs-hook.js`,
+a Stop hook in `~/.claude/settings.json`) does this. It reads only the end of the chat's transcript, writes to
+Cockpit's inbox, and never blocks Claude.
+
+The installer offers to connect both. To do it by hand:
 
 ```powershell
 claude mcp add --scope user cockpit -- "$env:LOCALAPPDATA\Programs\Cockpit\runtime\node.exe" "$env:LOCALAPPDATA\Programs\Cockpit\app\server\mcp.js"
 ```
 
-**Outputs** (the tray icon in the dock, shown once something arrives) lists what an agent made, one group per chat.
-Any program can add to it by writing a JSON file to `%USERPROFILE%\.cockpit\inbox\`:
+```powershell
+& "$env:LOCALAPPDATA\Programs\Cockpit\runtime\node.exe" "$env:LOCALAPPDATA\Programs\Cockpit\app\scripts\claude-setup.mjs" add-hook --node "$env:LOCALAPPDATA\Programs\Cockpit\runtime\node.exe"
+```
+
+`remove-hook` takes the hook out again; nothing else in your Claude Code settings is touched.
+
+The Outputs button appears in the dock once something has arrived. Any other program or agent can add to it too, by
+writing a JSON file to `%USERPROFILE%\.cockpit\inbox\`:
 
 ```json
 {
@@ -79,7 +93,7 @@ Any program can add to it by writing a JSON file to `%USERPROFILE%\.cockpit\inbo
 | What | Where |
 | --- | --- |
 | Notes, sticky notes, the journal, drafts | `Documents\Cockpit` (change it in Settings) |
-| The board, settings, kept pages, snippets | `%USERPROFILE%\.cockpit` |
+| The board, settings, kept pages, snippets | `%USERPROFILE%\.cockpit` (a copy of the board is kept each day in `backups`) |
 | The app | `%LOCALAPPDATA%\Programs\Cockpit` |
 
 Notes are plain Markdown files, so any editor (and any agent) can read them.
@@ -88,8 +102,9 @@ Notes are plain Markdown files, so any editor (and any agent) can read them.
 
 - The server listens on `127.0.0.1` only and refuses other hosts, other sites' origins and cross-site requests.
   Every change needs a custom header that a web page can't send.
-- Nothing else is sent anywhere unless you ask for it: a link you save is fetched to read it, and your Todoist token
-  goes only to `api.todoist.com`.
+- Nothing else is sent anywhere unless you ask for it: a link you save is fetched to read it, your Todoist token goes
+  only to `api.todoist.com`, and the daily update check asks GitHub for the latest release (nothing about you goes
+  with it; turn it off in Settings).
 - HTML you open runs in a sandbox with no access to Cockpit.
 - **Usage counts are opt-in.** After its first day Cockpit asks once whether it may send anonymous counts of how
   often features are used, once a day, with the version and Windows build, under a random id. Never what's on
@@ -103,7 +118,9 @@ Notes are plain Markdown files, so any editor (and any agent) can read them.
 These stay out of the way until you set them up:
 
 - **Todoist**: paste your API token in Settings.
-- **Trackers**: `tracker.json` files from the tracker mod for Claude Code, added in Settings.
+- **Trackers**: `tracker.json` files from the tracker mod for Claude Code. List them in Settings (the box appears once
+  there is one), or set `"scanTrackers": true` in `.cockpit\config.json` to look through Projects, Desktop and synced
+  folders for them.
 - **Journal sync over SSH** (`kokoroHost` in `.cockpit\config.json`): swaps journal pages with a self-hosted
   journal service through a restricted SSH key. See `server/lib/journal-sync.js` and `scripts/kokoro-gate.py`.
 

@@ -20,6 +20,7 @@ import { readOffice } from './lib/office.js'
 import * as outputs from './lib/outputs.js'
 import { hasBoard, readBoard, saveBoard, welcomeBoard } from './lib/board.js'
 import * as telemetry from './lib/telemetry.js'
+import * as updates from './lib/updates.js'
 import * as runs from './lib/runs.js'
 import { changesFor } from './lib/changes.js'
 
@@ -256,6 +257,13 @@ const counted = name => {
 }
 
 /** Anonymous usage counts (only with a yes, see telemetry.js): finished days go out about once an hour. */
+/** An installed copy looks for a newer release about once a day (updates.js keeps it to that). */
+function startUpdateChecks() {
+  const tick = () => updates.check(loadConfig()).catch(() => {})
+  setTimeout(tick, 90_000).unref()
+  setInterval(tick, 60 * 60_000).unref()
+}
+
 function startTelemetry() {
   const tick = () => telemetry.sendDue().then(r => r.sent && log(`telemetry: sent ${r.sent} day(s)`), e => log(String(e.message || e)))
   setTimeout(tick, 2 * 60_000).unref()
@@ -323,6 +331,12 @@ async function api(req, res, url) {
     clients.add(res)
     req.on('close', () => clients.delete(res))
     return
+  }
+
+  if (area === 'update') {
+    if (!a && method === 'GET') return json(res, 200, updates.status(cfg))
+    if (a === 'check' && method === 'POST') return json(res, 200, await updates.check(cfg, { force: true }))
+    if (a === 'apply' && method === 'POST') return json(res, 200, await updates.apply(cfg, { log }))
   }
 
   if (area === 'telemetry') {
@@ -688,6 +702,7 @@ export function start() {
   startWatchers(cfg)
   startJournalSync()
   startTelemetry()
+  startUpdateChecks()
   // secrets: unlock their key in the background now, so the first copy is instant; drop expired ones hourly
   snippets.warmKey().catch(e => log(`snippets: ${e.message}`))
   setInterval(() => {

@@ -875,3 +875,36 @@ test('telemetry: nothing without a key or a yes; only counts are sent, and a no 
   assert.deepEqual(t.readState().days, {}, 'a no forgets what was counted')
   delete process.env.COCKPIT_TELEMETRY_KEY
 })
+
+test('updates: versions compare by number; a release is read for its zip and checksum; a clone never checks', async () => {
+  const u = await import('../server/lib/updates.js')
+  assert.equal(u.compareVersions('0.1.10', '0.1.9'), 1)
+  assert.equal(u.compareVersions('v0.2.0', '0.2.0'), 0)
+  assert.equal(u.compareVersions('0.1.2', '0.1.3'), -1)
+  const r = u.parseRelease({
+    tag_name: 'v0.1.4',
+    html_url: 'https://github.com/x/y/releases/tag/v0.1.4',
+    assets: [{ name: 'Cockpit-0.1.4-win-x64.zip', browser_download_url: 'https://github.com/x/y/releases/download/v0.1.4/Cockpit-0.1.4-win-x64.zip', size: 10, digest: 'sha256:' + 'a'.repeat(64) }],
+  })
+  assert.deepEqual([r.version, r.size, r.sha256.length], ['0.1.4', 10, 64])
+  assert.equal(u.parseRelease({ tag_name: 'v1', assets: [] }), null, 'a release without the Windows zip is no update')
+  assert.equal(u.isInstalled(), false, 'the tests run from a clone')
+  let asked = false
+  const s = await u.check({ updates: true }, { force: true, get: async () => ((asked = true), { ok: true, json: async () => ({}) }) })
+  assert.equal(asked, false, 'a clone never asks GitHub')
+  assert.equal(s.available, false)
+  await assert.rejects(u.apply({ updates: true }), /git pull/)
+})
+
+test('board: a copy is kept once a day, the last 14', async () => {
+  const board = await import('../server/lib/board.js')
+  const { DATA_DIR } = await import('../server/lib/config.js')
+  const dir = path.join(DATA_DIR, 'backups')
+  fs.rmSync(dir, { recursive: true, force: true })
+  board.saveBoard({ cards: [], viewport: null })
+  for (let d = 1; d <= 20; d++) board.backup(new Date(Date.UTC(2026, 0, d, 12)))
+  const kept = fs.readdirSync(dir).sort()
+  assert.equal(kept.length, 14)
+  assert.ok(kept.includes('board-2026-01-20.json') && !kept.includes('board-2026-01-07.json'), 'the newest kept, the oldest gone (today\'s save made one too)')
+  fs.rmSync(path.join(DATA_DIR, 'board.json'), { force: true })
+})

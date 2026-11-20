@@ -56,6 +56,10 @@ export function defaults() {
     editor: 'notepad',
     /** Light, dark, or as Windows is set (the default). */
     theme: 'system',
+    /** An installed copy looks for a newer release about once a day. */
+    updates: true,
+    /** Look through Projects, Desktop and synced folders for tracker.json files (off: only the ones listed). */
+    scanTrackers: false,
   }
 }
 
@@ -84,6 +88,8 @@ export function loadConfig() {
   if (TIDY_GAPS.includes(raw.tidyGap)) cfg.tidyGap = raw.tidyGap
   if (EDITORS.includes(raw.editor)) cfg.editor = raw.editor
   if (THEMES.includes(raw.theme)) cfg.theme = raw.theme
+  if (typeof raw.updates === 'boolean') cfg.updates = raw.updates
+  if (typeof raw.scanTrackers === 'boolean') cfg.scanTrackers = raw.scanTrackers
   return cfg
 }
 
@@ -114,6 +120,10 @@ export function saveConfig(patch) {
   if (patch.tidyGap !== undefined) {
     if (!TIDY_GAPS.includes(patch.tidyGap)) throw new UserError(`tidyGap is one of ${TIDY_GAPS.join(', ')}`)
     raw.tidyGap = patch.tidyGap
+  }
+  if (patch.updates !== undefined) {
+    if (typeof patch.updates !== 'boolean') throw new UserError('updates is true or false')
+    raw.updates = patch.updates
   }
   if (patch.theme !== undefined) {
     if (!THEMES.includes(patch.theme)) throw new UserError(`theme is one of ${THEMES.join(', ')}`)

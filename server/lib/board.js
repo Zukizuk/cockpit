@@ -66,5 +66,23 @@ export function saveBoard(body) {
   const v = body.viewport
   const viewport = v ? { x: num(v.x, -1e7, 1e7, 0), y: num(v.y, -1e7, 1e7, 0), zoom: num(v.zoom, 0.1, 4, 1) } : null
   writeFileAtomic(file(), JSON.stringify({ cards, viewport }, null, 1) + '\n')
+  backup()
   return { ok: true, count: cards.length }
+}
+
+const KEEP_BACKUPS = 14
+
+/** A copy of the board once a day (the first save of the day), the last 14 kept: a bad save can be undone by hand. */
+export function backup(now = new Date()) {
+  try {
+    const dir = path.join(DATA_DIR, 'backups')
+    const name = `board-${now.toISOString().slice(0, 10)}.json`
+    if (fs.existsSync(path.join(dir, name))) return
+    fs.mkdirSync(dir, { recursive: true })
+    fs.copyFileSync(file(), path.join(dir, name))
+    const old = fs.readdirSync(dir).filter(n => /^board-\d{4}-\d{2}-\d{2}\.json$/.test(n)).sort().slice(0, -KEEP_BACKUPS)
+    for (const n of old) fs.rmSync(path.join(dir, n), { force: true })
+  } catch {
+    // a backup must never stop a save
+  }
 }

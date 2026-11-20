@@ -77,7 +77,8 @@ export function trackerFiles(cfg, home) {
     // no tracker mod config
   }
   for (const t of cfg.trackers) add(t)
-  if (home) for (const f of discoveredTrackers(home)) add(f)
+  // looking through Projects, Desktop and synced folders for more: only when asked (config scanTrackers)
+  if (home && cfg.scanTrackers) for (const f of discoveredTrackers(home)) add(f)
   return out
 }
 

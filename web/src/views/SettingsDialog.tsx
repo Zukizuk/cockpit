@@ -1,7 +1,9 @@
 // Settings, as a small dialog: how the board behaves, Todoist, the notes folder, extra trackers, and What's new.
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { ago } from '../lib'
 import { MessageSquare, Sparkles } from 'lucide-react'
-import { EDITORS, get, post, type Config, type TelemetryStatus, type TodoState } from '../api'
+import { EDITORS, get, post, type Config, type TelemetryStatus, type TodoState, type UpdateStatus } from '../api'
 import { useBoard } from '../board'
 import { STICKY_COLORS } from '../cards/CardShell'
 import { Button } from '@/components/ui/button'
@@ -164,6 +166,7 @@ export function SettingsDialog() {
               </ToggleGroup>
             </Row>
           </section>
+          <Updates />
           <section className="grid gap-2">
             <h3 className="text-[14px] font-medium">Todoist</h3>
             {cfg?.hasTodoistToken && !replacing ? (
@@ -232,9 +235,11 @@ export function SettingsDialog() {
               <Button variant="secondary">Save</Button>
             </form>
           </section>
+          {/* trackers come from the tracker mod for Claude Code: shown once there is one, or one is listed */}
+          {(board.trackers.length > 0 || trackers.trim()) && (
           <section className="grid gap-2">
-            <h3 className="text-[14px] font-medium">More trackers</h3>
-            <p className="text-[13px] text-muted-foreground">tracker.json files (or folders holding one), one per line.</p>
+            <h3 className="text-[14px] font-medium">Trackers</h3>
+            <p className="text-[13px] text-muted-foreground">More tracker.json files (or folders holding one), one per line.</p>
             <textarea
               className="min-h-24 rounded-md border border-input bg-ink/[0.03] px-3 py-2 font-mono text-[12px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               value={trackers}
@@ -244,6 +249,7 @@ export function SettingsDialog() {
               Save
             </Button>
           </section>
+          )}
           {usage?.available && (
             <section className="grid gap-3">
               <h3 className="text-[14px] font-medium">Privacy</h3>
@@ -296,5 +302,114 @@ export function SettingsDialog() {
         </div>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Updates: whether this copy is the latest, with Update now when it isn't. An installed copy checks about once a
+ * day (switchable); a copy run from source is updated with git.
+ */
+function Updates() {
+  const board = useBoard()
+  const [st, setSt] = useState<UpdateStatus | null>(null)
+  const [busy, setBusy] = useState('')
+  const [updating, setUpdating] = useState('')
+  useEffect(() => {
+    get<UpdateStatus>('/api/update').then(setSt, () => setSt(null))
+  }, [])
+  if (!st) return null
+  const checkNow = async () => {
+    setBusy('check')
+    try {
+      setSt(await post<UpdateStatus>('/api/update/check'))
+    } finally {
+      setBusy('')
+    }
+  }
+  const setAuto = async (on: boolean) => {
+    await post('/api/config', { updates: on })
+    setSt({ ...st, enabled: on })
+  }
+  const updateNow = async () => {
+    setBusy('update')
+    try {
+      const r = await post<{ version: string }>('/api/update/apply')
+      setUpdating(r.version)
+    } catch (e: any) {
+      board.toast(e.message)
+      setBusy('')
+    }
+  }
+  return (
+    <section className="grid gap-3">
+      <h3 className="text-[14px] font-medium">Updates</h3>
+      {!st.installed ? (
+        <p className="text-[13px] text-muted-foreground">Running from source: update with git pull, then npm run build.</p>
+      ) : (
+        <>
+          <Row name="Check for updates" hint="About once a day, from GitHub">
+            <ToggleGroup type="single" variant="outline" size="sm" value={st.enabled ? 'on' : 'off'} onValueChange={v => v && setAuto(v === 'on')}>
+              <ToggleGroupItem value="on" className="px-3">
+                On
+              </ToggleGroupItem>
+              <ToggleGroupItem value="off" className="px-3">
+                Off
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </Row>
+          <div className="flex items-center gap-3">
+            <p className="min-w-0 flex-1 text-[13px] text-muted-foreground">
+              {st.available
+                ? `Cockpit ${st.latest?.version} is available (you have ${st.current}).`
+                : st.error || `Cockpit ${st.current} is the latest${st.checkedAt ? `, checked ${ago(new Date(st.checkedAt).toISOString())}` : ''}.`}
+            </p>
+            {st.available ? (
+              <>
+                {st.latest?.page && (
+                  <Button size="sm" variant="ghost" onClick={() => board.openLink(st.latest!.page)}>
+                    What's new
+                  </Button>
+                )}
+                <Button size="sm" onClick={updateNow} disabled={!!busy}>
+                  {busy === 'update' ? 'Downloading…' : 'Update now'}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" variant="secondary" onClick={checkNow} disabled={!!busy}>
+                {busy === 'check' ? 'Checking…' : 'Check now'}
+              </Button>
+            )}
+          </div>
+        </>
+      )}
+      {updating && <Updating version={updating} />}
+    </section>
+  )
+}
+
+/** While the installer replaces the app: wait for the new version to answer, then load it. */
+function Updating({ version }: { version: string }) {
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const started = Date.now()
+    const t = setInterval(async () => {
+      if (Date.now() - started > 180_000) setSlow(true)
+      try {
+        const c = await get<Config>('/api/config')
+        if (c.version === version) location.reload()
+      } catch {
+        // the server is being replaced
+      }
+    }, 2000)
+    return () => clearInterval(t)
+  }, [version])
+  return createPortal(
+    <div className="updating glass" role="status" aria-live="polite">
+      <p className="text-[15px] font-medium">Updating to Cockpit {version}…</p>
+      <p className="text-[13px] text-muted-foreground">
+        {slow ? "This is taking longer than it should. If Cockpit doesn't come back, run the installer from the release page." : 'Cockpit will reopen in a moment. Your notes and board stay as they are.'}
+      </p>
+    </div>,
+    document.body,
   )
 }

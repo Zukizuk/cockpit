@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, SelectionMode, useNodesState, useReactFlow, useStore, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
 import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
-import { get, post, track, type Board, type ShownEntry, type TelemetryStatus } from './api'
+import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
 import { BoardProvider, fitsContent, foldNode, isSticky, resizingRef, toNode, useBoard, type CardNode } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
@@ -21,7 +21,7 @@ import { PinnedSheet, QUICK_DRAG } from './views/PinnedSheet'
 import { Reader } from './views/Reader'
 import { SettingsDialog } from './views/SettingsDialog'
 import { isPath, isUrl } from './views/paste'
-import { ago, emit } from './lib'
+import { ago, emit, useData } from './lib'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -469,6 +469,7 @@ function Dock() {
   const board = useBoard()
   const rf = useReactFlow()
   const later = laterCounts(board.items).todo
+  const update = useData(() => get<UpdateStatus>('/api/update'), [board.settingsOpen], { refreshEvery: 3_600_000 })
   return (
     <nav className="dock glass" aria-label="Cockpit">
       <DockButton label="Add" shortcut="Ctrl K" onClick={() => board.setPalette(true)}>
@@ -499,8 +500,9 @@ function Dock() {
       <DockButton label="Show everything" shortcut="0" onClick={() => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 })}>
         <Maximize className="size-[16px]" strokeWidth={1.75} />
       </DockButton>
-      <DockButton label="Settings" shortcut="," onClick={() => board.setSettingsOpen(true)}>
+      <DockButton label={update.data?.available ? `Settings: Cockpit ${update.data.latest?.version} is available` : 'Settings'} shortcut="," onClick={() => board.setSettingsOpen(true)}>
         <Settings2 className="size-[16px]" strokeWidth={1.75} />
+        {update.data?.available && <span className="dock-dot is-plain" />}
       </DockButton>
     </nav>
   )

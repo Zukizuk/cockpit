@@ -32,11 +32,20 @@ fs.mkdirSync(app, { recursive: true })
 
 // the app
 for (const p of ['server', 'web/dist', 'CHANGELOG.md', 'LICENSE', 'README.md', 'package.json', 'package-lock.json']) copy(p)
-for (const p of ['open.vbs', 'start-hidden.vbs', 'install-startup.ps1', 'install-hotkey.ps1', 'hotkey/CockpitHotkey.cs']) copy(`scripts/${p}`)
+for (const p of ['open.vbs', 'start-hidden.vbs', 'install-startup.ps1', 'install-hotkey.ps1', 'claude-setup.mjs', 'hotkey/CockpitHotkey.cs']) copy(`scripts/${p}`)
 copy('web/public/icons/cockpit.ico', 'cockpit.ico')
 
 // only what the server needs at run time (the web app is already bundled)
 run('npm', ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], app)
+// what's only there for developers (source maps, type definitions, readmes): smaller, and shorter deepest paths
+const prune = dir => {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, e.name)
+    if (e.isDirectory()) prune(full)
+    else if (/\.(map|d\.ts|d\.mts|d\.cts|md|markdown)$/i.test(e.name) && !/^license/i.test(e.name)) fs.rmSync(full)
+  }
+}
+prune(path.join(app, 'node_modules'))
 // npm leaves an empty folder for each scope it skipped (@codemirror, @radix-ui...)
 for (const d of fs.readdirSync(path.join(app, 'node_modules'))) {
   const full = path.join(app, 'node_modules', d)

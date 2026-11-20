@@ -2,6 +2,22 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 20 November 2026 (version 0.1.3)
+
+**New**
+- **Updates.** Cockpit checks for a new release about once a day. When there is one, the Settings button gets a dot and Settings > Updates offers **Update now**: it downloads the release, checks it against the checksum GitHub publishes, installs it and reopens Cockpit, with your notes and board untouched. You can turn the check off. (From 0.1.2, install this version by hand once; after that it updates itself.)
+- **Outputs for everyone using Claude Code.** The installer offers a small Claude Code hook that lists what each turn made under Outputs: files written or edited, drafts, commands and links. Uninstall takes it out again.
+- **A daily copy of the board**, the last 14 kept in .cockpitackups.
+
+**Improved**
+- Cockpit no longer looks through your Projects, Desktop and synced folders for tracker files unless you turn that on; the Trackers box in Settings appears once there's a tracker.
+- If Cockpit can't start (another program on its port, say), opening it says so instead of doing nothing. Without Edge, it opens in your default browser.
+- The installer says plainly when Ctrl+Alt+K couldn't be set up, and Uninstall reminds you to remove a Cockpit installed as an app from Edge.
+- A smaller download.
+
+**Fixed**
+- Installing or uninstalling one copy of Cockpit stopped the Ctrl+Alt+K helper of any other copy on the same PC.
+
 ## 20 November 2026 (version 0.1.2)
 
 **New**

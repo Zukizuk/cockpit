@@ -506,6 +506,16 @@ button:hover > .dock-sticky {
   text-align: center;
 }
 
+/* a dot with no number: there's something to see (an update) */
+.dock-dot.is-plain {
+  top: 6px;
+  right: 6px;
+  min-width: 0;
+  width: 7px;
+  height: 7px;
+  padding: 0;
+}
+
 .focus-bar {
   position: fixed;
   left: 50%;
@@ -2132,4 +2142,18 @@ table.data tbody tr:hover td {
   .board.is-arranging .react-flow__node {
     transition: none;
   }
+}
+
+/* while Cockpit updates itself: a note in the middle of the screen until the new version answers */
+.updating {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 100;
+  display: grid;
+  gap: 6px;
+  width: min(440px, calc(100vw - 32px));
+  padding: 20px 22px;
+  border-radius: 16px;
+  translate: -50% -50%;
 }

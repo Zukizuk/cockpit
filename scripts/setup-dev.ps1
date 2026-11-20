@@ -35,6 +35,13 @@ if ((Get-Command claude -ErrorAction SilentlyContinue) -and $Claude -ne 'no') {
     cmd /d /c "claude mcp remove --scope user cockpit >nul 2>&1"
     cmd /d /c "claude mcp add --scope user cockpit -- node `"$mcp`""
   }
+  # the Outputs list: a hook that lists what each turn made (skip it if a Claude Code mod already feeds Outputs)
+  $feed = Test-Path (Join-Path $env:USERPROFILE '.claude\mods\deliverables-tray')
+  $ask = if ($feed) { '  A Claude Code mod already feeds Outputs here. Add Cockpit''s Outputs hook too? [y/N]' } else { '  Also list what each Claude turn makes under Outputs? [Y/n]' }
+  $answer = Read-Host $ask
+  if (($feed -and $answer -match '^[yY]') -or (-not $feed -and $answer -notmatch '^[nN]')) {
+    node (Join-Path $here 'claude-setup.mjs') add-hook --node ((Get-Command node).Source)
+  }
 }
 Write-Host ''
 Write-Host 'Done. Open Cockpit from the Start menu or with Ctrl+Alt+K. After changing web/, run npm run build.'

@@ -287,6 +287,20 @@ export interface Config {
   windows: string
   /** Light, dark, or as Windows is set. */
   theme: Theme
+  /** An installed copy looks for a newer release about once a day. */
+  updates: boolean
+}
+
+/** Updates (an installed copy only): what's running, the latest release, and whether an update is under way. */
+export interface UpdateStatus {
+  installed: boolean
+  enabled: boolean
+  current: string
+  latest: { version: string; page: string; zip: string; size: number; sha256: string } | null
+  available: boolean
+  checkedAt: number
+  busy: '' | 'downloading' | 'installing'
+  error: string
 }
 
 /** Where a note or text file opens outside Cockpit (Settings). */
