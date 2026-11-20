@@ -1,10 +1,12 @@
 // Quick access: the things you open again and again, in a panel from the left (Q or P). Two parts:
 //   Pinned        what you pinned by hand (a daily Excel file, a folder, a site, a note); groups optional
-//   Often opened  what you keep opening anyway (a card read full screen, a file, a link), 3+ times in two weeks,
+//   Often opened  what you keep opening anyway (a card read full screen, a file, a link), on 3+ days in two weeks
+//                 and in the last week (not what's already on the board),
 //                 there by itself; pin it to keep it, or say "don't show"
 // A click opens it the way you open it: a file in its own program, a folder in Explorer, a link in the browser, a
 // note (or something you usually read in Cockpit) full screen. Keys 1-9 open the first nine.
 import { Fragment, useEffect, useState } from 'react'
+import { useReactFlow } from '@xyflow/react'
 import {
   BookOpen,
   EyeOff,
@@ -219,7 +221,7 @@ function OftenRow({ o, n }: { o: Often; n: number }) {
       thing={thing}
       icon={iconOf({ kind: o.kind, target: o.target } as Pin)}
       title={o.title}
-      detail={`${whereOf({ kind: o.kind, target: o.target } as Pin)} · ${o.opens}× in two weeks${o.inCockpit ? ' · usually read in Cockpit' : ''}`}
+      detail={`${whereOf({ kind: o.kind, target: o.target } as Pin)} · opened on ${o.days} days lately${o.inCockpit ? ' · usually read in Cockpit' : ''}`}
       n={n}
       onOpen={() => board.openOften(o)}
       actions={actions}
@@ -230,7 +232,11 @@ function OftenRow({ o, n }: { o: Often; n: number }) {
 export function PinnedSheet() {
   const board = useBoard()
   const [text, setText] = useState('')
-  const { items, groups, often } = board.pinned
+  const rf = useReactFlow()
+  const { items, groups } = board.pinned
+  // what's already on the board is in front of you: not offered again here
+  const onBoard = new Set(rf.getNodes().map(n => `${n.type}:${(n.data as { ref: string }).ref}`))
+  const often = board.pinned.often.filter(o => !(o.shownId && onBoard.has(`item:${o.shownId}`)) && !(o.kind === 'note' && onBoard.has(`note:${o.target}`)))
   const loose = items.filter(p => !p.group)
   const sections: [string, Pin[]][] = [['', loose], ...groups.map(g => [g, items.filter(p => p.group === g)] as [string, Pin[]])].filter(([, ps]) => ps.length) as [string, Pin[]][]
   const pins = sections.flatMap(([, ps]) => ps)
@@ -307,7 +313,7 @@ export function PinnedSheet() {
               <PinIcon className="size-5 opacity-60" strokeWidth={1.5} />
               <p>Nothing here yet.</p>
               <p className="text-[12.5px] leading-relaxed">
-                Paste a path or a link above, or choose Pin on a card or in the <Kbd>Ctrl</Kbd> <Kbd>K</Kbd> box. What you open three times in two weeks
+                Paste a path or a link above, or choose Pin on a card or in the <Kbd>Ctrl</Kbd> <Kbd>K</Kbd> box. What you open on three different days
                 shows up here by itself. Drag any of them onto the board to make it a card.
               </p>
             </div>

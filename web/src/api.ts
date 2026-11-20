@@ -68,9 +68,13 @@ export interface Often {
   target: string
   title: string
   opens: number
+  /** Different days it was opened on, in the last two weeks. */
+  days: number
   lastOpened: number
   inCockpit: boolean
   viewable?: boolean
+  /** The kept item it was read from, if any (so one already on the board isn't offered again). */
+  shownId?: string
 }
 export interface PinnedList {
   items: Pin[]

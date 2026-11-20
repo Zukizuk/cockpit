@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 20 November 2026 (version 0.1.5)
+
+**Improved**
+- **Often opened** in Quick access is choosier. Something shows there once you've opened it on three different days in two weeks (ten opens in one sitting count as one day), and it leaves by itself after a week without opening it. What's new, journal pages and anything already on the board are never listed there.
+
 ## 20 November 2026 (version 0.1.4)
 
 **Improved**

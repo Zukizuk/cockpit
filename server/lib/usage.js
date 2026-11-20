@@ -3,15 +3,22 @@
 // own program or shown in Explorer, a link opened in the browser, a pin clicked. Only the last 30 days are kept.
 import fs from 'node:fs'
 import path from 'node:path'
-import { DATA_DIR, UserError, writeFileAtomic } from './config.js'
+import { CHANGELOG, DATA_DIR, UserError, writeFileAtomic } from './config.js'
 import { detect } from './files.js'
 
 const FILE = () => path.join(DATA_DIR, 'usage.json')
 const DAY = 86_400_000
 const KEEP = 30 * DAY
 export const WINDOW = 14 * DAY
-export const MIN_OPENS = 3
-const SHOW = 8
+/** Opened on at least this many different days in the last two weeks (a burst of opens in one sitting is one day)… */
+export const MIN_DAYS = 3
+/** …and still opened lately: something left alone for a week leaves Often opened by itself. */
+export const STALE = 7 * DAY
+const SHOW = 6
+const dayOf = ms => new Date(ms).toISOString().slice(0, 10)
+/** Never "often opened": Cockpit's own What's new, and journal pages (the journal card has them). */
+const ignored = (kind, target) =>
+  (kind === 'note' && /^journal\//.test(String(target))) || (kind === 'file' && keyOf('file', target) === keyOf('file', CHANGELOG))
 
 function read() {
   try {
@@ -42,6 +49,7 @@ export function keyOf(kind, target) {
 export function recordOpen({ kind, target, title, where = 'outside', shownId }, now = Date.now()) {
   if (!target || !['file', 'folder', 'link', 'note'].includes(kind)) return
   if (kind === 'note') target = String(target).replace(/\\/g, '/')
+  if (ignored(kind, target)) return
   const d = read()
   const key = keyOf(kind === 'folder' ? 'file' : kind, target)
   const t = d.things[key] || { kind, target, title: '', opens: [], inCockpit: 0, outside: 0 }
@@ -58,29 +66,34 @@ export function recordOpen({ kind, target, title, where = 'outside', shownId }, 
   write(d)
 }
 
-/** Opened at least 3 times in the last two weeks, not pinned, not hidden, still there: most opened first. */
+/**
+ * Opened on 3 or more different days in the last two weeks and at least once in the last week, not pinned, not hidden,
+ * still there: most days first.
+ */
 export function oftenOpened(pinnedKeys = new Set(), now = Date.now()) {
   const d = read()
   const hidden = new Set(d.hidden)
   const out = []
   for (const [key, t] of Object.entries(d.things)) {
-    if (pinnedKeys.has(key) || hidden.has(key)) continue
-    const recent = t.opens.filter(x => now - x < WINDOW).length
-    if (recent < MIN_OPENS) continue
+    if (pinnedKeys.has(key) || hidden.has(key) || ignored(t.kind, t.target)) continue
+    const recentOpens = t.opens.filter(x => now - x < WINDOW)
+    const recent = new Set(recentOpens.map(dayOf)).size
+    if (recent < MIN_DAYS || now - Math.max(...t.opens) > STALE) continue
     if ((t.kind === 'file' || t.kind === 'folder') && !fs.existsSync(t.target)) continue
     out.push({
       key,
       kind: t.kind,
       target: t.target,
       title: t.title || (t.kind === 'link' ? t.target.replace(/^https?:\/\/(www\.)?/, '') : path.basename(t.target)),
-      opens: recent,
+      opens: recentOpens.length,
+      days: recent,
       lastOpened: Math.max(...t.opens),
       inCockpit: (t.inCockpit || 0) > (t.outside || 0),
       shownId: t.shownId,
       viewable: t.kind === 'folder' ? false : t.kind === 'file' ? detect(t.target).format !== 'binary' : true,
     })
   }
-  out.sort((a, b) => b.opens - a.opens || b.lastOpened - a.lastOpened)
+  out.sort((a, b) => b.days - a.days || b.lastOpened - a.lastOpened)
   return out.slice(0, SHOW)
 }
 

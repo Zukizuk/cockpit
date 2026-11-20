@@ -571,8 +571,9 @@ test('pinned: files, folders, links and notes; opened and counted; groups; never
   assert.equal(pinned.listPinned().items.length, 3)
 })
 
-test('often opened: 3 opens in two weeks shows it, pinned or hidden does not, old opens fade', async () => {
+test('often opened: on 3 different days lately shows it; a burst is one day; pinned, hidden, stale and What is new do not', async () => {
   const usage = await import('../server/lib/usage.js')
+  const { CHANGELOG } = await import('../server/lib/config.js')
   const dir = path.join(T, 'often')
   fs.mkdirSync(dir, { recursive: true })
   const file = path.join(dir, 'Report.xlsx')
@@ -580,24 +581,32 @@ test('often opened: 3 opens in two weeks shows it, pinned or hidden does not, ol
   const now = Date.UTC(2026, 10, 17, 12)
   const day = 86_400_000
   for (const t of [now - 2 * day, now - day]) usage.recordOpen({ kind: 'file', target: file, title: 'Report', where: 'outside' }, t)
-  assert.equal(usage.oftenOpened(new Set(), now).length, 0, 'two opens: not yet')
+  assert.equal(usage.oftenOpened(new Set(), now).length, 0, 'two days: not yet')
   usage.recordOpen({ kind: 'file', target: file.toUpperCase(), where: 'outside' }, now)
   let o = usage.oftenOpened(new Set(), now)
   assert.equal(o.length, process.platform === 'win32' ? 1 : 0, 'the same file however its path is written (Windows)')
   if (process.platform !== 'win32') return
-  assert.deepEqual([o[0].title, o[0].opens, o[0].inCockpit], ['Report', 3, false])
+  assert.deepEqual([o[0].title, o[0].days, o[0].inCockpit], ['Report', 3, false])
 
-  // read in Cockpit more than outside: it opens in Cockpit
-  for (let i = 0; i < 4; i++) usage.recordOpen({ kind: 'note', target: 'plans\\q1.md', title: 'Q1', where: 'cockpit' }, now - i * 1000)
+  // ten opens in one sitting are one day
+  for (let i = 0; i < 10; i++) usage.recordOpen({ kind: 'note', target: 'plans' + String.fromCharCode(92) + 'q1.md', title: 'Q1', where: 'cockpit' }, now - i * 1000)
+  assert.deepEqual(usage.oftenOpened(new Set(), now).map(x => x.title), ['Report'], 'a burst on one day is not "often"')
+  for (const d of [3, 5]) usage.recordOpen({ kind: 'note', target: 'plans/q1.md', title: 'Q1', where: 'cockpit' }, now - d * day)
   o = usage.oftenOpened(new Set(), now)
-  assert.deepEqual(o.map(x => x.title), ['Q1', 'Report'], 'most opened first')
-  assert.equal(o[0].inCockpit, true)
-  assert.equal(o[0].target, 'plans/q1.md')
+  assert.deepEqual(o.map(x => x.title).sort(), ['Q1', 'Report'])
+  assert.equal(o.find(x => x.title === 'Q1').inCockpit, true)
+
+  // What's new and journal pages are never counted
+  for (const d of [0, 1, 2]) {
+    usage.recordOpen({ kind: 'file', target: CHANGELOG, where: 'cockpit' }, now - d * day)
+    usage.recordOpen({ kind: 'note', target: 'journal/2026-11-17.md', where: 'cockpit' }, now - d * day)
+  }
+  assert.equal(usage.oftenOpened(new Set(), now).length, 2)
 
   assert.equal(usage.oftenOpened(new Set([usage.keyOf('note', 'plans/q1.md')]), now).length, 1, 'pinned ones are not repeated')
   usage.hide(usage.keyOf('file', file))
   assert.equal(usage.oftenOpened(new Set(), now).length, 1, 'hidden stays hidden')
-  assert.equal(usage.oftenOpened(new Set(), now + 15 * day).length, 0, 'opens older than two weeks no longer count')
+  assert.equal(usage.oftenOpened(new Set(), now + 8 * day).length, 0, 'not opened for a week: it leaves')
 })
 
 test('snippets: copy text back, secrets encrypted and hidden, expiry, instant delete', { timeout: 60_000 }, async () => {
