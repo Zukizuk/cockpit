@@ -971,3 +971,44 @@ test('trackers: a chat\'s tracker is announced once; one taken off stays off', a
   assert.equal(tracker.trackerFiles({ ...load(), trackers: [file] }, null).some(t => t.file === file), false, 'hidden wins over listed')
   saveConfig({ trackers: [], hiddenTrackers: [] })
 })
+
+test('journal notes: a page refers to notes; Kokoro gets their text at the end; it comes back as just the links', async () => {
+  const sync = await import('../server/lib/journal-sync.js')
+  const refs = await import('../server/lib/note-refs.js')
+  const cfg = { ...loadConfig(), notesDir: path.join(T, 'jrefs') }
+  fs.mkdirSync(path.join(cfg.notesDir, 'journal'), { recursive: true })
+  fs.mkdirSync(path.join(cfg.notesDir, 'stickies'), { recursive: true })
+  fs.writeFileSync(path.join(cfg.notesDir, 'stickies', 'a b.md'), 'pricing ideas\n- tiered')
+  const page = '# Saturday, 21 November 2026\n\nThinking about [Pricing](note:stickies/a%20b.md) and [Pricing again](note:stickies/a%20b.md), [gone](note:stickies/none.md).\n'
+  fs.writeFileSync(path.join(cfg.notesDir, 'journal', '2026-11-21.md'), page)
+  assert.deepEqual(refs.refsIn(page).map(r => r.path), ['stickies/a b.md', 'stickies/none.md'], 'each note once, the path decoded')
+
+  const full = refs.withNotes(cfg, page)
+  assert.match(full, /---\n\nNotes referred to \(from Cockpit\)\n\n### Pricing\n\npricing ideas\n- tiered\n$/)
+  assert.ok(!full.includes('### gone'), 'a note that is gone adds nothing')
+  assert.equal(refs.withoutNotes(full), page, 'taken off again, the page is as written')
+  assert.equal(refs.withNotes(cfg, full), full, 'never added twice')
+
+  const kokoro = new Map()
+  const call = async req => {
+    if (req.op === 'list') return { entries: [...kokoro.values()] }
+    return { results: req.entries.map(e => { const x = { created: '2026-11-21T09:00:00Z', ...e, id: e.id || 'k1', rev: `r${kokoro.size + 1}${Date.now()}` }; kokoro.set(x.id, x); return { status: 200, entry: x } }) }
+  }
+  await sync.sync(cfg, { call })
+  assert.match(kokoro.get('k1').text, /### Pricing\n\npricing ideas/, 'Kokoro has the note in the entry')
+  assert.equal(sync.localChanges(cfg), 0)
+
+  // the sticky note changes: the page counts as changed and goes again
+  fs.writeFileSync(path.join(cfg.notesDir, 'stickies', 'a b.md'), 'pricing ideas\n- tiered\n- per seat')
+  assert.equal(sync.localChanges(cfg), 1)
+  await sync.sync(cfg, { call })
+  assert.match(kokoro.get('k1').text, /- per seat/)
+
+  // edited on the phone: the page here follows, still with just the links
+  kokoro.set('k1', { ...kokoro.get('k1'), text: kokoro.get('k1').text.replace('Thinking about', 'Still thinking about'), rev: 'phone' })
+  await sync.sync(cfg, { call })
+  const here = fs.readFileSync(path.join(cfg.notesDir, 'journal', '2026-11-21.md'), 'utf8')
+  assert.match(here, /Still thinking about \[Pricing\]\(note:stickies\/a%20b\.md\)/)
+  assert.ok(!here.includes('Notes referred to'), 'the copied notes stay on Kokoro')
+  assert.equal(sync.localChanges(cfg), 0, 'and no echo back')
+})

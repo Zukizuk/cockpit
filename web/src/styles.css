@@ -2282,3 +2282,95 @@ table.data tbody tr:hover td {
     width: 128px;
   }
 }
+
+/* ---- a journal page's links to other notes ---------------------------------------------------------------- */
+
+.md a.note-ref {
+  text-decoration: none;
+  border-radius: 5px;
+  padding: 0 4px;
+  background: oklch(var(--contrast) / 0.07);
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.08);
+  transition: background-color 150ms ease-out;
+}
+
+.md a.note-ref:hover {
+  background: oklch(var(--contrast) / 0.12);
+}
+
+.note-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid oklch(var(--contrast) / 0.06);
+}
+
+.note-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--muted-foreground);
+  background: oklch(var(--contrast) / 0.05);
+  transition: background-color 150ms ease-out, color 150ms ease-out;
+}
+
+.note-ref-chip:hover {
+  background: oklch(var(--contrast) / 0.1);
+  color: var(--foreground);
+}
+
+/* [[ in the journal: the list of notes */
+.cm-tooltip.cm-tooltip-autocomplete {
+  border: 0;
+  border-radius: 10px;
+  padding: 4px;
+  background: var(--glass-solid);
+  backdrop-filter: blur(28px) saturate(160%);
+  box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.09), var(--glass-shadow);
+  font-family: var(--font-sans, inherit);
+}
+
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  max-height: 260px;
+  min-width: 240px;
+  font-family: inherit;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete > ul > li {
+  padding: 5px 10px !important;
+  border-radius: 6px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: var(--foreground);
+}
+
+.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected] {
+  background: oklch(var(--contrast) / 0.1);
+  color: var(--foreground);
+}
+
+.cm-tooltip-autocomplete .cm-completionDetail {
+  margin-left: 10px;
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+
+.cm-note-ref {
+  border-radius: 5px;
+  padding: 1px 4px;
+  background: oklch(var(--contrast) / 0.08);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.1);
+  cursor: pointer;
+}
+
+.cm-tooltip.cm-tooltip-autocomplete > ul {
+  font-family: var(--font-sans, system-ui, sans-serif) !important;
+}

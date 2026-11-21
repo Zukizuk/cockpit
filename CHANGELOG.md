@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 21 November 2026 (version 0.1.6)
+
+**New**
+- **Refer to your notes from the journal.** Type `[[` in a journal page and pick a note (sticky notes first): it goes in as a link that reads as the note's title. Click it in the reading view, or Ctrl+click while writing, to open the note; the notes a page refers to are also listed under it. With the journal synced to Kokoro, each page takes the text of the notes it refers to along at its end, and a change to one of those notes is synced with it. Coming back from Kokoro, the page keeps just the links.
+
 ## 20 November 2026 (version 0.1.5)
 
 **Improved**

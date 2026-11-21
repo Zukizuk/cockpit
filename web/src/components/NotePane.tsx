@@ -1,9 +1,12 @@
 // A note (journal page, thought or note) that saves as you type and never overwrites a change made elsewhere.
 // The same pane sits in a card on the board and full screen.
-import { useMemo, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
+import { NotebookPen } from 'lucide-react'
 import { get, post, put, type NoteRead, type NoteSaved } from '../api'
 import { clock, onEvent } from '../lib'
-import { Editor } from './Editor'
+import { Editor, type NoteChoice } from './Editor'
+import { useBoard } from '../board'
+import { refsIn } from '../noteRefs'
 import { Markdown } from './Markdown'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -248,6 +251,20 @@ interface PaneProps {
 }
 
 export function NotePane({ path, mode, note, compact, autoFocus, focusId, placeholder }: PaneProps) {
+  const board = useBoard()
+  const journal = path.startsWith('journal/')
+  // a journal page can refer to other notes: [[ lists them (sticky notes first), a click on one opens it
+  const allNotes = board.notes?.notes
+  const choices = useCallback(
+    (): NoteChoice[] =>
+      (allNotes || [])
+        .filter(n => !n.path.startsWith('journal/') && n.path !== path)
+        .sort((a, b) => Number(b.path.startsWith('stickies/')) - Number(a.path.startsWith('stickies/')) || b.mtime - a.mtime)
+        .map(n => ({ path: n.path, title: n.title || n.name.replace(/\.md$/i, ''), detail: noteKind(n.path) })),
+    [allNotes, path],
+  )
+  const openNote = useCallback((p: string) => board.expand({ type: 'note', ref: p }), [board])
+  const refs = journal ? refsIn(note.text) : []
   if (note.status === 'loading') return <p className="text-muted-foreground">Loading…</p>
   return (
     <div className="note-pane flex min-h-0 flex-col gap-3">
@@ -271,9 +288,11 @@ export function NotePane({ path, mode, note, compact, autoFocus, focusId, placeh
               value={note.text}
               onChange={note.change}
               onSave={() => note.save()}
-              placeholder={placeholder || 'Start writing…'}
+              placeholder={placeholder || (journal ? 'Start writing… Type [[ to refer to a note' : 'Start writing…')}
               autoFocus={autoFocus}
               focusId={focusId}
+              notes={journal ? choices : undefined}
+              onOpenNote={journal ? openNote : undefined}
             />
           </div>
         )}
@@ -283,10 +302,21 @@ export function NotePane({ path, mode, note, compact, autoFocus, focusId, placeh
               text={note.text}
               className={cn(compact && 'md-compact')}
               resolveAsset={href => `/api/notes/asset?p=${encodeURIComponent(joinRel(path, href))}`}
+              onNoteLink={openNote}
             />
           </div>
         )}
       </div>
+      {refs.length > 0 && (
+        <div className="note-refs" aria-label="Notes this page refers to">
+          {refs.map(r => (
+            <button key={r.path} type="button" className="note-ref-chip" title={`Open ${r.title || r.path}`} onClick={() => openNote(r.path)}>
+              <NotebookPen className="size-3.5 shrink-0" strokeWidth={1.75} />
+              <span className="truncate">{r.title || r.path}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -10,12 +10,14 @@
 // gate (scripts/kokoro-gate.py): list entries, save title and text. No shell, no other part of the server.
 // Nothing is deleted either way. A note archived here stops syncing; an entry deleted there stays here.
 // Edited in both places since the last sync: both are kept (the Kokoro one as its own file here, ours as a new entry there).
+// A page that refers to other notes takes them along at its end (note-refs.js), and changes to them count as changes.
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { DATA_DIR, writeFileAtomic } from './config.js'
 import { notesRoot } from './notes.js'
+import { withNotes, withoutNotes } from './note-refs.js'
 
 export const KOKORO_DIR = path.join(DATA_DIR, 'kokoro')
 const STATE = () => path.join(KOKORO_DIR, 'journal.json')
@@ -121,7 +123,7 @@ export function localChanges(cfg, state = readState()) {
       continue
     }
     const m = state.files[rel]
-    if (m ? hash(file) !== m.hash : parseEntry(file).text) n++
+    if (m ? hash(withNotes(cfg, file)) !== m.hash : parseEntry(file).text) n++
   }
   return n
 }
@@ -153,9 +155,10 @@ async function doSync(cfg, { call = req => gate(cfg, req), now = () => Date.now(
       } catch {
         continue
       }
-      const h = hash(file)
+      const full = withNotes(cfg, file)
+      const h = hash(full)
       const m = state.files[rel]
-      const { title, text } = parseEntry(file)
+      const { title, text } = parseEntry(full)
       if (!m) {
         if (text) saves.push({ rel, h, entry: { title, text } })
         continue
@@ -163,9 +166,9 @@ async function doSync(cfg, { call = req => gate(cfg, req), now = () => Date.now(
       const r = remote.get(m.id)
       if (h !== m.hash) saves.push({ rel, h, entry: { id: m.id, rev: m.rev, title, text } })
       else if (r && r.rev !== m.rev) {
-        const next = entryFile(r)
+        const next = withoutNotes(entryFile(r))
         writeFileAtomic(abs, next)
-        state.files[rel] = { ...m, rev: r.rev, hash: hash(next) }
+        state.files[rel] = { ...m, rev: r.rev, hash: hash(withNotes(cfg, next)) }
         done.updated++
       }
     }
@@ -183,9 +186,9 @@ async function doSync(cfg, { call = req => gate(cfg, req), now = () => Date.now(
     for (const e of entries) {
       if (known.has(e.id)) continue
       const rel = newFileFor(root, e)
-      const next = entryFile(e)
+      const next = withoutNotes(entryFile(e))
       writeFileAtomic(path.join(root, rel), next)
-      state.files[rel] = { id: e.id, rev: e.rev, hash: hash(next) }
+      state.files[rel] = { id: e.id, rev: e.rev, hash: hash(withNotes(cfg, next)) }
       done.pulled++
     }
 
@@ -202,9 +205,9 @@ async function doSync(cfg, { call = req => gate(cfg, req), now = () => Date.now(
         } else if (r.status === 409 && pass === 0) {
           // keep both: theirs as its own file here, ours as a new entry there
           const rel = newFileFor(root, r.entry)
-          const next = entryFile(r.entry)
+          const next = withoutNotes(entryFile(r.entry))
           writeFileAtomic(path.join(root, rel), next)
-          state.files[rel] = { id: r.entry.id, rev: r.entry.rev, hash: hash(next) }
+          state.files[rel] = { id: r.entry.id, rev: r.entry.rev, hash: hash(withNotes(cfg, next)) }
           delete state.files[s.rel]
           again.push({ ...s, entry: { title: s.entry.title, text: s.entry.text } })
           done.conflicts++

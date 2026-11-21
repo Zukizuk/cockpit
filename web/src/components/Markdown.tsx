@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { isLight } from '../theme'
+import { notePathOf } from '../noteRefs'
 import hljs from 'highlight.js/lib/common'
 import powershell from 'highlight.js/lib/languages/powershell'
 import dos from 'highlight.js/lib/languages/dos'
@@ -42,6 +43,12 @@ export function renderMarkdown(text: string, resolveAsset?: (href: string) => st
   const marked = new Marked({ gfm: true, breaks: false })
   marked.use({
     renderer: {
+      // a link to another note (a journal page referring to a sticky note): opens the note in Cockpit
+      link({ href, tokens }) {
+        const note = notePathOf(href || '')
+        if (!note) return false
+        return `<a href="#" class="note-ref" data-note="${escapeAttr(note)}">${this.parser.parseInline(tokens)}</a>`
+      },
       image({ href, title, text: alt }) {
         const src = (href && isRelative(href) && resolveAsset?.(href)) || href || ''
         return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt || '')}"${title ? ` title="${escapeAttr(title)}"` : ''} loading="lazy">`
@@ -49,7 +56,7 @@ export function renderMarkdown(text: string, resolveAsset?: (href: string) => st
     },
   })
   const raw = marked.parse(frontMatter(text), { async: false }) as string
-  return DOMPurify.sanitize(raw, { ADD_ATTR: ['target', 'data-local'] })
+  return DOMPurify.sanitize(raw, { ADD_ATTR: ['target', 'data-local', 'data-note'] })
 }
 
 let mermaidLoad: Promise<any> | null = null
@@ -109,10 +116,12 @@ interface Props {
   text: string
   resolveAsset?: (href: string) => string | null
   onLocalLink?: (href: string) => void
+  /** A link to another note was clicked. */
+  onNoteLink?: (path: string) => void
   className?: string
 }
 
-export function Markdown({ text, resolveAsset, onLocalLink, className }: Props) {
+export function Markdown({ text, resolveAsset, onLocalLink, onNoteLink, className }: Props) {
   const html = useMemo(() => renderMarkdown(text, resolveAsset), [text, resolveAsset])
   const ref = useRef<HTMLElement>(null)
 
@@ -129,6 +138,12 @@ export function Markdown({ text, resolveAsset, onLocalLink, className }: Props) 
       ref={ref}
       className={`md ${className || ''}`}
       onClick={e => {
+        const ref = (e.target as HTMLElement).closest('a[data-note]') as HTMLAnchorElement | null
+        if (ref) {
+          e.preventDefault()
+          onNoteLink?.(ref.getAttribute('data-note') || '')
+          return
+        }
         const a = (e.target as HTMLElement).closest('a[data-local]') as HTMLAnchorElement | null
         if (!a || !onLocalLink) return
         e.preventDefault()

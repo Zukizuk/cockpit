@@ -2,14 +2,91 @@
 // Its colours and sizes come from --ed-* variables, so a sticky note's paper can set its own.
 import { useEffect, useRef } from 'react'
 import { EditorState } from '@codemirror/state'
-import { EditorView, drawSelection, dropCursor, keymap, placeholder as cmPlaceholder } from '@codemirror/view'
+import { Decoration, EditorView, ViewPlugin, drawSelection, dropCursor, keymap, placeholder as cmPlaceholder, type DecorationSet, type ViewUpdate } from '@codemirror/view'
+import { RangeSetBuilder } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { HighlightStyle, indentOnInput, syntaxHighlighting } from '@codemirror/language'
 import { highlightSelectionMatches, searchKeymap, searchPanelOpen } from '@codemirror/search'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { tags as t } from '@lezer/highlight'
+import { autocompletion, completionKeymap, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete'
 import { onEvent } from '../lib'
+import { NOTE_LINK, noteLink, notePathOf } from '../noteRefs'
+
+/** A note that can be referred to: [[ in the editor lists them. */
+export type NoteChoice = { path: string; title: string; detail?: string }
+
+/** [[ then a few letters: the notes whose title or words match, most recent first; picking one puts its link in. */
+function noteSource(list: () => NoteChoice[]) {
+  return (ctx: CompletionContext): CompletionResult | null => {
+    const m = ctx.matchBefore(/\[\[[^\]\n]*/)
+    if (!m) return null
+    const q = m.text.slice(2).toLowerCase()
+    const options = list()
+      .filter(n => !q || n.title.toLowerCase().includes(q) || (n.detail || '').toLowerCase().includes(q))
+      .slice(0, 30)
+      .map(n => ({
+        label: n.title,
+        detail: n.detail,
+        apply: (view: EditorView, _c: unknown, from: number, to: number) => {
+          // a "]]" typed ahead of the cursor goes too
+          const after = view.state.sliceDoc(to, to + 2) === ']]' ? to + 2 : to
+          const link = noteLink(n.title, n.path)
+          view.dispatch({ changes: { from, to: after, insert: link }, selection: { anchor: from + link.length } })
+        },
+      }))
+    return { from: m.from, options, filter: false }
+  }
+}
+
+/**
+ * A link to a note reads as its title alone: the "(note:…)" part is hidden and the title gets a chip look, except
+ * while the cursor is in that link (to change it).
+ */
+const hidePath = Decoration.replace({})
+const titleMark = Decoration.mark({ class: 'cm-note-ref' })
+function noteDecorations(view: EditorView): DecorationSet {
+  const b = new RangeSetBuilder<Decoration>()
+  const sel = view.state.selection.main
+  for (const { from, to } of view.visibleRanges) {
+    const text = view.state.sliceDoc(from, to)
+    for (const m of text.matchAll(NOTE_LINK)) {
+      const a = from + (m.index ?? 0)
+      const z = a + m[0].length
+      if (sel.from <= z && sel.to >= a) continue
+      const titleEnd = a + 1 + m[1].length
+      b.add(a, a + 1, hidePath)
+      b.add(a + 1, titleEnd, titleMark)
+      b.add(titleEnd, z, hidePath)
+    }
+  }
+  return b.finish()
+}
+const noteLinks = ViewPlugin.fromClass(
+  class {
+    decorations: DecorationSet
+    constructor(view: EditorView) {
+      this.decorations = noteDecorations(view)
+    }
+    update(u: ViewUpdate) {
+      if (u.docChanged || u.selectionSet || u.viewportChanged) this.decorations = noteDecorations(u.view)
+    }
+  },
+  { decorations: v => v.decorations },
+)
+
+/** The note link under a position, if any. */
+function noteAt(doc: string, pos: number) {
+  const line0 = doc.lastIndexOf('\n', pos - 1) + 1
+  const line1 = doc.indexOf('\n', pos)
+  const line = doc.slice(line0, line1 < 0 ? doc.length : line1)
+  for (const m of line.matchAll(NOTE_LINK)) {
+    const a = line0 + (m.index ?? 0)
+    if (pos >= a && pos <= a + m[0].length) return notePathOf(`note:${m[2]}`)
+  }
+  return ''
+}
 
 const prose = HighlightStyle.define([
   { tag: t.heading1, fontSize: 'var(--ed-h1, 1.9em)', fontWeight: '700', letterSpacing: '-0.02em' },
@@ -57,9 +134,16 @@ interface Props {
   autoFocus?: boolean
   /** A "note-focus" event with this id puts the cursor at the end (typing on a selected note card). */
   focusId?: string
+  /** Notes to refer to: [[ lists them, and Ctrl+click on a link to one opens it. */
+  notes?: () => NoteChoice[]
+  onOpenNote?: (path: string) => void
 }
 
-export function Editor({ docKey, value, onChange, onSave, placeholder, autoFocus, focusId }: Props) {
+export function Editor({ docKey, value, onChange, onSave, placeholder, autoFocus, focusId, notes, onOpenNote }: Props) {
+  const notesRef = useRef(notes)
+  const openRef = useRef(onOpenNote)
+  notesRef.current = notes
+  openRef.current = onOpenNote
   const host = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const changeRef = useRef(onChange)
@@ -82,6 +166,24 @@ export function Editor({ docKey, value, onChange, onSave, placeholder, autoFocus
         syntaxHighlighting(prose),
         theme,
         cmPlaceholder(placeholder || 'Write…'),
+        ...(notes
+          ? [
+              autocompletion({ override: [noteSource(() => notesRef.current?.() || [])], icons: false }),
+              noteLinks,
+              EditorView.domEventHandlers({
+                mousedown: (e, v) => {
+                  if (!(e.ctrlKey || e.metaKey)) return false
+                  const pos = v.posAtCoords({ x: e.clientX, y: e.clientY })
+                  const p = pos == null ? '' : noteAt(v.state.doc.toString(), pos)
+                  if (!p) return false
+                  e.preventDefault()
+                  openRef.current?.(p)
+                  return true
+                },
+              }),
+              keymap.of(completionKeymap),
+            ]
+          : []),
         keymap.of([
           { key: 'Mod-s', preventDefault: true, run: () => (saveRef.current?.(), true) },
           // Esc leaves the note (the board's keys work again); with search open, it closes search first

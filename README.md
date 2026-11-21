@@ -33,7 +33,8 @@ Windows may warn that the installer is from an unknown publisher: the release is
 - **Sticky notes** (<kbd>N</kbd>): click and type. Five colours, a title if you want one. They're plain text
   files in your notes folder.
 - **Journal** (<kbd>J</kbd>): one page a day. The card always shows today; earlier days are a click back and stay
-  read-only until you unlock them.
+  read-only until you unlock them. Type `[[` to refer to one of your notes (a sticky note where you gathered your
+  thoughts, say).
 - **Snippets** (<kbd>C</kbd>): things you copy often, one click each. Secrets are encrypted on disk with Windows'
   own data protection and hidden until revealed.
 - **Quick access** (<kbd>Q</kbd>): your pins, plus what you open most. Its pin keeps it open beside the board.
