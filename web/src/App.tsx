@@ -547,7 +547,7 @@ function OutputsSheet() {
     board.toast(`Cleared ${r.cleared} ${r.cleared === 1 ? 'chat' : 'chats'} (kept on disk, just hidden)`)
   }
   return (
-    <Sheet open={board.outputsOpen} onOpenChange={board.setOutputsOpen}>
+    <Sheet open={board.outputsOpen} onOpenChange={board.setOutputsOpen} modal={false}>
       <SheetContent side="right" className="glass-panel w-[min(460px,calc(100vw-24px))] gap-0 sm:max-w-none">
         <SheetHeader className="pb-2">
           <SheetTitle>Outputs</SheetTitle>

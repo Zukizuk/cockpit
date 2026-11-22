@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 22 November 2026 (version 0.1.8)
+
+**Fixed**
+- Dragging a row from the Outputs panel onto the board did nothing: the panel dimmed the board and caught the drop. It now opens beside the board, like Quick access, and a dragged row becomes a card where you drop it.
+
 ## 22 November 2026 (version 0.1.7)
 
 **New**
