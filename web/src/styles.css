@@ -2414,48 +2414,69 @@ table.data tbody tr:hover td {
 
 /* ---- comments on cards ------------------------------------------------------------------------------------- */
 
-.comment-pill {
-  position: relative;
+.comment-bubble {
+  /* a speech bubble pinned to the card's top-right corner, its point on the corner (as FigJam's comments); it keeps
+     its size on screen whatever the zoom, growing out of that point */
+  position: absolute;
+  left: calc(100% - 8px);
+  bottom: calc(100% - 8px);
+  z-index: 5;
   display: flex;
   align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 7px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-  background: oklch(var(--contrast) / 0.06);
-  transition-property: background-color, color, opacity;
-  transition-duration: 150ms;
+  justify-content: center;
+  gap: 3px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 999px 999px 999px 5px;
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--background);
+  background: var(--foreground);
+  box-shadow:
+    0 0 0 2px var(--background),
+    0 6px 16px oklch(0 0 0 / 0.28);
+  transform: scale(calc(1 / clamp(0.35, var(--board-zoom, 1), 1.6)));
+  transform-origin: 0% 100%;
+  transition-property: scale, opacity, background-color;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
 }
 
-.comment-pill:hover,
-.comment-pill.is-open {
-  background: oklch(var(--contrast) / 0.12);
-  color: var(--foreground);
+/* the last word is Claude's: its colour, so a reply waiting for you stands out */
+.comment-bubble.is-claude {
+  background: oklch(0.82 0.13 85);
+  color: oklch(0.22 0.03 85);
 }
 
-/* no comments yet: there while the card is hovered, so a first one is one click away */
-.comment-pill.is-empty {
+.comment-bubble:hover,
+.comment-bubble.is-open {
+  scale: 1.08;
+}
+
+.comment-bubble:active {
+  scale: 0.96;
+}
+
+/* no comments yet: a small + while the card is hovered, so a first one is one click away */
+.comment-bubble.is-empty {
   opacity: 0;
-  background: transparent;
+  scale: 0.6;
+  pointer-events: none;
+  background: var(--card);
+  color: var(--muted-foreground);
+  box-shadow:
+    0 0 0 1px oklch(var(--contrast) / 0.14),
+    0 4px 12px oklch(0 0 0 / 0.2);
 }
 
-.card:hover .comment-pill.is-empty,
-.comment-pill.is-empty.is-open,
-.comment-pill.is-empty:focus-visible {
+.react-flow__node:hover .comment-bubble.is-empty,
+.comment-bubble.is-empty.is-open,
+.comment-bubble.is-empty:focus-visible {
   opacity: 1;
-}
-
-.comment-dot {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--primary);
+  scale: 1;
+  pointer-events: auto;
 }
 
 .comment-pop {
@@ -2536,4 +2557,9 @@ table.data tbody tr:hover td {
 
 .comment-input:focus {
   box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 45%, transparent);
+}
+
+/* after a drag-select, the picked cards show it themselves (as FigJam): no box left around them */
+.react-flow__nodesselection-rect {
+  display: none;
 }

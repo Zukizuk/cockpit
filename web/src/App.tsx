@@ -477,7 +477,12 @@ function DockButton({ label, shortcut, onClick, children, active }: { label: str
 function CornerTools() {
   const board = useBoard()
   const rf = useReactFlow()
-  const zoom = Math.round(useStore(s => s.transform[2]) * 100)
+  const scale = useStore(s => s.transform[2])
+  const zoom = Math.round(scale * 100)
+  // things pinned to cards (comment bubbles) keep their size on screen at any zoom
+  useEffect(() => {
+    document.documentElement.style.setProperty('--board-zoom', String(scale))
+  }, [scale])
   const tool = (label: string, keys: string, onClick: () => void, children: React.ReactNode) => (
     <Tooltip>
       <TooltipTrigger asChild>

@@ -276,6 +276,9 @@ function NewSnippet({ onKept }: { onKept: () => void }) {
   useEffect(() => {
     const el = field.current
     if (!el) return
+    // empty: its one row. Folded (not drawn), it measures 0: left alone, or it stays squashed when unfolded
+    el.style.height = ''
+    if (!text || !el.offsetParent) return
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 132)}px`
   }, [text])

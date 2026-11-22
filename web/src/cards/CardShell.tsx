@@ -2,7 +2,7 @@
 // and selects text without moving the card, resize handles, and the same actions on right-click and in "⋯".
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { NodeResizer, useNodeId, useNodesData, useReactFlow } from '@xyflow/react'
+import { NodeResizer, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
 import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, minSize, resizingRef, useBoard, type CardNode } from '../board'
@@ -208,15 +208,19 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       </DropdownMenuContent>
     </DropdownMenu>
   )
+  // several cards picked (a drag on the board): their outline says so; resize corners only for one
+  const manyPicked = useStore(s => s.nodes.reduce((k, n) => k + (n.selected ? 1 : 0), 0) > 1)
   const lockBadge = locked && <IconButton icon={Lock} label="Locked in place. Click to unlock" onClick={toggleLock} className="lock-badge" />
 
   return (
     <>
+      {/* the comments hang off the card's top-right corner, outside it */}
+      {nodeId && <CardComments nodeId={nodeId} />}
       {locked ? null : (
         <NodeResizer
           minWidth={min.w}
           minHeight={min.h}
-          isVisible={selected && !folded}
+          isVisible={selected && !folded && !manyPicked}
           lineClassName="rz-line"
           handleClassName="rz-handle"
           onResizeStart={resizeStart}
@@ -240,7 +244,6 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
             {sticky ? (
               <header className="card-head sticky-strip card-drag" onDoubleClick={onExpand} title={onExpand ? 'Double-click to open full screen' : undefined}>
                 <span className="sticky-strip-text">{stripText}</span>
-                {nodeId && <CardComments nodeId={nodeId} />}
                 <div className="card-actions nodrag flex items-center gap-0.5">
                   {quick}
                   {lockBadge}
@@ -258,7 +261,6 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
                   <div className="truncate text-[13.5px] font-medium">{title}</div>
                   {subtitle && <div className="truncate text-[11.5px] text-muted-foreground">{subtitle}</div>}
                 </div>
-                {nodeId && <CardComments nodeId={nodeId} />}
                 <div className="card-actions nodrag flex items-center gap-0.5">
                   {!folded && quick}
                   {lockBadge}

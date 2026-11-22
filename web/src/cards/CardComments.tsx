@@ -1,7 +1,7 @@
 // A card's comments: a count in its header (shown once there is one, or while the card is hovered) that opens the
 // thread. The user and Claude both write here; Claude reads them through Cockpit's board tools.
 import { useEffect, useRef, useState } from 'react'
-import { MessageSquare, Sparkles, X } from 'lucide-react'
+import { MessageSquare, Plus, Sparkles, X } from 'lucide-react'
 import { useBoard } from '../board'
 import { ago, onEvent } from '../lib'
 import { cn } from '@/lib/utils'
@@ -36,23 +36,32 @@ export function CardComments({ nodeId }: { nodeId: string }) {
     setText('')
     await board.addComment(nodeId, t).catch(() => setText(t))
   }
-  const fromClaude = list.some(c => c.by === 'Claude')
+  const lastByClaude = list.at(-1)?.by === 'Claude'
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={cn('comment-pill nodrag', !list.length && 'is-empty', open && 'is-open')}
-          aria-label={list.length ? `${list.length} comment${list.length === 1 ? '' : 's'}` : 'Comment'}
-          title={list.length ? 'Comments' : 'Comment'}
+          className={cn('comment-bubble nodrag nopan', !list.length && 'is-empty', lastByClaude && 'is-claude', open && 'is-open')}
+          aria-label={list.length ? `${list.length} comment${list.length === 1 ? '' : 's'}${lastByClaude ? ', the last from Claude' : ''}` : 'Add a comment'}
+          title={list.length ? 'Comments' : 'Add a comment'}
         >
-          <MessageSquare className="size-[13px]" strokeWidth={1.75} />
-          {list.length > 0 && <span>{list.length}</span>}
-          {fromClaude && <span className="comment-dot" aria-hidden />}
+          {!list.length ? (
+            <Plus className="size-[14px]" strokeWidth={2} />
+          ) : lastByClaude ? (
+            <>
+              <Sparkles className="size-[12px]" strokeWidth={2} />
+              <span>{list.length}</span>
+            </>
+          ) : list.length === 1 ? (
+            <MessageSquare className="size-[13px]" strokeWidth={2} />
+          ) : (
+            <span>{list.length}</span>
+          )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="comment-pop" onOpenAutoFocus={e => e.preventDefault()} onFocusOutside={justOpened} onInteractOutside={justOpened}>
+      <PopoverContent align="start" side="right" className="comment-pop" onOpenAutoFocus={e => e.preventDefault()} onFocusOutside={justOpened} onInteractOutside={justOpened}>
         <div className="comment-list">
           {!list.length && <p className="px-3 py-3 text-[13px] text-muted-foreground">No comments yet. Leave a note for yourself, or ask Claude about this card.</p>}
           {list.map(c => (
