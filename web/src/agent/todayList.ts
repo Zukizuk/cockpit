@@ -5,7 +5,8 @@
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
 
-export type AgentTask = { id: string; task: string; done: boolean; detail?: string }
+/** saving: just added to Todoist, not confirmed yet (its id is a temporary one) */
+export type AgentTask = { id: string; task: string; done: boolean; detail?: string; saving?: boolean }
 
 type Options = {
   value?: AgentTask[]
@@ -32,9 +33,13 @@ const taskList = definePrimitive({
       const all = () => list.map(t => `"${t.task}"`).join(', ') || 'none'
       if (!q) throw new Error(`Name the task. The tasks: ${all()}.`)
       const exact = list.find(t => t.id === which || t.task.toLowerCase() === q)
-      if (exact) return exact
+      const ready = (t: AgentTask) => {
+        if (t.saving) throw new Error(`"${t.task}" is still being saved to Todoist. Try again in a moment.`)
+        return t
+      }
+      if (exact) return ready(exact)
       const some = list.filter(t => t.task.toLowerCase().includes(q))
-      if (some.length === 1) return some[0]
+      if (some.length === 1) return ready(some[0])
       if (some.length > 1) throw new Error(`"${words(which)}" matches ${some.length} tasks: ${some.map(t => `"${t.task}"`).join(', ')}. Use more of the words.`)
       throw new Error(`No task "${words(which)}". The tasks: ${all()}.`)
     }
@@ -45,9 +50,13 @@ const taskList = definePrimitive({
     }
     return {
       tasks,
+      // UI SDK hands an argument that matches a task's words over as that task's id: words that are already on the
+      // list come back here as its id, so they're refused, not added as an id
       add: (text: string) => {
         const t = words(text)
         if (!t) throw new Error("Give the new task's words.")
+        const same = tasks().find(x => x.id === t || x.task.toLowerCase() === t.toLowerCase())
+        if (same) throw new Error(`"${same.task}" is already on the list.`)
         call('onAdd')(t)
       },
       complete: (task: string) => {
@@ -62,7 +71,8 @@ const taskList = definePrimitive({
       },
       rename: (task: string, text: string) => {
         const t = find(task)
-        const next = words(text)
+        const named = tasks().find(x => x.id === text)
+        const next = named ? named.task : words(text)
         if (!next) throw new Error('Give the new words.')
         call('onRename')(t.id, next)
       },
