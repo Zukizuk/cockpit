@@ -1,7 +1,8 @@
 // Today: a to-do list. With Todoist connected it's Todoist's today (and overdue); without, a simple list kept on
 // this PC. Either way: add, tick off, change the words (click them), remove. Everything shows at once and is saved
 // behind the scenes; if saving fails, the list goes back and says why.
-import { useState } from 'react'
+import { TaskList, type AgentTask } from '../agent/todayList'
+import { useMemo, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Check, ExternalLink, ListTodo, RefreshCw, Trash2, X } from 'lucide-react'
 import { get, post, type LocalTask, type Task, type TodoState } from '../api'
@@ -207,6 +208,54 @@ export function TasksCard({ id, data, selected }: NodeProps<CardNode>) {
         }
 
   const rows = todoist ? todoistRows : localRows
+
+  // What an agent may do through Cockpit's board tools (experimental): the same as a click, and it says so
+  // the same array until the list really changes: UI SDK resyncs on every new value
+  const agentKey = JSON.stringify(rows.filter(r => !r.pending).map(r => [r.id, r.content, !!r.done, r.detail || '']))
+  const agentTasks: AgentTask[] = useMemo(
+    () => (JSON.parse(agentKey) as [string, string, boolean, string][]).map(([id, task, done, detail]) => ({ id, task, done, ...(detail ? { detail } : {}) })),
+    [agentKey],
+  )
+  const rowOf = (tid: string) => rows.find(r => r.id === tid)
+  const byAgent = {
+    onAdd: (line: string) => {
+      add(line)
+      board.toast(`Claude added "${line}"`)
+    },
+    onComplete: (tid: string) => {
+      const r = rowOf(tid)
+      if (!r) return
+      actionsFor(r).onToggle()
+      board.toast(
+        `Claude ticked off "${r.content}"`,
+        todoist
+          ? undefined
+          : {
+              label: 'Undo',
+              run: () => {
+                setLocal(ts => ts.map(t => (t.id === tid ? { ...t, doneOn: '' } : t)))
+                post(`/api/tasks/${tid}`, { done: false }).catch(failLocal)
+              },
+            },
+      )
+    },
+    onReopen: (tid: string) => {
+      const r = rowOf(tid)
+      if (!r || todoist) return
+      actionsFor(r).onToggle()
+      board.toast(`Claude put "${r.content}" back on the list`)
+    },
+    onRename: (tid: string, v: string) => {
+      const r = rowOf(tid)
+      if (!r) return
+      actionsFor(r).onRename(v)
+      board.toast(`Claude renamed "${r.content}" to "${v}"`)
+    },
+    onRemove: (tid: string) => {
+      const r = rowOf(tid)
+      if (r) actionsFor(r).onRemove()
+    },
+  }
   const open = rows.filter(r => !r.done).length
   const loading = !s || (!todoist && !local.data)
   return (
@@ -226,7 +275,7 @@ export function TasksCard({ id, data, selected }: NodeProps<CardNode>) {
       {loading ? (
         <p className="text-[13px] text-muted-foreground">{todo.error || 'Loading…'}</p>
       ) : (
-        <div className="grid gap-2">
+        <TaskList aria-label="Today's tasks" value={agentTasks} {...byAgent} className="grid gap-2">
           <form
             onSubmit={e => {
               e.preventDefault()
@@ -245,7 +294,7 @@ export function TasksCard({ id, data, selected }: NodeProps<CardNode>) {
               <TaskRow key={r.id} row={r} {...actionsFor(r)} />
             ))}
           </ul>
-        </div>
+        </TaskList>
       )}
     </CardShell>
   )

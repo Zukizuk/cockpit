@@ -3,6 +3,7 @@
 // (Claude's outputs, the library, notes, trackers). React Flow owns the cards' positions and sizes; they are
 // saved to the server a moment after they stop changing. Every change to the layout (a move, a resize, Tidy, a
 // card added or taken off) can be undone with Ctrl+Z.
+import { startAgentBridge } from './agent/bridge'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReactFlow, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
@@ -100,7 +101,8 @@ export type PlaceOpts = { near?: string; at?: { x: number; y: number }; size?: {
 /** Something from Quick access: a pin or an often-opened thing. */
 export type QuickThing = { kind: Pin['kind'] | 'item' | 'text'; target: string; title: string }
 /** A button in the toast: Undo, mostly. */
-export type ToastAction = { label: string; run: () => void }
+/** ms: how long it stays (default 5 s with a button) */
+export type ToastAction = { label: string; run: () => void; ms?: number }
 /** How the board behaves (Settings). */
 /** The theme the page was last drawn in (until the settings arrive). */
 function savedTheme(): Theme {
@@ -266,9 +268,21 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     setToastState({ text, action: action ?? null })
     if (toastTimer.current) clearTimeout(toastTimer.current)
     // with a button in it, it stays long enough to reach
-    toastTimer.current = setTimeout(() => setToastState({ text: '', action: null }), action ? 5000 : 2600)
+    toastTimer.current = setTimeout(() => setToastState({ text: '', action: null }), action ? (action.ms ?? 5000) : 2600)
   }, [])
   const clearToast = useCallback(() => setToastState({ text: '', action: null }), [])
+
+  // Cockpit's board tools (experimental): an agent's call is run here; a removal waits for the person's Allow
+  useEffect(() => {
+    startAgentBridge(
+      text =>
+        new Promise<boolean>(resolve => {
+          let answered = false
+          toast(text, { label: 'Allow', ms: 20_000, run: () => ((answered = true), resolve(true)) })
+          setTimeout(() => !answered && resolve(false), 20_000)
+        }),
+    )
+  }, [toast])
 
   const persist = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)

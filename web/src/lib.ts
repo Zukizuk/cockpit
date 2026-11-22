@@ -68,10 +68,13 @@ export function useEvent(name: string, fn: Listener) {
 }
 
 let source: EventSource | null = null
+const last = new Map<string, any>()
+/** The last data an event from the server carried (for a listener that starts after it came). */
+export const lastEvent = (name: string) => last.get(name)
 export function startEvents() {
   if (source) return
   source = new EventSource('/api/events')
-  for (const name of ['shown', 'notes', 'opened', 'notice', 'outputs', 'journal', 'pinned', 'snippets']) {
+  for (const name of ['shown', 'notes', 'opened', 'notice', 'outputs', 'journal', 'pinned', 'snippets', 'hello', 'agent-call']) {
     source.addEventListener(name, e => {
       let data = {}
       try {
@@ -79,6 +82,7 @@ export function startEvents() {
       } catch {
         // empty event
       }
+      last.set(name, data)
       emit(name, data)
     })
   }

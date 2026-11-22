@@ -125,6 +125,33 @@ function broadcast(event, data = {}) {
   for (const c of clients) c.write(msg)
 }
 
+// Cockpit's board tools (experimental, spike/ui-sdk-today): an agent's snapshot, act or query, from the MCP server,
+// goes to one open window (the one used last), which runs it with UI SDK's bridge and posts the result back.
+let nextClient = 0
+let agentWindow = null // the window that answers board tools
+const agentCalls = new Map() // id -> { resolve, timer }
+const AGENT_TOOLS = new Set(['snapshot', 'act', 'query'])
+function windowForAgent() {
+  if (agentWindow && clients.has(agentWindow)) return agentWindow
+  return [...clients].at(-1) || null
+}
+function callBoard(tool, input) {
+  if (!AGENT_TOOLS.has(tool)) throw new UserError(`No board tool ${tool}`)
+  const target = windowForAgent()
+  if (!target) throw new UserError('No Cockpit window is open. Ask the user to open Cockpit (Ctrl+Alt+K), then try again.')
+  const id = Math.random().toString(36).slice(2, 12)
+  // an act can wait for the person to allow a step
+  const wait = tool === 'act' ? 45_000 : 10_000
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      agentCalls.delete(id)
+      reject(new UserError('Cockpit did not answer in time. Is its window open?'))
+    }, wait)
+    agentCalls.set(id, { resolve, timer })
+    target.write(`event: agent-call\ndata: ${JSON.stringify({ id, client: target.cockpitClient, tool, input: input ?? {} })}\n\n`)
+  })
+}
+
 // Something to bring onto the board ({id} of an entry, or {folder}). With no window open it waits (a while) for the
 // next one to connect: Send to, or a chat's show tool, with Cockpit closed.
 const pendingOpens = []
@@ -380,10 +407,32 @@ async function api(req, res, url) {
   if (area === 'events' && method === 'GET') {
     res.writeHead(200, { ...BASE_HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
     res.write('retry: 3000\n\n')
+    res.cockpitClient = ++nextClient
     clients.add(res)
+    res.write(`event: hello\ndata: ${JSON.stringify({ client: res.cockpitClient })}\n\n`)
     flushPending(res)
     req.on('close', () => clients.delete(res))
     return
+  }
+
+  // board tools (experimental): the MCP server's call, a window's answer, and which window was used last
+  if (area === 'agent' && method === 'POST') {
+    const body = await readBody(req)
+    if (a === 'call') return json(res, 200, { output: await callBoard(String(body.tool || ''), body.input) })
+    if (a === 'result') {
+      const c = agentCalls.get(String(body.id || ''))
+      if (c) {
+        clearTimeout(c.timer)
+        agentCalls.delete(String(body.id))
+        c.resolve(body.output ?? null)
+      }
+      return json(res, 200, { ok: true })
+    }
+    if (a === 'here') {
+      const w = [...clients].find(c => c.cockpitClient === Number(body.client))
+      if (w) agentWindow = w
+      return json(res, 200, { ok: true })
+    }
   }
 
   if (area === 'update') {

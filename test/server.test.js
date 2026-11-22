@@ -331,7 +331,7 @@ test('mcp: initialize, list and show over stdio', async () => {
     assert.equal(init.result.serverInfo.name, 'cockpit')
     assert.equal(init.result.protocolVersion, '2025-06-18')
     const list = await send(2, 'tools/list', {})
-    assert.deepEqual(list.result.tools.map(t => t.name), ['show', 'snippet'])
+    assert.deepEqual(list.result.tools.map(t => t.name), ['show', 'snippet', 'board_snapshot', 'board_act', 'board_query'])
     const snip = await send(6, 'tools/call', { name: 'snippet', arguments: { text: 'npm run build', title: 'Build', secret: false } })
     assert.match(snip.result.content[0].text, /Left in Cockpit's Snippets as "Build", kept until deleted/)
     const ok = await send(3, 'tools/call', { name: 'show', arguments: { content: '# Hi', title: 'Hi' } })
@@ -1056,6 +1056,58 @@ test('send to: a file and a folder sent with no window open come up when one con
     assert.match(text, /event: opened\ndata: \{"folder":/)
     assert.ok(text.includes(JSON.stringify({ id: entry.id })), 'the file comes up as its card')
     assert.ok(text.includes(JSON.stringify(dir).slice(1, -1)), 'the folder comes up as a folder card')
+  } finally {
+    ac.abort()
+    child.kill()
+  }
+})
+
+test('board tools: a call goes to the open window, its answer comes back; with no window it says so', async () => {
+  const port = 4980 + Math.floor(Math.random() * 9)
+  const child = spawn(process.execPath, [path.join(here, '..', 'server', 'index.js')], { env: { ...process.env, COCKPIT_PORT: String(port) }, stdio: 'ignore' })
+  const base = `http://127.0.0.1:${port}`
+  const call = body => fetch(`${base}/api/agent/call`, { method: 'POST', headers: { 'X-Cockpit': '1', 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const ac = new AbortController()
+  try {
+    for (let i = 0; i < 100; i++) {
+      await new Promise(r => setTimeout(r, 100))
+      if (await fetch(`${base}/api/health`).then(r => r.ok, () => false)) break
+    }
+    const none = await call({ tool: 'snapshot' })
+    assert.notEqual(none.status, 200)
+    assert.match((await none.json()).error, /No Cockpit window is open/)
+
+    // a window connects; it is told who it is, then gets the call and answers it
+    const res = await fetch(`${base}/api/events`, { signal: ac.signal })
+    const reader = res.body.getReader()
+    let text = ''
+    let pending = null
+    const until = async (re, ms = 5000) => {
+      const end = Date.now() + ms
+      while (Date.now() < end && !re.test(text)) {
+        pending ||= reader.read()
+        const got = await Promise.race([pending, new Promise(r => setTimeout(() => r(null), 200))])
+        if (!got) continue
+        pending = null
+        if (got.done) break
+        text += Buffer.from(got.value).toString('utf8')
+      }
+      return text.match(re)
+    }
+    const hello = await until(/event: hello\ndata: (\{.*\})/)
+    assert.ok(hello, 'the window is told who it is')
+    const answer = call({ tool: 'act', input: { steps: [{ ref: 'Today', action: 'add', args: ['x'] }] } }).then(r => r.json())
+    const asked = await until(/event: agent-call\ndata: (\{.*\})/)
+    assert.ok(asked, 'the call reaches the window')
+    const c = JSON.parse(asked[1])
+    assert.equal(c.tool, 'act')
+    assert.equal(c.client, JSON.parse(hello[1]).client)
+    assert.deepEqual(c.input.steps[0].args, ['x'])
+    await fetch(`${base}/api/agent/result`, { method: 'POST', headers: { 'X-Cockpit': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id, output: { ok: true } }) })
+    assert.deepEqual(await answer, { output: { ok: true } })
+
+    const bad = await call({ tool: 'rm' })
+    assert.notEqual(bad.status, 200)
   } finally {
     ac.abort()
     child.kill()

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Cockpit's MCP server (stdio, no dependencies): `show` puts a file or written content on Cockpit; `snippet` leaves
-// something to copy (a command, a key) in its Snippets.
+// Cockpit's MCP server (stdio): `show` puts a file or written content on Cockpit; `snippet` leaves something to copy
+// (a command, a key) in its Snippets; `board_snapshot`, `board_act` and `board_query` (experimental) read and use the
+// open board through UI SDK's agent bridge (only the Today list for now).
 // It writes straight into ~/.cockpit/shown, so it works while the app is closed, and starts the app's server
 // when it is not running. Only JSON-RPC goes to stdout; anything else goes to stderr.
 import readline from 'node:readline'
@@ -12,8 +13,14 @@ import { HOST, PORT, VERSION } from './lib/config.js'
 import { FORMATS, addCompare, addLink, addShown } from './lib/shown.js'
 import { addSnippetSync } from './lib/snippets.js'
 import * as telemetry from './lib/telemetry.js'
+import { agentTools } from '@ui-sdk/core/agent'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
+
+const BOARD_NOTE =
+  'Today\'s tasks are a "task-list" labelled "Today\'s tasks" (its value lists each task: id, task, done). Its actions: ' +
+  'add(text), complete(task), reopen(task), rename(task, newText), remove(task); a task is named by its words or id. ' +
+  'A removal waits for the user to allow it in Cockpit. Only the Today list can be used this way for now.'
 
 export const TOOLS = [
   {
@@ -65,6 +72,14 @@ export const TOOLS = [
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   },
+  // Board tools (experimental, spike/ui-sdk-today): UI SDK's snapshot, act and query, run on the open board
+  ...agentTools.map(t => ({
+    name: `board_${t.name}`,
+    description:
+      `On the user's Cockpit board (it must be open in a window). ${BOARD_NOTE}\n\n${t.description}`,
+    inputSchema: t.inputSchema,
+    annotations: { readOnlyHint: t.name !== 'act', destructiveHint: false, openWorldHint: false },
+  })),
 ]
 
 function write(msg) {
@@ -86,6 +101,31 @@ function health(timeout = 800) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+/** A POST to Cockpit's own API, as Cockpit itself would send it. */
+function postJson(p, body) {
+  const data = JSON.stringify(body)
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: HOST, port: PORT, path: p, method: 'POST', timeout: 60_000, headers: { host: `${HOST}:${PORT}`, 'content-type': 'application/json', 'x-cockpit': '1', 'content-length': Buffer.byteLength(data) } },
+      res => {
+        let s = ''
+        res.setEncoding('utf8')
+        res.on('data', c => (s += c))
+        res.on('end', () => {
+          let parsed = null
+          try {
+            parsed = JSON.parse(s)
+          } catch {}
+          resolve({ status: res.statusCode, body: parsed })
+        })
+      },
+    )
+    req.on('error', reject)
+    req.on('timeout', () => req.destroy(new Error('Cockpit did not answer in time')))
+    req.end(data)
+  })
+}
 
 /** Starts the app server in the background when it isn't answering. */
 export async function ensureServer() {
@@ -127,6 +167,16 @@ export async function callTool(name, args = {}) {
             (s.secret ? ' Do not repeat the secret in the chat.' : ''),
         }],
       }
+    } catch (e) {
+      return { isError: true, content: [{ type: 'text', text: e?.message || String(e) }] }
+    }
+  }
+  if (name.startsWith('board_')) {
+    try {
+      if (!(await ensureServer())) throw new Error("Cockpit isn't running.")
+      const r = await postJson('/api/agent/call', { tool: name.slice(6), input: args })
+      if (r.status !== 200) throw new Error(r.body?.error || `Cockpit answered ${r.status}`)
+      return { content: [{ type: 'text', text: JSON.stringify(r.body.output) }] }
     } catch (e) {
       return { isError: true, content: [{ type: 'text', text: e?.message || String(e) }] }
     }
