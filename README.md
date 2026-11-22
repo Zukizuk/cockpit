@@ -15,8 +15,8 @@ It runs on your PC only (a small local server on `127.0.0.1`) and opens in its o
    else to install.
 3. Open **Cockpit** from the Start menu, or press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>K</kbd> from anywhere.
 
-The installer puts Cockpit in `%LOCALAPPDATA%\Programs\Cockpit`, starts it at login, and (if you use Claude Code)
-offers to connect the two. To remove Cockpit, run **Uninstall.cmd** in that folder; your notes and board are kept.
+The installer puts Cockpit in `%LOCALAPPDATA%\Programs\Cockpit`, starts it at login, adds it to Explorer's Send to,
+and (if you use Claude Code) offers to connect the two. To remove Cockpit, run **Uninstall.cmd** in that folder; your notes and board are kept.
 
 **Updates:** Cockpit checks GitHub for a new release about once a day. When there is one, a dot appears on the
 Settings button; **Settings → Updates → Update now** downloads it, checks it against the checksum GitHub publishes,
@@ -30,6 +30,9 @@ Windows may warn that the installer is from an unknown publisher: the release is
 - **Paste anything.** A link goes to **Later** (to check, reading, done), read in the background so you can read
   it in Cockpit. A file path opens as a card: Markdown, code, CSV, JSON, diffs, images, PDF, audio and video, and
   Word, Excel and PowerPoint previews.
+- **Bring in files from Windows.** Right-click files or folders in Explorer and choose **Send to → Cockpit**, or
+  pick **Choose files…** in the + box for Windows' own Open dialog. A folder becomes a card with its files as a tree.
+  Something sent while Cockpit is closed is there when you open it.
 - **Sticky notes** (<kbd>N</kbd>): click and type. Five colours, a title if you want one. They're plain text
   files in your notes folder.
 - **Journal** (<kbd>J</kbd>): one page a day. The card always shows today; earlier days are a click back and stay

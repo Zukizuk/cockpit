@@ -32,7 +32,7 @@ fs.mkdirSync(app, { recursive: true })
 
 // the app
 for (const p of ['server', 'web/dist', 'CHANGELOG.md', 'LICENSE', 'README.md', 'package.json', 'package-lock.json']) copy(p)
-for (const p of ['open.vbs', 'start-hidden.vbs', 'install-startup.ps1', 'install-hotkey.ps1', 'claude-setup.mjs', 'hotkey/CockpitHotkey.cs']) copy(`scripts/${p}`)
+for (const p of ['open.vbs', 'send-to.vbs', 'start-hidden.vbs', 'install-startup.ps1', 'install-hotkey.ps1', 'claude-setup.mjs', 'hotkey/CockpitHotkey.cs']) copy(`scripts/${p}`)
 copy('web/public/icons/cockpit.ico', 'cockpit.ico')
 
 // only what the server needs at run time (the web app is already bundled)

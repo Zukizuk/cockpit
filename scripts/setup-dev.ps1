@@ -1,9 +1,9 @@
 # For working on Cockpit from a clone (`npm run setup`, after `npm install`): runs this copy the way an installed
 # one runs, with the Node on your PATH.
-#   - "Cockpit" in the Start menu, the server at login, Ctrl+Alt+K (the Cockpit helper)
+#   - "Cockpit" in the Start menu and in Explorer's Send to, the server at login, Ctrl+Alt+K (the Cockpit helper)
 #   - optionally connects Claude Code to this copy's MCP server
 # Undo with: scripts\install-startup.ps1 -Remove; scripts\install-hotkey.ps1 -Remove; and remove Cockpit.lnk from
-# the Start menu.
+# the Start menu and from Send to (shell:sendto).
 param([ValidateSet('ask', 'yes', 'no')][string]$Claude = 'ask')
 $ErrorActionPreference = 'Stop'
 $here = $PSScriptRoot
@@ -21,6 +21,18 @@ $l.IconLocation = Join-Path $repo 'web\public\icons\cockpit.ico'
 $l.Description = 'Cockpit (from your clone)'
 $l.Save()
 Write-Host '  Added Cockpit to the Start menu'
+
+# Explorer's Send to > Cockpit (a name of its own if an installed copy has the usual one)
+$sendTo = Join-Path ([Environment]::GetFolderPath('SendTo')) 'Cockpit.lnk'
+if ((Test-Path $sendTo) -and -not $sh.CreateShortcut($sendTo).Arguments.Contains($repo)) { $sendTo = Join-Path ([Environment]::GetFolderPath('SendTo')) 'Cockpit (dev).lnk' }
+$l = $sh.CreateShortcut($sendTo)
+$l.TargetPath = Join-Path $env:WINDIR 'System32\wscript.exe'
+$l.Arguments = "`"$(Join-Path $here 'send-to.vbs')`""
+$l.WorkingDirectory = $repo
+$l.IconLocation = Join-Path $repo 'web\public\icons\cockpit.ico'
+$l.Description = 'Put it on your Cockpit board'
+$l.Save()
+Write-Host '  Added Cockpit to Send to'
 
 & (Join-Path $here 'install-startup.ps1') | Out-Null
 Write-Host '  The server starts at login'

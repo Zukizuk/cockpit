@@ -1,7 +1,7 @@
 # Installs Cockpit from this folder (an unzipped release) for the current Windows user. No admin rights needed.
 #
 #   - copies the app and its own Node to %LOCALAPPDATA%\Programs\Cockpit (or -InstallDir)
-#   - adds "Cockpit" to the Start menu, and starts the server at login (-NoStartup to skip)
+#   - adds "Cockpit" to the Start menu and to Explorer's Send to, and starts the server at login (-NoStartup to skip)
 #   - builds and starts the Cockpit helper: Ctrl+Alt+K brings Cockpit up and keeps its server running (-NoHotkey to skip)
 #   - offers to connect Cockpit to Claude Code, if Claude Code is installed (-Claude yes|no to answer up front):
 #     the show and snippet tools, and the Outputs list (a hook that lists what each turn made)
@@ -71,6 +71,17 @@ if (-not $NoStartMenu -and -not $edgeApp) {
   $l.Save()
   Step 'Added Cockpit to the Start menu'
 }
+
+# Explorer's Send to > Cockpit: the files and folders sent come onto the board
+$sendTo = Join-Path ([Environment]::GetFolderPath('SendTo')) 'Cockpit.lnk'
+$l = $sh.CreateShortcut($sendTo)
+$l.TargetPath = Join-Path $env:WINDIR 'System32\wscript.exe'
+$l.Arguments = "`"$(Join-Path $scripts 'send-to.vbs')`""
+$l.WorkingDirectory = $app
+$l.IconLocation = Join-Path $app 'cockpit.ico'
+$l.Description = 'Put it on your Cockpit board'
+$l.Save()
+Step 'Added Cockpit to Send to (right-click a file in Explorer)'
 
 if (-not $NoStartup) {
   & (Join-Path $scripts 'install-startup.ps1') | Out-Null

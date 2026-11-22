@@ -1,4 +1,4 @@
-# Takes Cockpit away: its Start menu and login entries, the Cockpit helper, the Claude Code connection, and the
+# Takes Cockpit away: its Start menu, Send to and login entries, the Cockpit helper, the Claude Code connection, and the
 # installed app. Your notes (Documents\Cockpit) and board (%USERPROFILE%\.cockpit) are kept; delete them yourself
 # if you want them gone.
 param([string]$InstallDir = $PSScriptRoot)
@@ -14,7 +14,7 @@ Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyC
 # the shortcuts, only where they point at this copy (a clone set up with `npm run setup` keeps its own)
 $sh = New-Object -ComObject WScript.Shell
 $startup = [Environment]::GetFolderPath('Startup')
-foreach ($link in (Join-Path $startup 'Cockpit server.lnk'), (Join-Path $startup 'Cockpit hotkey.lnk'), (Join-Path ([Environment]::GetFolderPath('Programs')) 'Cockpit.lnk')) {
+foreach ($link in (Join-Path $startup 'Cockpit server.lnk'), (Join-Path $startup 'Cockpit hotkey.lnk'), (Join-Path ([Environment]::GetFolderPath('Programs')) 'Cockpit.lnk'), (Join-Path ([Environment]::GetFolderPath('SendTo')) 'Cockpit.lnk')) {
   if (-not (Test-Path $link)) { continue }
   $s = $sh.CreateShortcut($link)
   if ("$($s.TargetPath) $($s.Arguments)".Contains($InstallDir)) { Remove-Item $link }

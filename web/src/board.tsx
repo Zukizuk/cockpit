@@ -664,7 +664,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Something a chat showed (or the tray's Cockpit button sent) comes onto the board by itself.
-  useEvent('opened', (d: { id: string }) => {
+  // A folder sent from Explorer (Send to > Cockpit) comes as a folder card.
+  useEvent('opened', (d: { id?: string; folder?: string }) => {
+    if (d.folder) return void addCard('folder', d.folder)
+    if (!d.id) return
     addCard('item', d.id)
     items.reload()
   })

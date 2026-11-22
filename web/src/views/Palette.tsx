@@ -1,6 +1,6 @@
 // The + box: paste a link or path to open it, type to add a line to today's journal, or find anything kept and put it on the board.
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpenText, Bookmark, ClipboardList, FileText, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
+import { BookOpenText, Bookmark, ClipboardList, FileText, FolderOpen, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
 import { post } from '../api'
 import { ago } from '../lib'
 import { useBoard } from '../board'
@@ -26,6 +26,18 @@ export function Palette() {
     close()
     const r = await post<{ path: string }>('/api/notes/new', { kind: 'journal' })
     board.addCard('note', r.path)
+  }
+
+  // Windows' own Open dialog (the server opens it), so each file keeps its real path; several can be picked
+  const chooseFiles = async () => {
+    close()
+    try {
+      const r = await post<{ paths: string[]; busy?: boolean }>('/api/pick')
+      if (r.busy) return board.toast('The file picker is already open')
+      for (const p of r.paths) await board.showItem({ path: p })
+    } catch (e: any) {
+      board.toast(e.message)
+    }
   }
 
   return (
@@ -121,6 +133,10 @@ export function Palette() {
                 <NotebookText strokeWidth={1.5} />
                 Sticky note
                 <CommandShortcut>N</CommandShortcut>
+              </CommandItem>
+              <CommandItem value="choose files browse open file picker computer" onSelect={chooseFiles}>
+                <FolderOpen strokeWidth={1.5} />
+                Choose files…
               </CommandItem>
               <CommandItem value="journal today" onSelect={journal}>
                 <NotebookPen strokeWidth={1.5} />

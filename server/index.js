@@ -25,6 +25,7 @@ import * as telemetry from './lib/telemetry.js'
 import * as updates from './lib/updates.js'
 import * as runs from './lib/runs.js'
 import { changesFor } from './lib/changes.js'
+import { pickFiles } from './lib/pick.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.resolve(here, '..', 'web', 'dist')
@@ -124,6 +125,25 @@ function broadcast(event, data = {}) {
   for (const c of clients) c.write(msg)
 }
 
+// Something to bring onto the board ({id} of an entry, or {folder}). With no window open it waits (a while) for the
+// next one to connect: Send to, or a chat's show tool, with Cockpit closed.
+const pendingOpens = []
+const PENDING_FOR = 10 * 60_000
+function announceOpen(d) {
+  if (clients.size) return broadcast('opened', d)
+  pendingOpens.push({ ...d, at: Date.now() })
+  if (pendingOpens.length > 20) pendingOpens.shift()
+}
+function flushPending(res) {
+  const now = Date.now()
+  const due = pendingOpens.splice(0).filter(d => now - d.at < PENDING_FOR)
+  if (!due.length) return
+  // after a moment: the page sets up its listeners once it has loaded
+  setTimeout(() => {
+    for (const { at, ...d } of due) res.write(`event: opened\ndata: ${JSON.stringify(d)}\n\n`)
+  }, 1500)
+}
+
 setInterval(() => broadcast('ping', { t: Date.now() }), 25_000).unref()
 
 function debounce(fn, ms) {
@@ -162,7 +182,7 @@ function noteNewEntries(announce) {
     if (known.get(e.id) === at) continue
     known.set(e.id, at)
     const fresh = Date.now() - Date.parse(at) < 60_000
-    if (announce && fresh && e.from !== 'you' && !e.hidden && !e.later) broadcast('opened', { id: e.id })
+    if (announce && fresh && e.from !== 'you' && !e.hidden && !e.later) announceOpen({ id: e.id })
   }
 }
 
@@ -201,10 +221,13 @@ async function drainInbox() {
       try {
         fs.rmSync(file, { force: true })
         const from = typeof req.from === 'string' ? req.from : 'Claude'
+        if (from === 'Send to') counted('add.sendto')
         if (req.tracker) addTracker(req.tracker)
         else if (req.outputs) outputs.addOutputs(req.outputs)
         else if (req.url) await shown.addLink({ url: req.url, from })
         else if (req.left && req.right) shown.addCompare({ left: req.left, right: req.right, from })
+        // a folder (sent from Explorer) becomes a folder card
+        else if (req.path && folders.isFolder(req.path)) announceOpen({ folder: folders.folderPath(req.path) })
         else if (req.path) shown.addShown({ path: req.path, from })
       } catch (e) {
         log(`inbox ${n}: ${e.message}`)
@@ -344,12 +367,21 @@ async function api(req, res, url) {
   if (refused) return json(res, 403, { error: `Refused (${refused})` })
   const cfg = loadConfig()
 
-  if (area === 'health') return json(res, 200, { ok: true, app: 'cockpit', version: VERSION, pid: process.pid, startedAt })
+  // windows: how many Cockpit pages are open (Send to brings one forward rather than opening another)
+  if (area === 'health') return json(res, 200, { ok: true, app: 'cockpit', version: VERSION, pid: process.pid, startedAt, windows: clients.size })
+
+  // the + box's "Choose files…": Windows' Open dialog, for files with their real paths
+  if (area === 'pick' && method === 'POST') {
+    const r = await pickFiles()
+    if (r.paths.length) counted('add.pick')
+    return json(res, 200, r)
+  }
 
   if (area === 'events' && method === 'GET') {
     res.writeHead(200, { ...BASE_HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive' })
     res.write('retry: 3000\n\n')
     clients.add(res)
+    flushPending(res)
     req.on('close', () => clients.delete(res))
     return
   }

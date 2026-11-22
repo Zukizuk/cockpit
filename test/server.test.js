@@ -1012,3 +1012,52 @@ test('journal notes: a page refers to notes; Kokoro gets their text at the end; 
   assert.ok(!here.includes('Notes referred to'), 'the copied notes stay on Kokoro')
   assert.equal(sync.localChanges(cfg), 0, 'and no echo back')
 })
+
+test('send to: a file and a folder sent with no window open come up when one connects', async () => {
+  const port = 4990 + Math.floor(Math.random() * 9)
+  const child = spawn(process.execPath, [path.join(here, '..', 'server', 'index.js')], { env: { ...process.env, COCKPIT_PORT: String(port) }, stdio: 'ignore' })
+  const base = `http://127.0.0.1:${port}`
+  const ac = new AbortController()
+  try {
+    for (let i = 0; i < 100; i++) {
+      await new Promise(r => setTimeout(r, 100))
+      if (await fetch(`${base}/api/health`).then(r => r.ok, () => false)) break
+    }
+    assert.equal((await fetch(`${base}/api/health`).then(r => r.json())).windows, 0)
+    const dir = path.join(T, 'sent folder é')
+    fs.mkdirSync(dir, { recursive: true })
+    const file = path.join(dir, 'sent.md')
+    fs.writeFileSync(file, '# Sent\n')
+    const inbox = path.join(process.env.COCKPIT_DATA, 'inbox')
+    fs.mkdirSync(inbox, { recursive: true })
+    fs.writeFileSync(path.join(inbox, 's1.json'), JSON.stringify({ path: file, from: 'Send to' }))
+    fs.writeFileSync(path.join(inbox, 's2.json'), JSON.stringify({ path: dir, from: 'Send to' }))
+    let entry = null
+    for (let i = 0; i < 100 && !entry; i++) {
+      await new Promise(r => setTimeout(r, 100))
+      entry = shown.listShown().find(e => e.path === file)
+    }
+    assert.ok(entry, 'the file became an item')
+    await new Promise(r => setTimeout(r, 1500)) // the shown folder's watcher notices it
+    // now a window connects: what was sent comes to it
+    const res = await fetch(`${base}/api/events`, { signal: ac.signal })
+    const reader = res.body.getReader()
+    let text = ''
+    const until = Date.now() + 5000
+    let pending = null
+    while (Date.now() < until && !(text.includes('"folder"') && text.includes(entry.id))) {
+      pending ||= reader.read()
+      const got = await Promise.race([pending, new Promise(r => setTimeout(() => r(null), 500))])
+      if (!got) continue
+      pending = null
+      if (got.done) break
+      text += Buffer.from(got.value).toString('utf8')
+    }
+    assert.match(text, /event: opened\ndata: \{"folder":/)
+    assert.ok(text.includes(JSON.stringify({ id: entry.id })), 'the file comes up as its card')
+    assert.ok(text.includes(JSON.stringify(dir).slice(1, -1)), 'the folder comes up as a folder card')
+  } finally {
+    ac.abort()
+    child.kill()
+  }
+})

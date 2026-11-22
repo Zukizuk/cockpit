@@ -2,6 +2,15 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 22 November 2026 (version 0.1.7)
+
+**New**
+- **Send to → Cockpit.** Right-click files or folders in Explorer, choose Send to, then Cockpit: each one comes onto the board, a folder as a folder card, and Cockpit comes to the front. If Cockpit isn't running, it starts and they're waiting on the board. (Installing or updating to this version adds the entry.)
+- **Choose files…** in the + box opens Windows' own Open dialog. Pick one file or several; each becomes a card.
+
+**Improved**
+- Something Claude shows while no Cockpit window is open now comes up on the board when you next open it (within ten minutes), instead of only being listed.
+
 ## 21 November 2026 (version 0.1.6)
 
 **New**
