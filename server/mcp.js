@@ -20,7 +20,8 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const BOARD_NOTE =
   'Today\'s tasks are a "task-list" labelled "Today\'s tasks" (its value lists each task: id, task, done). Its actions: ' +
   'add(text), complete(task), reopen(task), rename(task, newText), remove(task); a task is named by its words or id. ' +
-  'A removal waits for the user to allow it in Cockpit. Only the Today list can be used this way for now.'
+  'A removal waits for the user to allow it in Cockpit. Only the Today list can be used this way for now: if the snapshot has no task-list, ' +
+  'the Today card is not on the board (the user can press T in Cockpit to add it).'
 
 export const TOOLS = [
   {
