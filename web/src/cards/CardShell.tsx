@@ -3,10 +3,12 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { NodeResizer, useNodeId, useNodesData, useReactFlow } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { CardComments } from './CardComments'
+import { emit } from '../lib'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -116,6 +118,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     { label: folded ? 'Unfold' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, hidden: !!sticky, keys: 'F' },
     { label: board.focusing ? 'Bring everything back' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
     { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
+    { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) },
     {
       label: 'Fit to contents',
       icon: Shrink,
@@ -125,6 +128,23 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
         board.persist()
       },
       hidden: !autoHeight || fits || folded,
+    },
+    // other spaces: out of view here, there when you go to that space
+    ...board.spaces
+      .filter(x => x.id !== board.space)
+      .slice(0, 8)
+      .map((x, i): CardAction => ({ label: `Move to ${x.name}`, icon: Layers, run: () => void (nodeId && board.moveToSpace([nodeId], x.id)), gap: i === 0 })),
+    {
+      label: 'Move to a new space',
+      icon: Layers,
+      run: () => {
+        if (!nodeId) return
+        const here = board.space
+        const to = board.newSpace()
+        board.moveToSpace([nodeId], to)
+        board.toast('Moved to a new space', { label: 'Go back', run: () => board.switchSpace(here) })
+      },
+      gap: board.spaces.length <= 1,
     },
     ...actions,
   ].filter(a => !a.hidden)
@@ -220,6 +240,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
             {sticky ? (
               <header className="card-head sticky-strip card-drag" onDoubleClick={onExpand} title={onExpand ? 'Double-click to open full screen' : undefined}>
                 <span className="sticky-strip-text">{stripText}</span>
+                {nodeId && <CardComments nodeId={nodeId} />}
                 <div className="card-actions nodrag flex items-center gap-0.5">
                   {quick}
                   {lockBadge}
@@ -237,6 +258,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
                   <div className="truncate text-[13.5px] font-medium">{title}</div>
                   {subtitle && <div className="truncate text-[11.5px] text-muted-foreground">{subtitle}</div>}
                 </div>
+                {nodeId && <CardComments nodeId={nodeId} />}
                 <div className="card-actions nodrag flex items-center gap-0.5">
                   {!folded && quick}
                   {lockBadge}

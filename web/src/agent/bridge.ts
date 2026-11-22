@@ -1,8 +1,8 @@
 // The page's end of Cockpit's board tools: a Claude Code chat calls board_snapshot, board_act or board_query (the MCP
 // server), Cockpit's server passes the call to one open window (this one, if it was used last), UI SDK's bridge runs it
 // on the components on the board, and the result goes back the same way.
-// What an agent may do: read anything UI SDK shows it; on the Today list, add, tick off, reopen and rename; a removal
-// waits for the person to allow it. Nothing else on the board is a UI SDK component, so nothing else is reachable.
+// What an agent may do: read and use the board (spaces, cards, comments), Today, Later and Snippets (agent/*); every
+// removal waits for the person to allow it.
 // Experimental (spike/ui-sdk-today).
 import { createAgent } from '@ui-sdk/react/agent'
 import { post } from '../api'
@@ -10,6 +10,9 @@ import { lastEvent, onEvent } from '../lib'
 
 type Call = { id: string; client: number; tool: 'snapshot' | 'act' | 'query'; input?: unknown }
 export type Ask = (text: string) => Promise<boolean>
+
+// what an agent may reach, and how a removal there is put to the person
+const WHERE: Record<string, string> = { 'task-list': 'from Today', board: 'from the board', 'later-list': 'from Later', 'snippet-list': 'from Snippets' }
 
 let started = false
 let me = 0
@@ -19,8 +22,10 @@ export function startAgentBridge(ask: Ask) {
   started = true
   const agent = createAgent({
     allow: ({ component, action, args }) => {
-      if (component !== 'task-list') return false
-      if (action === 'remove') return ask(`Claude wants to remove "${String(args?.[0] ?? '')}" from Today`)
+      const where = WHERE[component]
+      if (!where) return false
+      // taking something away is the person's call
+      if (action === 'remove') return ask(`Claude wants to remove "${String(args?.[0] ?? '')}" ${where}`)
       return true
     },
   })

@@ -18,10 +18,16 @@ import { agentTools } from '@ui-sdk/core/agent'
 const here = path.dirname(fileURLToPath(import.meta.url))
 
 const BOARD_NOTE =
-  'Today\'s tasks are a "task-list" labelled "Today\'s tasks" (its value lists each task: id, task, done). Its actions: ' +
-  'add(text), complete(task), reopen(task), rename(task, newText), remove(task); a task is named by its words or id. ' +
-  'A removal waits for the user to allow it in Cockpit. Only the Today list can be used this way for now: if the snapshot has no task-list, ' +
-  'the Today card is not on the board (the user can press T in Cockpit to add it).'
+  "The board's components: 'Board' (board: its value lists the spaces and every card with id, kind, title, space, " +
+  'folded, file or url, and its comments; actions switchSpace(space), newSpace(name), renameSpace(space, name), ' +
+  "moveToSpace(card, space), comment(card, text), addSticky(text), jot(text) into today's journal, show(pathOrUrl), " +
+  "fold(card), unfold(card), focus(card), remove(card)); 'Today's tasks' (task-list: add(text), complete(task), " +
+  "reopen(task), rename(task, newText), remove(task)); 'Later' (later-list: add(linkOrNote), setState(item, 'to check' | " +
+  "'reading' | 'done'), remove(item)); 'Snippets' (snippet-list: add(text, title?), remove(item); a secret's text is " +
+  'never shown). Cards and items are named by id or by words of their title. Notes (sticky notes, journal) are files: ' +
+  "read and edit them at the card's file path, and the board follows. The user's comments on a card may be for you. " +
+  "Every removal waits for the user to allow it in Cockpit. If 'Today's tasks' is missing, the Today card is not on " +
+  'the board (the user can press T).'
 
 export const TOOLS = [
   {

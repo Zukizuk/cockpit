@@ -755,7 +755,7 @@ test('outputs: a turn kept as one group; only listed targets can be opened', asy
 
 test('board: cards saved and read back, bad ones dropped, sizes kept sane', async () => {
   const { readBoard, saveBoard } = await import('../server/lib/board.js')
-  assert.deepEqual(readBoard(), { cards: [], viewport: null })
+  assert.deepEqual(readBoard(), { cards: [], viewport: null, spaces: [{ id: 'main', name: 'Main' }], space: 'main' })
   saveBoard({ cards: [{ id: 'a', type: 'item', ref: 'x', x: 10, y: 20, w: 50, h: 9000 }, { id: 'b', type: 'nope', ref: 'y' }], viewport: { x: 1, y: 2, zoom: 9 } })
   const b = readBoard()
   assert.deepEqual(b.cards, [{ id: 'a', type: 'item', ref: 'x', x: 10, y: 20, w: 200, h: 4000 }])
@@ -1112,4 +1112,38 @@ test('board tools: a call goes to the open window, its answer comes back; with n
     ac.abort()
     child.kill()
   }
+})
+
+test('spaces: kept with the board, each card in one; a card whose space is gone goes back to Main', async () => {
+  const { readBoard, saveBoard } = await import('../server/lib/board.js')
+  saveBoard({
+    cards: [{ id: 'a', type: 'note', ref: 'n.md' }, { id: 'b', type: 'note', ref: 'm.md', space: 'launch' }, { id: 'c', type: 'note', ref: 'o.md', space: 'gone' }],
+    viewport: null,
+    spaces: [{ id: 'main', name: 'Home' }, { id: 'launch', name: 'Launch', viewport: { x: 5, y: 6, zoom: 2 } }, { id: 'BAD ID', name: 'x' }],
+    space: 'launch',
+  })
+  const b = readBoard()
+  assert.deepEqual(b.spaces.map(s => s.name), ['Home', 'Launch'])
+  assert.deepEqual(b.spaces[1].viewport, { x: 5, y: 6, zoom: 2 })
+  assert.equal(b.space, 'launch')
+  assert.equal(b.cards.find(c => c.id === 'a').space, undefined)
+  assert.equal(b.cards.find(c => c.id === 'b').space, 'launch')
+  assert.equal(b.cards.find(c => c.id === 'c').space, undefined, 'a space that is gone: Main')
+  saveBoard({ cards: [], viewport: null, space: 'nowhere' })
+  assert.equal(readBoard().space, 'main')
+})
+
+test('comments: a thread per card, yours and Claude\'s; one can be deleted', async () => {
+  const c = await import('../server/lib/comments.js')
+  const mine = c.addComment({ card: 'later-1', text: ' Read this first ' })
+  const claude = c.addComment({ card: 'later-1', text: 'Done: it is short.', by: 'Claude' })
+  c.addComment({ card: 'note-2', text: 'x', by: 'someone else' })
+  const all = c.listComments().cards
+  assert.deepEqual(all['later-1'].map(x => [x.by, x.text]), [['you', 'Read this first'], ['Claude', 'Done: it is short.']])
+  assert.equal(all['note-2'][0].by, 'you', 'only you or Claude')
+  assert.throws(() => c.addComment({ card: 'later-1', text: '  ' }), /Write something/)
+  assert.throws(() => c.addComment({ card: '../x', text: 'a' }), /Which card/)
+  c.removeComment(mine.id)
+  assert.deepEqual(c.listComments().cards['later-1'].map(x => x.id), [claude.id])
+  assert.throws(() => c.removeComment(mine.id), /gone/)
 })

@@ -405,6 +405,23 @@ export interface BoardCard {
   color?: StickyColor
   /** A card that fits its content (Snippets) was given a height by hand: it keeps that height. */
   sized?: boolean
+  /** The space it's in (Main when left out). */
+  space?: string
+}
+
+/** A board of its own: cards in other spaces stay saved, out of view. Each keeps where its view was. */
+export interface Space {
+  id: string
+  name: string
+  viewport?: { x: number; y: number; zoom: number } | null
+}
+
+/** A comment on a card: the user's or Claude's. */
+export interface CardComment {
+  id: string
+  by: 'you' | 'Claude'
+  text: string
+  at: string
 }
 
 export type StickyColor = 'yellow' | 'green' | 'pink' | 'orange' | 'ink'
@@ -412,6 +429,9 @@ export type StickyColor = 'yellow' | 'green' | 'pink' | 'orange' | 'ink'
 export interface Board {
   cards: BoardCard[]
   viewport: { x: number; y: number; zoom: number } | null
+  spaces?: Space[]
+  /** The space shown now. */
+  space?: string
 }
 
 export type Shell = 'pwsh' | 'bash'

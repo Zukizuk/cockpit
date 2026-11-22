@@ -17,6 +17,7 @@ import { listSessions, readTranscript } from './lib/sessions.js'
 import { readTrackers } from './lib/tracker.js'
 import * as todoist from './lib/todoist.js'
 import * as tasks from './lib/tasks.js'
+import * as comments from './lib/comments.js'
 import * as folders from './lib/folders.js'
 import { readOffice } from './lib/office.js'
 import * as outputs from './lib/outputs.js'
@@ -748,6 +749,22 @@ async function api(req, res, url) {
   }
 
   // the Today card's own list, when Todoist isn't connected
+  // comments on cards: a thread per card, the user's and Claude's
+  if (area === 'comments') {
+    if (!a && method === 'GET') return json(res, 200, comments.listComments())
+    if (!a && method === 'POST') {
+      const body = await readBody(req)
+      const c = comments.addComment({ card: body.card, text: body.text, by: body.by })
+      broadcast('comments', { card: body.card, by: c.by })
+      return json(res, 200, c)
+    }
+    if (a && b === 'remove' && method === 'POST') {
+      const r = comments.removeComment(a)
+      broadcast('comments', {})
+      return json(res, 200, r)
+    }
+  }
+
   if (area === 'tasks') {
     if (!a && method === 'GET') return json(res, 200, tasks.listTasks())
     if (!a && method === 'POST') {

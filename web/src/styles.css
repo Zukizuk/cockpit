@@ -194,6 +194,7 @@
 [data-slot='context-menu-content'],
 [data-slot='select-content'],
 [data-slot='dialog-content'],
+[data-slot='popover-content'],
 [data-slot='sheet-content'] {
   background: var(--glass) !important;
   backdrop-filter: blur(28px) saturate(160%);
@@ -207,6 +208,7 @@
 /* menus open over cards, a bright sticky note too: more solid than the rest of the glass, so they never take its colour */
 [data-slot='dropdown-menu-content'],
 [data-slot='context-menu-content'],
+[data-slot='popover-content'],
 [data-slot='select-content'] {
   background: var(--glass-solid) !important;
 }
@@ -435,6 +437,41 @@ button:hover > .dock-sticky {
 }
 
 /* bottom right: zoom out and in, and ? for the shortcuts (as FigJam) */
+.space-switch {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--foreground);
+  outline: none;
+  transition-property: background-color, scale;
+  transition-duration: 150ms;
+}
+
+button.space-switch:active {
+  scale: 0.96;
+}
+
+.space-switch:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+.space-name-input {
+  width: 160px;
+  background: transparent;
+  outline: none;
+  font: inherit;
+}
+
 .corner-tools {
   position: fixed;
   right: 16px;
@@ -2373,4 +2410,130 @@ table.data tbody tr:hover td {
 
 .cm-tooltip.cm-tooltip-autocomplete > ul {
   font-family: var(--font-sans, system-ui, sans-serif) !important;
+}
+
+/* ---- comments on cards ------------------------------------------------------------------------------------- */
+
+.comment-pill {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: oklch(var(--contrast) / 0.06);
+  transition-property: background-color, color, opacity;
+  transition-duration: 150ms;
+}
+
+.comment-pill:hover,
+.comment-pill.is-open {
+  background: oklch(var(--contrast) / 0.12);
+  color: var(--foreground);
+}
+
+/* no comments yet: there while the card is hovered, so a first one is one click away */
+.comment-pill.is-empty {
+  opacity: 0;
+  background: transparent;
+}
+
+.card:hover .comment-pill.is-empty,
+.comment-pill.is-empty.is-open,
+.comment-pill.is-empty:focus-visible {
+  opacity: 1;
+}
+
+.comment-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.comment-pop {
+  width: 340px;
+  overflow: hidden;
+}
+
+.comment-list {
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.comment {
+  padding: 8px 12px;
+}
+
+.comment + .comment {
+  border-top: 1px solid oklch(var(--contrast) / 0.07);
+}
+
+.comment.is-claude {
+  background: oklch(var(--contrast) / 0.035);
+}
+
+.comment-by {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.comment-x {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  opacity: 0;
+  transition-property: opacity, background-color;
+  transition-duration: 150ms;
+}
+
+.comment:hover .comment-x {
+  opacity: 1;
+}
+
+.comment-x:hover {
+  background: oklch(var(--contrast) / 0.08);
+}
+
+.comment-text {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment-form {
+  border-top: 1px solid oklch(var(--contrast) / 0.08);
+  padding: 8px;
+}
+
+.comment-input {
+  width: 100%;
+  resize: none;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 13px;
+  line-height: 1.45;
+  background: oklch(var(--contrast) / 0.05);
+  outline: none;
+}
+
+.comment-input:focus {
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--ring) 45%, transparent);
 }

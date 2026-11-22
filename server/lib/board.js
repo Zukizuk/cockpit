@@ -12,12 +12,42 @@ export const COLORS = new Set(['yellow', 'green', 'pink', 'orange', 'ink'])
 const file = () => path.join(DATA_DIR, 'board.json')
 const num = (v, lo, hi, d) => (Number.isFinite(Number(v)) ? Math.min(hi, Math.max(lo, Number(v))) : d)
 
+// Spaces: the board can have several (Main, and any the user makes); each card belongs to one, and each space keeps
+// where its view was. Cards of other spaces stay saved, out of view.
+const MAIN = { id: 'main', name: 'Main' }
+const MAX_SPACES = 20
+
+const viewportOf = v => (v && typeof v === 'object' ? { x: num(v.x, -1e7, 1e7, 0), y: num(v.y, -1e7, 1e7, 0), zoom: num(v.zoom, 0.1, 4, 1) } : null)
+const spaceId = s => (typeof s === 'string' && /^[a-z0-9-]{1,40}$/.test(s) ? s : 'main')
+
+/** The spaces as saved, Main always first. */
+function spacesOf(list) {
+  const out = [{ ...MAIN }]
+  for (const s of Array.isArray(list) ? list : []) {
+    // an id that isn't one is left out (it would read as Main)
+    if (spaceId(s?.id) !== s?.id) continue
+    const id = s.id
+    const name = String(s?.name || '').trim().slice(0, 40)
+    const found = out.find(x => x.id === id)
+    if (found) {
+      if (id === 'main' && name) found.name = name
+      if (s?.viewport) found.viewport = viewportOf(s.viewport)
+      continue
+    }
+    if (out.length >= MAX_SPACES || !name) continue
+    out.push({ id, name, ...(s?.viewport ? { viewport: viewportOf(s.viewport) } : {}) })
+  }
+  return out
+}
+
 export function readBoard() {
   try {
     const b = JSON.parse(fs.readFileSync(file(), 'utf8'))
-    return { cards: Array.isArray(b.cards) ? b.cards : [], viewport: b.viewport || null }
+    const spaces = spacesOf(b.spaces)
+    const space = spaces.some(s => s.id === b.space) ? b.space : 'main'
+    return { cards: Array.isArray(b.cards) ? b.cards : [], viewport: b.viewport || null, spaces, space }
   } catch {
-    return { cards: [], viewport: null }
+    return { cards: [], viewport: null, spaces: spacesOf([]), space: 'main' }
   }
 }
 
@@ -62,10 +92,14 @@ export function saveBoard(body) {
       ...(c.locked === true ? { locked: true } : {}),
       ...(typeof c.color === 'string' && COLORS.has(c.color) ? { color: c.color } : {}),
       ...(c.sized === true ? { sized: true } : {}),
+      ...(spaceId(c.space) !== 'main' ? { space: spaceId(c.space) } : {}),
     }))
-  const v = body.viewport
-  const viewport = v ? { x: num(v.x, -1e7, 1e7, 0), y: num(v.y, -1e7, 1e7, 0), zoom: num(v.zoom, 0.1, 4, 1) } : null
-  writeFileAtomic(file(), JSON.stringify({ cards, viewport }, null, 1) + '\n')
+  const viewport = viewportOf(body.viewport)
+  const spaces = spacesOf(body.spaces)
+  // a card whose space is gone goes back to Main
+  for (const c of cards) if (c.space && !spaces.some(s => s.id === c.space)) delete c.space
+  const space = spaces.some(s => s.id === body.space) ? body.space : 'main'
+  writeFileAtomic(file(), JSON.stringify({ cards, viewport, spaces, space }, null, 1) + '\n')
   backup()
   return { ok: true, count: cards.length }
 }

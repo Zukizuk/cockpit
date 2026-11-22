@@ -7,7 +7,7 @@ import { startAgentBridge } from './agent/bridge'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReactFlow, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
-import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type ShownEntry, type StickyColor, type Tracker } from './api'
+import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker } from './api'
 import { pack } from './layout'
 import { useData, useEvent } from './lib'
 
@@ -44,7 +44,7 @@ export const SNIPPETS_MIN_H = 160
 export const FOLDED_H = 46
 
 /** openH: the height a folded card goes back to when it's unfolded. */
-export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean }
+export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string }
 export type CardNode = Node<CardData, CardType>
 
 /** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
@@ -60,7 +60,7 @@ export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}) },
   width: c.w,
   height: c.folded ? FOLDED_H : AUTO_HEIGHT.has(c.type) && !keepsSize(c) ? undefined : c.h,
   dragHandle: '.card-drag',
@@ -79,7 +79,11 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.locked ? { locked: true } : {}),
   ...(n.data.color ? { color: n.data.color } : {}),
   ...(n.data.sized ? { sized: true } : {}),
+  ...(n.data.space && n.data.space !== 'main' ? { space: n.data.space } : {}),
 })
+
+/** The space a card is in. */
+export const spaceOf = (n: { data: CardData }) => n.data.space || 'main'
 
 /** The same card folded to its header, or opened back to its height. */
 export function foldNode(n: CardNode, fold: boolean): CardNode {
@@ -93,6 +97,26 @@ export function foldNode(n: CardNode, fold: boolean): CardNode {
 export function lockNode(n: CardNode, locked: boolean): CardNode {
   const { locked: _was, ...data } = n.data
   return { ...n, draggable: !locked, deletable: !locked, data: locked ? { ...data, locked: true } : data }
+}
+
+type Box = { x: number; y: number; w: number; h: number }
+/** The nearest spot to pos where a card of this size touches none of these cards, in rings around it. */
+export function freeSpot(pos: { x: number; y: number }, size: { w: number; h: number }, nodes: CardNode[]) {
+  const GAP = 28
+  const boxes: Box[] = nodes.map(n => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.measured?.width ?? 400, h: n.height ?? n.measured?.height ?? 300 }))
+  const clear = (p: { x: number; y: number }) =>
+    boxes.every(b => p.x + size.w + GAP <= b.x || b.x + b.w + GAP <= p.x || p.y + size.h + GAP <= b.y || b.y + b.h + GAP <= p.y)
+  if (clear(pos)) return pos
+  const step = 120
+  for (let ring = 1; ring <= 40; ring++) {
+    const spots: { x: number; y: number; d: number }[] = []
+    for (let i = -ring; i <= ring; i++)
+      for (const [dx, dy] of [[i, -ring], [i, ring], [-ring, i], [ring, i]]) spots.push({ x: pos.x + dx * step, y: pos.y + dy * step, d: Math.hypot(dx, dy) })
+    spots.sort((a, b) => a.d - b.d)
+    const found = spots.find(clear)
+    if (found) return { x: found.x, y: found.y }
+  }
+  return pos
 }
 
 export type Expanded = { type: 'item' | 'note'; ref: string } | null
@@ -195,6 +219,21 @@ interface Ctx {
   trackers: Tracker[]
   versions: Record<string, number>
   persist: () => void
+  /** Spaces: boards of their own; the one shown now. */
+  spaces: Space[]
+  space: string
+  switchSpace: (id: string) => void
+  /** Makes a space (named, or "Space 2") and goes to it; returns its id. */
+  newSpace: (name?: string) => string
+  renameSpace: (id: string, name: string) => void
+  /** Removes a space; its cards go to Main. */
+  deleteSpace: (id: string) => void
+  /** Sends cards to another space (out of view here); Undo brings them back. */
+  moveToSpace: (ids: string[], space: string) => void
+  /** Comments on cards, by card id. */
+  comments: Record<string, CardComment[]>
+  addComment: (card: string, text: string, by?: 'you' | 'Claude') => Promise<void>
+  removeComment: (id: string) => Promise<void>
 }
 
 const BoardCtx = createContext<Ctx | null>(null)
@@ -205,8 +244,20 @@ export function useBoard() {
   return c
 }
 
-export function BoardProvider({ children }: { children: ReactNode }) {
+export function BoardProvider({ children, initial }: { children: ReactNode; initial: Board }) {
   const rf = useReactFlow<CardNode>()
+  const [spaces, setSpacesState] = useState<Space[]>(initial.spaces?.length ? initial.spaces : [{ id: 'main', name: 'Main' }])
+  const [space, setSpaceState] = useState(initial.space || 'main')
+  const spacesRef = useRef(spaces)
+  const spaceRef = useRef(space)
+  const setSpaces = (next: Space[]) => {
+    spacesRef.current = next
+    setSpacesState(next)
+  }
+  const setSpace = (id: string) => {
+    spaceRef.current = id
+    setSpaceState(id)
+  }
   const [expanded, setExpanded] = useState<Expanded>(null)
   const [toastState, setToastState] = useState<{ text: string; action: ToastAction | null }>({ text: '', action: null })
   const [palette, setPaletteOpen] = useState(false)
@@ -287,7 +338,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const persist = useCallback(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      const body: Board = { cards: rf.getNodes().map(fromNode), viewport: rf.getViewport() }
+      const viewport = rf.getViewport()
+      // each space keeps where its view was
+      const spacesNow = spacesRef.current.map(x => (x.id === spaceRef.current ? { ...x, viewport } : x))
+      const body: Board = { cards: rf.getNodes().map(fromNode), viewport, spaces: spacesNow, space: spaceRef.current }
       put('/api/board', body).catch(() => toast("Couldn't save the board's layout"))
     }, 600)
   }, [rf, toast])
@@ -331,7 +385,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       const kept = new Set(layout.map(c => c.id))
       for (const n of nodes) if (!kept.has(n.id) && isSticky(n.type, n.data.ref)) discardIfEmpty(n.data.ref)
       glide()
-      rf.setNodes(layout.map(c => ({ ...toNode(c), selected: picked.has(c.id) })))
+      rf.setNodes(layout.map(c => ({ ...toNode(c), hidden: (c.space || 'main') !== spaceRef.current, selected: picked.has(c.id) })))
       persist()
     },
     [rf, glide, persist, discardIfEmpty],
@@ -370,12 +424,16 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     (type: CardType, ref: string, opts: PlaceOpts = {}) => {
       track(`card.${type}`)
       const existing = rf.getNodes().find(n => n.type === type && n.data.ref === ref)
-      if (existing) {
+      // already here: shown; in another space: it comes to this one, to a free spot
+      const moving = existing && spaceOf(existing) !== spaceRef.current ? existing : null
+      if (existing && !moving) {
         focus(existing.id)
         return existing.id
       }
       remember()
-      const size = opts.size ?? sizeFor(type, ref)
+      const size = moving
+        ? { w: moving.width ?? moving.measured?.width ?? sizeFor(type, ref).w, h: moving.height ?? moving.measured?.height ?? sizeFor(type, ref).h }
+        : (opts.size ?? sizeFor(type, ref))
       const near = opts.near ? rf.getNode(opts.near) : undefined
       let pos = opts.at
         ? { x: opts.at.x - size.w / 2, y: opts.at.y - 20 }
@@ -387,27 +445,17 @@ export function BoardProvider({ children }: { children: ReactNode }) {
           })()
       // a new card goes where nothing else is: the nearest free spot to where it was meant to go, in rings
       // around it, so it never lands on top of a card already there
-      const GAP = 28
-      const boxes = rf.getNodes().map(n => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.measured?.width ?? 400, h: n.height ?? n.measured?.height ?? 300 }))
-      const clear = (p: { x: number; y: number }) =>
-        boxes.every(b => p.x + size.w + GAP <= b.x || b.x + b.w + GAP <= p.x || p.y + size.h + GAP <= b.y || b.y + b.h + GAP <= p.y)
-      if (!clear(pos)) {
-        const step = 120
-        let found: { x: number; y: number } | null = null
-        for (let ring = 1; ring <= 40 && !found; ring++) {
-          const spots: { x: number; y: number; d: number }[] = []
-          for (let i = -ring; i <= ring; i++)
-            for (const [dx, dy] of [[i, -ring], [i, ring], [-ring, i], [ring, i]]) spots.push({ x: pos.x + dx * step, y: pos.y + dy * step, d: Math.hypot(dx, dy) })
-          spots.sort((a, b) => a.d - b.d)
-          found = spots.find(clear) ?? null
-        }
-        if (found) pos = { x: found.x, y: found.y }
-      }
-      const id = `${type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-      rf.setNodes(ns => [
-        ...ns.map(n => ({ ...n, selected: false })),
-        { id, type, position: pos, data: { ref, pulse: Date.now(), born: Date.now() }, width: size.w, height: AUTO_HEIGHT.has(type) ? undefined : size.h, selected: true, dragHandle: '.card-drag' },
-      ])
+      pos = freeSpot(pos, size, rf.getNodes().filter(n => !n.hidden && n.id !== moving?.id))
+      const here = spaceRef.current === 'main' ? {} : { space: spaceRef.current }
+      const id = moving ? moving.id : `${type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+      if (moving) {
+        const { space: _from, ...data } = moving.data
+        rf.setNodes(ns => ns.map(n => (n.id === id ? { ...n, position: pos, hidden: false, selected: true, data: { ...data, ...here, pulse: Date.now() } } : { ...n, selected: false })))
+      } else
+        rf.setNodes(ns => [
+          ...ns.map(n => ({ ...n, selected: false })),
+          { id, type, position: pos, data: { ref, pulse: Date.now(), born: Date.now(), ...here }, width: size.w, height: AUTO_HEIGHT.has(type) ? undefined : size.h, selected: true, dragHandle: '.card-drag' },
+        ])
       // dropped somewhere on purpose: stay where the user is looking
       if (!opts.at) requestAnimationFrame(() => rf.fitView({ nodes: [{ id }], duration: 320, padding: 0.25, maxZoom: 1, minZoom: Math.min(rf.getZoom(), 1) }))
       persist()
@@ -589,7 +637,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       }
       const target = rf.getNode(id ?? rf.getNodes().find(n => n.selected)?.id ?? '')
       if (!target) return toast('Select a card first')
-      const nodes = rf.getNodes()
+      const nodes = rf.getNodes().filter(n => !n.hidden)
       const cards: Snap = Object.fromEntries(
         nodes.map(n => [n.id, { x: n.position.x, y: n.position.y, ...sizeOf(n), folded: !!n.data.folded, ...(n.data.openH ? { openH: n.data.openH } : {}) }]),
       )
@@ -626,7 +674,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const tidy = useCallback(() => {
     track('board.tidy')
     if (focusSaved.current) return toast('Bring everything back first, then tidy')
-    const nodes = rf.getNodes()
+    const nodes = rf.getNodes().filter(n => !n.hidden)
     const free = nodes.filter(n => !n.data.locked)
     if (!free.length) return toast(nodes.length ? 'Every card is locked in place' : 'Nothing on the board yet')
     remember()
@@ -641,6 +689,138 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     toast('Tidied', { label: 'Undo', run: () => undoRef.current() })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rf, persist, toast, remember, glide])
+
+  // ---- comments -------------------------------------------------------------------------------------------------
+  const commentsData = useData(() => get<{ cards: Record<string, CardComment[]> }>('/api/comments'), [], { refreshOn: ['comments'] })
+  const addComment = useCallback(
+    async (card: string, text: string, by: 'you' | 'Claude' = 'you') => {
+      try {
+        await post('/api/comments', { card, text, by })
+        commentsData.reload()
+      } catch (err: any) {
+        toast(err.message)
+        throw err
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [toast],
+  )
+  const removeComment = useCallback(
+    async (id: string) => {
+      await post(`/api/comments/${id}/remove`).catch((err: any) => toast(err.message))
+      commentsData.reload()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [toast],
+  )
+
+  // ---- spaces ---------------------------------------------------------------------------------------------------
+  // Boards of their own. Cards of other spaces stay on the board, hidden; each space keeps where its view was.
+  const switchSpace = useCallback(
+    (id: string) => {
+      if (id === spaceRef.current) return
+      const target = spacesRef.current.find(x => x.id === id)
+      if (!target) return
+      if (focusSavedRef.current) return toast('Bring everything back first')
+      const viewport = rf.getViewport()
+      setSpaces(spacesRef.current.map(x => (x.id === spaceRef.current ? { ...x, viewport } : x)))
+      setSpace(id)
+      rf.setNodes(ns => ns.map(n => ({ ...n, hidden: spaceOf(n) !== id, selected: false })))
+      requestAnimationFrame(() => {
+        if (target.viewport) rf.setViewport(target.viewport)
+        else if (rf.getNodes().some(n => spaceOf(n) === id)) rf.fitView({ padding: 0.15, maxZoom: 1 })
+        else rf.setViewport({ x: 0, y: 0, zoom: 1 })
+      })
+      persist()
+      toast(target.name)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf, persist, toast],
+  )
+
+  const newSpace = useCallback(
+    (name?: string) => {
+      const list = spacesRef.current
+      if (list.length >= 20) {
+        toast('20 spaces is the most')
+        return spaceRef.current
+      }
+      const label = (name || '').trim().slice(0, 40) || `Space ${list.length + 1}`
+      const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) || 'space'
+      let id = base
+      for (let i = 2; list.some(x => x.id === id) || id === 'main'; i++) id = `${base}-${i}`
+      setSpaces([...list, { id, name: label }])
+      switchSpace(id)
+      return id
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [switchSpace, toast],
+  )
+
+  const renameSpace = useCallback(
+    (id: string, name: string) => {
+      const label = name.trim().slice(0, 40)
+      if (!label) return
+      setSpaces(spacesRef.current.map(x => (x.id === id ? { ...x, name: label } : x)))
+      persist()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [persist],
+  )
+
+  const deleteSpace = useCallback(
+    (id: string) => {
+      if (id === 'main') return toast("Main can't be removed")
+      const gone = spacesRef.current.find(x => x.id === id)
+      if (!gone) return
+      if (spaceRef.current === id) switchSpace('main')
+      setSpaces(spacesRef.current.filter(x => x.id !== id))
+      let moved = 0
+      rf.setNodes(ns =>
+        ns.map(n => {
+          if (spaceOf(n) !== id) return n
+          moved++
+          const { space: _gone, ...data } = n.data
+          return { ...n, data, hidden: spaceRef.current !== 'main' }
+        }),
+      )
+      persist()
+      toast(moved ? `Removed ${gone.name}; its cards are in Main` : `Removed ${gone.name}`)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf, persist, toast, switchSpace],
+  )
+
+  const moveToSpace = useCallback(
+    (ids: string[], to: string) => {
+      const target = spacesRef.current.find(x => x.id === to)
+      if (!target || !ids.length) return
+      const set = new Set(ids)
+      remember()
+      // they land in view there: around the middle of where that space was last looked at, in free spots
+      const vp = to === spaceRef.current ? rf.getViewport() : (target.viewport ?? { x: innerWidth / 2, y: innerHeight / 2, zoom: 1 })
+      const middle = { x: (innerWidth / 2 - vp.x) / vp.zoom, y: (innerHeight / 2 - vp.y) / vp.zoom }
+      const there = rf.getNodes().filter(n => spaceOf(n) === to && !set.has(n.id))
+      const spots = new Map<string, { x: number; y: number }>()
+      for (const n of rf.getNodes().filter(n => set.has(n.id))) {
+        const size = { w: n.width ?? n.measured?.width ?? 400, h: n.height ?? n.measured?.height ?? 300 }
+        const pos = freeSpot({ x: middle.x - size.w / 2, y: middle.y - size.h / 2 }, size, there)
+        spots.set(n.id, pos)
+        there.push({ ...n, position: pos })
+      }
+      rf.setNodes(ns =>
+        ns.map(n => {
+          if (!set.has(n.id)) return n
+          const { space: _from, ...data } = n.data
+          return { ...n, position: spots.get(n.id) ?? n.position, data: to === 'main' ? data : { ...data, space: to }, hidden: to !== spaceRef.current, selected: false }
+        }),
+      )
+      persist()
+      toast(ids.length === 1 ? `Moved to ${target.name}` : `${ids.length} cards moved to ${target.name}`, { label: 'Undo', run: () => undoRef.current() })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf, persist, toast, remember],
+  )
 
   const renameItem = useCallback(
     async (id: string, title: string) => {
@@ -820,8 +1000,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
       items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
+      spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
+      comments: commentsData.data?.cards || {}, addComment, removeComment,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist],
+    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

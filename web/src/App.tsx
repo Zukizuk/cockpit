@@ -29,6 +29,8 @@ import { Kbd } from '@/components/ui/kbd'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { SpaceSwitcher } from './views/SpaceSwitcher'
+import { BoardAgent } from './agent/boardAgent'
 
 const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard }
 
@@ -43,7 +45,7 @@ export function App() {
   return (
     <TooltipProvider delayDuration={400} skipDelayDuration={600}>
       <ReactFlowProvider>
-        <BoardProvider>
+        <BoardProvider initial={board}>
           <Canvas initial={board} />
           <Dock />
           <Palette />
@@ -55,6 +57,8 @@ export function App() {
           <FocusBar />
           <UsageAsk />
           <CornerTools />
+          <SpaceSwitcher />
+          <BoardAgent />
           <Toast />
           <Badge />
           <UrlState />
@@ -67,7 +71,10 @@ export function App() {
 function Canvas({ initial }: { initial: Board }) {
   const board = useBoard()
   const rf = useReactFlow<CardNode>()
-  const [nodes, , onNodesChange] = useNodesState<CardNode>(useMemo(() => initial.cards.map(toNode), [initial]))
+  // cards of other spaces are there, hidden
+  const [nodes, , onNodesChange] = useNodesState<CardNode>(
+    useMemo(() => initial.cards.map(c => ({ ...toNode(c), hidden: (c.space || 'main') !== (initial.space || 'main') })), [initial]),
+  )
 
   const onChange = useCallback(
     (changes: NodeChange<CardNode>[]) => {
@@ -220,6 +227,15 @@ function Canvas({ initial }: { initial: Board }) {
         e.preventDefault()
         board.expand({ type: one.type, ref: one.data.ref })
       }
+      // Alt+1 to 9: that space
+      if (e.altKey && !ctrl && /^[1-9]$/.test(e.key)) {
+        const to = board.spaces[Number(e.key) - 1]
+        if (to) {
+          e.preventDefault()
+          board.switchSpace(to.id)
+        }
+        return
+      }
       // Single keys (see KeysDialog): only bare keys, so Ctrl/Alt combinations stay the browser's and Windows'.
       // A capital letter is typing that missed its box, never a shortcut.
       if (ctrl || e.altKey || e.repeat || (e.shiftKey && /^[a-z]$/.test(key))) return
@@ -252,6 +268,16 @@ function Canvas({ initial }: { initial: Board }) {
           board.persist()
         },
         ',': () => board.setSettingsOpen(true),
+        // spaces: the one before, the one after, the list
+        '[': () => {
+          const i = board.spaces.findIndex(x => x.id === board.space)
+          if (i > 0) board.switchSpace(board.spaces[i - 1].id)
+        },
+        ']': () => {
+          const i = board.spaces.findIndex(x => x.id === board.space)
+          if (i < board.spaces.length - 1) board.switchSpace(board.spaces[i + 1].id)
+        },
+        s: () => emit('spaces-open'),
         '?': () => board.setKeysOpen(true),
       }
       const fn = run[e.key.toLowerCase()]
@@ -375,7 +401,7 @@ function Canvas({ initial }: { initial: Board }) {
         onNodesChange={onChange}
         nodeTypes={nodeTypes}
         defaultViewport={initial.viewport ?? { x: 0, y: 0, zoom: 1 }}
-        fitView={!initial.viewport && nodes.length > 0}
+        fitView={!initial.viewport && nodes.some(n => !n.hidden)}
         fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
         minZoom={0.15}
         maxZoom={2}
