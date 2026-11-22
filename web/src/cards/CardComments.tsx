@@ -1,7 +1,7 @@
 // A card's comments: a count in its header (shown once there is one, or while the card is hovered) that opens the
 // thread. The user and Claude both write here; Claude reads them through Cockpit's board tools.
 import { useEffect, useRef, useState } from 'react'
-import { MessageSquare, Plus, Sparkles, X } from 'lucide-react'
+import { Plus, Sparkles, X } from 'lucide-react'
 import { useBoard } from '../board'
 import { ago, onEvent } from '../lib'
 import { cn } from '@/lib/utils'
@@ -47,18 +47,7 @@ export function CardComments({ nodeId }: { nodeId: string }) {
           aria-label={list.length ? `${list.length} comment${list.length === 1 ? '' : 's'}${lastByClaude ? ', the last from Claude' : ''}` : 'Add a comment'}
           title={list.length ? 'Comments' : 'Add a comment'}
         >
-          {!list.length ? (
-            <Plus className="size-[14px]" strokeWidth={2} />
-          ) : lastByClaude ? (
-            <>
-              <Sparkles className="size-[12px]" strokeWidth={2} />
-              <span>{list.length}</span>
-            </>
-          ) : list.length === 1 ? (
-            <MessageSquare className="size-[13px]" strokeWidth={2} />
-          ) : (
-            <span>{list.length}</span>
-          )}
+          {list.length ? <span>{list.length}</span> : <Plus className="size-[11px]" strokeWidth={2.25} />}
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" side="right" className="comment-pop" onOpenAutoFocus={e => e.preventDefault()} onFocusOutside={justOpened} onInteractOutside={justOpened}>

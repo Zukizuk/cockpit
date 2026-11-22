@@ -273,15 +273,8 @@ function NewSnippet({ onKept }: { onKept: () => void }) {
   // select the card and press Ctrl+V anywhere on the board, or use the clipboard button in its header
   useEffect(() => onEvent('snippet-paste', (d: { text?: string; fromClipboard?: boolean }) => (d.fromClipboard ? fromClipboard() : d.text && take(d.text))))
 
-  useEffect(() => {
-    const el = field.current
-    if (!el) return
-    // empty: its one row. Folded (not drawn), it measures 0: left alone, or it stays squashed when unfolded
-    el.style.height = ''
-    if (!text || !el.offsetParent) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 132)}px`
-  }, [text])
+  // the box grows with what's pasted by itself (CSS field-sizing): nothing measures it, so folding, hiding or a
+  // space switch can never leave it squashed
 
   const onKey = (e: React.KeyboardEvent) => {
     e.stopPropagation()

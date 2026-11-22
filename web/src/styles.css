@@ -648,6 +648,11 @@ button.space-switch:active {
   max-height: min(560px, 70vh);
 }
 
+/* Snippets is never shorter than its header and the box to paste into, whatever height was saved */
+.react-flow__node-snippets:has(.card:not(.is-folded)) {
+  min-height: 112px;
+}
+
 .snip-new {
   border-radius: 10px;
   background: var(--sunken);
@@ -662,6 +667,10 @@ button.space-switch:active {
 .snip-field {
   display: block;
   width: 100%;
+  /* as tall as its text, one line at least, five at most: the browser sizes it, never a script */
+  field-sizing: content;
+  min-height: 36px;
+  max-height: 132px;
   resize: none;
   border: 0;
   outline: none;
@@ -2415,60 +2424,67 @@ table.data tbody tr:hover td {
 /* ---- comments on cards ------------------------------------------------------------------------------------- */
 
 .comment-bubble {
-  /* a speech bubble pinned to the card's top-right corner, its point on the corner (as FigJam's comments); it keeps
-     its size on screen whatever the zoom, growing out of that point */
+  /* a small message bubble on the card's top-right corner, its tail on the corner; the same size on screen at any
+     zoom, growing out of that point */
   position: absolute;
-  left: calc(100% - 8px);
-  bottom: calc(100% - 8px);
+  left: calc(100% - 7px);
+  bottom: calc(100% - 7px);
   z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  min-width: 30px;
-  height: 30px;
-  padding: 0 9px;
-  border-radius: 999px 999px 999px 5px;
-  font-size: 13px;
-  font-weight: 650;
+  gap: 2px;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px 10px 10px 3px;
+  font-size: 11px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--background);
-  background: var(--foreground);
+  color: color-mix(in oklab, var(--foreground) 82%, transparent);
+  background: var(--card);
   box-shadow:
-    0 0 0 2px var(--background),
-    0 6px 16px oklch(0 0 0 / 0.28);
+    0 0 0 1px oklch(var(--contrast) / 0.14),
+    0 3px 8px oklch(0 0 0 / 0.22);
   transform: scale(calc(1 / clamp(0.35, var(--board-zoom, 1), 1.6)));
   transform-origin: 0% 100%;
-  transition-property: scale, opacity, background-color;
-  transition-duration: 160ms;
+  transition-property: scale, opacity, color, box-shadow;
+  transition-duration: 150ms;
   transition-timing-function: var(--ease-out);
-}
-
-/* the last word is Claude's: its colour, so a reply waiting for you stands out */
-.comment-bubble.is-claude {
-  background: oklch(0.82 0.13 85);
-  color: oklch(0.22 0.03 85);
 }
 
 .comment-bubble:hover,
 .comment-bubble.is-open {
-  scale: 1.08;
+  scale: 1.06;
+  color: var(--foreground);
+  box-shadow:
+    0 0 0 1px oklch(var(--contrast) / 0.22),
+    0 4px 10px oklch(0 0 0 / 0.26);
 }
 
 .comment-bubble:active {
   scale: 0.96;
 }
 
-/* no comments yet: a small + while the card is hovered, so a first one is one click away */
+/* the last word is Claude's: a small dot, so a reply waiting for you shows */
+.comment-bubble.is-claude::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 1.5px var(--card);
+}
+
+/* no comments yet: a faint bubble while the card is hovered, so a first one is one click away */
 .comment-bubble.is-empty {
   opacity: 0;
-  scale: 0.6;
+  scale: 0.7;
   pointer-events: none;
-  background: var(--card);
   color: var(--muted-foreground);
-  box-shadow:
-    0 0 0 1px oklch(var(--contrast) / 0.14),
-    0 4px 12px oklch(0 0 0 / 0.2);
 }
 
 .react-flow__node:hover .comment-bubble.is-empty,
