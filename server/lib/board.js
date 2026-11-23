@@ -93,6 +93,9 @@ export function saveBoard(body) {
       ...(typeof c.color === 'string' && COLORS.has(c.color) ? { color: c.color } : {}),
       ...(c.sized === true ? { sized: true } : {}),
       ...(spaceId(c.space) !== 'main' ? { space: spaceId(c.space) } : {}),
+      // tucked away at the top edge (off the board until brought back); its contents hidden (blurred) on the board
+      ...(c.tucked === true ? { tucked: true } : {}),
+      ...(c.veiled === true ? { veiled: true } : {}),
     }))
   const viewport = viewportOf(body.viewport)
   const spaces = spacesOf(body.spaces)

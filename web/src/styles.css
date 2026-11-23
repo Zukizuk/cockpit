@@ -2579,3 +2579,112 @@ table.data tbody tr:hover td {
 .react-flow__nodesselection-rect {
   display: none;
 }
+
+/* ---- contents hidden (sharing the screen) ------------------------------------------------------------------ */
+
+.card.is-veiled {
+  position: relative;
+}
+
+/* what the card shows, and its title, blurred past reading; the card keeps its place and shape */
+.card.is-veiled .card-body,
+.card.is-veiled .card-head .min-w-0,
+.card.is-veiled .sticky-strip-text {
+  filter: blur(9px);
+  user-select: none;
+  pointer-events: none;
+}
+
+.veil {
+  position: absolute;
+  inset: 46px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  background: oklch(var(--contrast) / 0.02);
+  cursor: pointer;
+  transition: color 150ms ease-out;
+}
+
+.card.is-sticky .veil {
+  inset: 28px 0 0;
+  color: oklch(0.25 0.02 80 / 0.7);
+}
+
+.veil:hover {
+  color: var(--foreground);
+}
+
+.card.is-sticky .veil:hover {
+  color: oklch(0.2 0.02 80);
+}
+
+.icon-btn.veil-on,
+.veil-on {
+  color: var(--foreground);
+}
+
+/* ---- cards tucked away: tabs hanging from the top edge ----------------------------------------------------- */
+
+.tuck-tray {
+  position: fixed;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 25;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100vw - 340px);
+}
+
+.tuck-tab {
+  display: flex;
+  align-items: flex-end;
+  max-width: 170px;
+  height: 30px;
+  padding: 0 12px 6px;
+  border-radius: 0 0 10px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: color-mix(in oklab, var(--foreground) 85%, transparent);
+  background: var(--card);
+  box-shadow:
+    0 0 0 1px oklch(var(--contrast) / 0.12),
+    0 4px 12px oklch(0 0 0 / 0.25);
+  /* tucked: only its lower edge shows; it comes down a little when pointed at */
+  translate: 0 -4px;
+  transition-property: translate, box-shadow;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
+}
+
+.tuck-tab.is-paper {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.25);
+}
+
+.tuck-tab:hover {
+  translate: 0 2px;
+}
+
+.tuck-tab:active {
+  scale: 0.96;
+}
+
+.tuck-more {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+/* the eye shows on a hovered card, or while its contents are hidden */
+.card:not(:hover) .veil-btn:not(.veil-on) {
+  opacity: 0;
+}

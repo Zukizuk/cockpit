@@ -407,6 +407,10 @@ export interface BoardCard {
   sized?: boolean
   /** The space it's in (Main when left out). */
   space?: string
+  /** Tucked away: a tab at the top edge of the screen until brought back to where it was. */
+  tucked?: boolean
+  /** Its contents hidden (blurred), as when sharing the screen. */
+  veiled?: boolean
 }
 
 /** A board of its own: cards in other spaces stay saved, out of view. Each keeps where its view was. */

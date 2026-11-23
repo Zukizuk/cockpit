@@ -28,7 +28,9 @@ const BOARD_NOTE =
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
   'its value has kind, space, selected, inView, folded, color (sticky notes), file or url, peek (its first lines) and ' +
   'comments; actions comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), rename(title) ' +
-  "(notes), setColor(yellow | green | pink | orange | charcoal) (sticky notes), remove(). 'Today's tasks' (task-list: " +
+  "(notes), setColor(yellow | green | pink | orange | charcoal) (sticky notes), tuck() to tuck it away as a tab at " +
+  'the top edge, bringBack(), hideContents() and showContents() (blurred on the board, for sharing the screen; ' +
+  "a card's tucked and hidden say which), remove(). 'Today's tasks' (task-list: " +
   "add(text), complete(task), reopen(task), rename(task, newText), remove(task)); 'Later' (later-list: " +
   "add(linkOrNote), setState(item, 'to check' | 'reading' | 'done'), remove(item)); 'Snippets' (snippet-list: " +
   "add(text, title?), remove(item); a secret's text is never shown). " +

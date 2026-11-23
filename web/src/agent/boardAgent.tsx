@@ -85,6 +85,10 @@ export type CardValue = {
   selected?: boolean
   inView?: boolean
   folded?: boolean
+  /** tucked away at the top edge of the screen */
+  tucked?: boolean
+  /** its contents hidden (blurred) on the board */
+  hidden?: boolean
   color?: string
   file?: string
   url?: string
@@ -102,12 +106,14 @@ type CardOptions = {
   onRename?: (title: string) => void
   onColor?: (color: StickyColor) => void
   onRemove?: () => void
+  onTuck?: (tuck: boolean) => void
+  onVeil?: (veil: boolean) => void
 }
 const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', pink: 'pink', orange: 'orange', charcoal: 'ink', ink: 'ink', dark: 'ink', black: 'ink' }
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action' },
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action' },
   state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -134,10 +140,14 @@ const cardPrimitive = definePrimitive({
         call('onColor')(c)
       },
       remove: () => call('onRemove')(),
+      tuck: () => call('onTuck')(true),
+      bringBack: () => call('onTuck')(false),
+      hideContents: () => call('onVeil')(true),
+      showContents: () => call('onVeil')(false),
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'remove'] },
+  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -205,7 +215,7 @@ const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 // ---- on the page -------------------------------------------------------------------------------------------
 
 const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder' }
-type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string]
+type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean]
 type Built = { id: string; type: string; ref: string; title: string; value: CardValue }
 
 export function BoardAgent() {
@@ -222,7 +232,7 @@ export function BoardAgent() {
         const w = n.measured?.width ?? n.width ?? 0
         const h = n.measured?.height ?? n.height ?? 0
         const seen = !n.hidden && n.position.x < view.x1 && n.position.x + w > view.x0 && n.position.y < view.y1 && n.position.y + h > view.y0
-        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || ''] as Row
+        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled] as Row
       }),
     )
   })
@@ -235,7 +245,7 @@ export function BoardAgent() {
 
   const cards: Built[] = useMemo(() => {
     const spaceOfId = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
-    return (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color]) => {
+    return (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled]) => {
       let title = KIND[type] ?? type
       let file: string | undefined
       let url: string | undefined
@@ -271,6 +281,8 @@ export function BoardAgent() {
         ...(selected ? { selected: true } : {}),
         ...(inView ? { inView: true } : {}),
         ...(folded ? { folded: true } : {}),
+        ...(tucked ? { tucked: true } : {}),
+        ...(veiled ? { hidden: true } : {}),
         ...(sticky ? { color: color === 'ink' || !color ? 'charcoal' : color } : {}),
         ...(file ? { file } : {}),
         ...(url ? { url } : {}),
@@ -355,6 +367,8 @@ export function BoardAgent() {
             }
             onColor={c.value.kind === 'sticky note' ? color => board.setColor(c.id, color) : undefined}
             onRemove={() => board.removeCard(c.id)}
+            onTuck={t => (t ? board.tuck([c.id]) : board.untuck(c.id))}
+            onVeil={v => board.setVeiled([c.id], v)}
           />
         </Fragment>
       ))}

@@ -5,7 +5,7 @@ import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, SelectionM
 import '@xyflow/react/dist/base.css'
 import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
-import { BoardProvider, fitsContent, foldNode, isSticky, resizingRef, toNode, useBoard, type CardNode } from './board'
+import { BoardProvider, offBoard, fitsContent, foldNode, isSticky, resizingRef, toNode, useBoard, type CardNode } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
@@ -30,6 +30,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { SpaceSwitcher } from './views/SpaceSwitcher'
+import { TuckedTray } from './views/TuckedTray'
 import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
 
@@ -59,6 +60,7 @@ export function App() {
           <UsageAsk />
           <CornerTools />
           <SpaceSwitcher />
+          <TuckedTray />
           <BoardAgent />
           <Toast />
           <Badge />
@@ -74,7 +76,7 @@ function Canvas({ initial }: { initial: Board }) {
   const rf = useReactFlow<CardNode>()
   // cards of other spaces are there, hidden
   const [nodes, , onNodesChange] = useNodesState<CardNode>(
-    useMemo(() => initial.cards.map(c => ({ ...toNode(c), hidden: (c.space || 'main') !== (initial.space || 'main') })), [initial]),
+    useMemo(() => initial.cards.map(c => ({ ...toNode(c), hidden: offBoard(c, initial.space || 'main') })), [initial]),
   )
 
   const onChange = useCallback(
@@ -310,6 +312,14 @@ function Canvas({ initial }: { initial: Board }) {
           if (i < board.spaces.length - 1) board.switchSpace(board.spaces[i + 1].id)
         },
         s: () => emit('spaces-open'),
+        // hide the selected cards' contents (sharing the screen), or show them again
+        h: () => {
+          if (!picked.length) return board.toast('Select a card first, then H hides its contents')
+          board.setVeiled(
+            picked.map(n => n.id),
+            !picked.every(n => n.data.veiled),
+          )
+        },
         '?': () => board.setKeysOpen(true),
       }
       const fn = run[e.key.toLowerCase()]

@@ -3,7 +3,7 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { NodeResizer, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -77,6 +77,8 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const node = useNodesData<CardNode>(nodeId || '')
   const folded = !!node?.data.folded
   const locked = !!node?.data.locked
+  const veiled = !!node?.data.veiled
+  const toggleVeil = () => nodeId && board.setVeiled([nodeId], !veiled)
   const min = minSize((node?.type || 'item') as CardType, node?.data.ref || '')
   // fits its content now (Snippets, until a height is dragged by hand)
   const fits = !!autoHeight && !node?.data.sized
@@ -119,6 +121,8 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     { label: board.focusing ? 'Bring everything back' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
     { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
     { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) },
+    { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },
+    { label: 'Tuck away at the top', icon: ArrowUpToLine, run: () => nodeId && board.tuck([nodeId]) },
     {
       label: 'Fit to contents',
       icon: Shrink,
@@ -239,12 +243,14 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
               fits && 'is-auto',
               locked && 'is-locked',
               sticky && `is-sticky paper-${sticky}`,
+              veiled && 'is-veiled',
             )}
           >
             {sticky ? (
               <header className="card-head sticky-strip card-drag" onDoubleClick={onExpand} title={onExpand ? 'Double-click to open full screen' : undefined}>
                 <span className="sticky-strip-text">{stripText}</span>
                 <div className="card-actions nodrag flex items-center gap-0.5">
+                  <IconButton icon={veiled ? Eye : EyeOff} label={veiled ? 'Show its contents' : 'Hide its contents (H)'} onClick={toggleVeil} className={cn('veil-btn', veiled && 'veil-on')} />
                   {quick}
                   {lockBadge}
                   {menu}
@@ -263,6 +269,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
                 </div>
                 <div className="card-actions nodrag flex items-center gap-0.5">
                   {!folded && quick}
+                  <IconButton icon={veiled ? Eye : EyeOff} label={veiled ? 'Show its contents' : 'Hide its contents (H)'} onClick={toggleVeil} className={cn('veil-btn', veiled && 'veil-on')} />
                   {lockBadge}
                   <IconButton icon={folded ? ChevronsUpDown : ChevronsDownUp} label={folded ? 'Unfold' : 'Fold to its title'} onClick={toggleFold} />
                   {menu}
@@ -273,6 +280,13 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
             <div className={cn('card-body nodrag nowheel nopan nokey', bodyClassName)} hidden={folded}>
               {children}
             </div>
+            {/* contents hidden (sharing the screen): a click shows them again */}
+            {veiled && !folded && (
+              <button type="button" className="veil nodrag" onClick={toggleVeil} aria-label="Hidden. Click to show">
+                <EyeOff className="size-4" strokeWidth={1.75} />
+                <span>Hidden</span>
+              </button>
+            )}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent className="w-60">{items(ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut)}</ContextMenuContent>

@@ -44,7 +44,7 @@ export const SNIPPETS_MIN_H = 160
 export const FOLDED_H = 46
 
 /** openH: the height a folded card goes back to when it's unfolded. */
-export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string }
+export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean }
 export type CardNode = Node<CardData, CardType>
 
 /** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
@@ -60,7 +60,7 @@ export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}) },
   width: c.w,
   height: c.folded ? FOLDED_H : AUTO_HEIGHT.has(c.type) && !keepsSize(c) ? undefined : c.h,
   dragHandle: '.card-drag',
@@ -80,7 +80,12 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.color ? { color: n.data.color } : {}),
   ...(n.data.sized ? { sized: true } : {}),
   ...(n.data.space && n.data.space !== 'main' ? { space: n.data.space } : {}),
+  ...(n.data.tucked ? { tucked: true } : {}),
+  ...(n.data.veiled ? { veiled: true } : {}),
 })
+
+/** Off the board right now: in another space, or tucked away at the top edge. */
+export const offBoard = (c: { space?: string; tucked?: boolean }, space: string) => (c.space || 'main') !== space || !!c.tucked
 
 /** The space a card is in. */
 export const spaceOf = (n: { data: CardData }) => n.data.space || 'main'
@@ -237,6 +242,12 @@ interface Ctx {
   comments: Record<string, CardComment[]>
   addComment: (card: string, text: string, by?: 'you' | 'Claude') => Promise<void>
   removeComment: (id: string) => Promise<void>
+  /** Tucks cards away: tabs at the top edge of the screen, off the board, until brought back. */
+  tuck: (ids: string[]) => void
+  /** Brings a tucked card back to where it was. */
+  untuck: (id: string) => void
+  /** Hides (blurs) cards' contents, or shows them again: for sharing the screen. */
+  setVeiled: (ids: string[], veiled: boolean) => void
 }
 
 const BoardCtx = createContext<Ctx | null>(null)
@@ -388,7 +399,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const kept = new Set(layout.map(c => c.id))
       for (const n of nodes) if (!kept.has(n.id) && isSticky(n.type, n.data.ref)) discardIfEmpty(n.data.ref)
       glide()
-      rf.setNodes(layout.map(c => ({ ...toNode(c), hidden: (c.space || 'main') !== spaceRef.current, selected: picked.has(c.id) })))
+      rf.setNodes(layout.map(c => ({ ...toNode(c), hidden: offBoard(c, spaceRef.current), selected: picked.has(c.id) })))
       persist()
     },
     [rf, glide, persist, discardIfEmpty],
@@ -423,6 +434,56 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     [rf],
   )
 
+  // ---- tucked away, contents hidden ---------------------------------------------------------------------------
+  const tuck = useCallback(
+    (ids: string[]) => {
+      const set = new Set(ids)
+      if (!set.size) return
+      remember()
+      rf.setNodes(ns => ns.map(n => (set.has(n.id) ? { ...n, hidden: true, selected: false, data: { ...n.data, tucked: true } } : n)))
+      persist()
+      toast(set.size === 1 ? 'Tucked away at the top' : `${set.size} cards tucked away at the top`, { label: 'Undo', run: () => undoRef.current() })
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf, remember, persist, toast],
+  )
+  const untuck = useCallback(
+    (id: string) => {
+      const n = rf.getNode(id)
+      if (!n) return
+      remember()
+      const { tucked: _t, ...data } = n.data
+      rf.setNodes(ns => ns.map(x => (x.id === id ? { ...x, hidden: false, selected: true, data: { ...data, pulse: Date.now() } } : { ...x, selected: false })))
+      persist()
+      // back where it was; the view goes to it only if that's out of sight
+      requestAnimationFrame(() => {
+        const m = rf.getNode(id)
+        if (!m) return
+        const w = m.measured?.width ?? m.width ?? 400
+        const h = m.measured?.height ?? m.height ?? 300
+        const a = rf.flowToScreenPosition(m.position)
+        const z = rf.getZoom()
+        const seen = a.x < innerWidth && a.y < innerHeight && a.x + w * z > 0 && a.y + h * z > 0
+        if (!seen) rf.setCenter(m.position.x + w / 2, m.position.y + h / 2, { zoom: z, duration: 320 })
+      })
+    },
+    [rf, remember, persist],
+  )
+  const setVeiled = useCallback(
+    (ids: string[], veiled: boolean) => {
+      const set = new Set(ids)
+      rf.setNodes(ns =>
+        ns.map(n => {
+          if (!set.has(n.id)) return n
+          const { veiled: _v, ...data } = n.data
+          return { ...n, data: veiled ? { ...data, veiled: true } : data }
+        }),
+      )
+      persist()
+    },
+    [rf, persist],
+  )
+
   const addCard = useCallback(
     (type: CardType, ref: string, opts: PlaceOpts = {}) => {
       track(`card.${type}`)
@@ -430,7 +491,9 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       // already here: shown; in another space: it comes to this one, to a free spot
       const moving = existing && spaceOf(existing) !== spaceRef.current ? existing : null
       if (existing && !moving) {
-        focus(existing.id)
+        // tucked away: it comes back out
+        if (existing.data.tucked) untuck(existing.id)
+        else focus(existing.id)
         return existing.id
       }
       remember()
@@ -452,7 +515,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const here = spaceRef.current === 'main' ? {} : { space: spaceRef.current }
       const id = moving ? moving.id : `${type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
       if (moving) {
-        const { space: _from, ...data } = moving.data
+        const { space: _from, tucked: _t, ...data } = moving.data
         rf.setNodes(ns => ns.map(n => (n.id === id ? { ...n, position: pos, hidden: false, selected: true, data: { ...data, ...here, pulse: Date.now() } } : { ...n, selected: false })))
       } else
         rf.setNodes(ns => [
@@ -464,7 +527,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       persist()
       return id
     },
-    [rf, focus, persist, remember],
+    [rf, focus, persist, remember, untuck],
   )
 
   const toggleFocusRef = useRef<(id?: string) => void>(() => {})
@@ -752,7 +815,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const viewport = rf.getViewport()
       setSpaces(spacesRef.current.map(x => (x.id === spaceRef.current ? { ...x, viewport } : x)))
       setSpace(id)
-      rf.setNodes(ns => ns.map(n => ({ ...n, hidden: spaceOf(n) !== id, selected: false })))
+      rf.setNodes(ns => ns.map(n => ({ ...n, hidden: offBoard({ space: spaceOf(n), tucked: n.data.tucked }, id), selected: false })))
       requestAnimationFrame(() => {
         if (target.viewport) rf.setViewport(target.viewport)
         else if (rf.getNodes().some(n => spaceOf(n) === id)) rf.fitView({ padding: 0.15, maxZoom: 1 })
@@ -808,7 +871,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
           if (spaceOf(n) !== id) return n
           moved++
           const { space: _gone, ...data } = n.data
-          return { ...n, data, hidden: spaceRef.current !== 'main' }
+          return { ...n, data, hidden: offBoard({ tucked: data.tucked }, spaceRef.current) }
         }),
       )
       persist()
@@ -838,7 +901,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       rf.setNodes(ns =>
         ns.map(n => {
           if (!set.has(n.id)) return n
-          const { space: _from, ...data } = n.data
+          const { space: _from, tucked: _t, ...data } = n.data
           return { ...n, position: spots.get(n.id) ?? n.position, data: to === 'main' ? data : { ...data, space: to }, hidden: to !== spaceRef.current, selected: false }
         }),
       )
@@ -1028,9 +1091,9 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
       showImage, items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
-      comments: commentsData.data?.cards || {}, addComment, removeComment,
+      comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment],
+    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

@@ -29,6 +29,7 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
       { keys: ['Space'], what: 'Open the selected one full screen' },
       { keys: ['F2'], what: 'Give a note a title, or rename it' },
       { keys: ['F'], what: 'Fold or unfold them' },
+      { keys: ['H'], what: 'Hide their contents, or show them (sharing the screen)' },
       { keys: ['Ctrl', 'Shift', 'L'], what: 'Lock them in place, or unlock them' },
       { keys: ['Delete'], what: 'Take them off the board' },
     ],
