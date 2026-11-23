@@ -3,7 +3,7 @@
 // What's kept: how many times each feature was used each day (a fixed list of names, below), the Cockpit version and
 // the Windows build, under a random id made on this PC. Never what's on your board: no text, titles, links, paths or
 // file names. It's sent once a day, as one event per day, to the project's PostHog (EU). "See what's sent" in Settings
-// shows the exact data.
+// shows the exact data. PostHog is told not to look up where it came from ($geoip_disable): no city or country.
 //
 // Where it goes is set in package.json ("cockpitTelemetry": { host, key }). With no key (a fork, a dev build without
 // one) nothing is counted, nothing is asked and nothing is sent.
@@ -95,7 +95,7 @@ export function preview(s = readState(), at = new Date()) {
       event: 'daily_usage',
       distinct_id: s.id,
       timestamp: `${day}T12:00:00Z`,
-      properties: { day, ...counts, version: VERSION, windows: os.release(), $process_person_profile: false },
+      properties: { day, ...counts, version: VERSION, windows: os.release(), $process_person_profile: false, $geoip_disable: true },
     }))
 }
 

@@ -940,7 +940,7 @@ test('telemetry: nothing without a key or a yes; only counts are sent, and a no 
   assert.equal(r.sent, 1)
   assert.match(sent.url, /\/batch\/$/)
   const props = sent.body.batch[0].properties
-  assert.deepEqual(Object.keys(props).sort(), ['$process_person_profile', 'app.open', 'day', 'sticky.new', 'version', 'windows'].sort(), 'only counts, the day, the version and the Windows build')
+  assert.deepEqual(Object.keys(props).sort(), ['$geoip_disable', '$process_person_profile', 'app.open', 'day', 'sticky.new', 'version', 'windows'].sort(), 'only counts, the day, the version and the Windows build')
   assert.deepEqual(t.readState().days, {}, 'sent days are forgotten')
   assert.equal((await t.sendDue({ post: async () => assert.fail('nothing to send') })).sent, 0)
 
