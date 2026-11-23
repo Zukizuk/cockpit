@@ -20,7 +20,7 @@ export const EVENTS = new Set([
   'card.later', 'card.snippets', 'card.tasks', 'card.tracker', 'card.outputs', 'card.note', 'card.item', 'card.command',
   'sticky.new', 'note.title', 'journal.open', 'journal.past',
   'later.link', 'later.note', 'later.done',
-  'item.fullscreen', 'item.link', 'item.file',
+  'item.fullscreen', 'item.compare', 'item.link', 'item.file',
   'snippet.add', 'snippet.copy',
   'quick.open', 'quick.pin',
   'board.tidy', 'board.undo', 'board.lock', 'board.foldall', 'board.menu',

@@ -58,7 +58,7 @@ function fold(rows: Row[], context: number, open: Set<number>): Row[] {
   return out
 }
 
-export function CompareView({ before, after, leftName, rightName }: { before: string; after: string; leftName: string; rightName: string }) {
+export function CompareView({ before, after, leftName, rightName, tags = ['Before', 'After'] }: { before: string; after: string; leftName: string; rightName: string; tags?: [string, string] }) {
   const [open, setOpen] = useState<Set<number>>(new Set())
   const rows = useMemo(() => buildRows(before, after), [before, after])
   const changed = rows.filter(r => r.kind !== 'same').length
@@ -67,10 +67,10 @@ export function CompareView({ before, after, leftName, rightName }: { before: st
     <div className="compare">
       <div className="compare-head">
         <div>
-          <span className="tag-before">Before</span> {leftName}
+          <span className="tag-before">{tags[0]}</span> {leftName}
         </div>
         <div>
-          <span className="tag-after">After</span> {rightName}
+          <span className="tag-after">{tags[1]}</span> {rightName}
         </div>
       </div>
       {changed === 0 && <p className="compare-same">The two files are the same.</p>}

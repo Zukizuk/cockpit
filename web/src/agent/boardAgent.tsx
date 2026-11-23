@@ -48,6 +48,7 @@ type BoardOptions = {
   onTidy?: () => void
   onFocusOn?: (cards: string[]) => void
   onBringBack?: () => void
+  onCompare?: (cards: string[]) => void
 }
 
 /** Rows an agent gives: an array of arrays (the first is the header), or text (tab-separated, Markdown or CSV). */
@@ -59,7 +60,7 @@ function rowsOf(rows: unknown): string[][] {
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -91,6 +92,11 @@ const boardPrimitive = definePrimitive({
         call('onFocusOn')(list)
       },
       bringBack: () => call('onBringBack')(),
+      compare: (a: unknown, b: unknown) => {
+        const list = [a, b].flat().map(words).filter(Boolean)
+        if (list.length !== 2) throw new Error('Name the two cards to compare.')
+        call('onCompare')(list)
+      },
       addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
@@ -99,7 +105,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -497,6 +503,12 @@ export function BoardAgent() {
           said(ids.length > 1 ? `Claude put ${ids.length} cards in focus` : 'Claude put a card in focus')
         }}
         onBringBack={() => board.focusing && board.toggleFocus()}
+        onCompare={titles => {
+          // full screen, side by side, in the order named (the first on the left)
+          const [a, b] = titles.map(t => pick(cards, t, c => c.id, c => c.title, 'card').id)
+          board.compareCards([a, b], true)
+          said('Claude put two cards side by side')
+        }}
         onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t })).then(id => place(id, s))}
         onAddTable={
           board.prefs.extras.tables

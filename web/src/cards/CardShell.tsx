@@ -3,7 +3,7 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { NodeResizer, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -85,7 +85,8 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const locked = !!node?.data.locked
   const veiled = !!node?.data.veiled
   // several cards picked (a drag on the board): their outline says so; resize corners only for one
-  const manyPicked = useStore(s => s.nodes.reduce((k, n) => k + (n.selected ? 1 : 0), 0) > 1)
+  const pickedCount = useStore(s => s.nodes.reduce((k, n) => k + (n.selected ? 1 : 0), 0))
+  const manyPicked = pickedCount > 1
   const toggleVeil = () => nodeId && board.setVeiled([nodeId], !veiled)
   const min = minSize((node?.type || 'item') as CardType, node?.data.ref || '')
   // fits its content now (Snippets, until a height is dragged by hand)
@@ -130,6 +131,13 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     ...here,
     { label: folded ? 'Unfold' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, hidden: !!sticky, keys: 'F', gap: here.length > 0 },
     { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
+    {
+      label: 'Compare side by side',
+      icon: SquareSplitHorizontal,
+      run: () => board.compareCards(rf.getNodes().filter(n => n.selected).map(n => n.id)),
+      hidden: !(selected && pickedCount === 2),
+      keys: 'Space',
+    },
     { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
     { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) },
     { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },

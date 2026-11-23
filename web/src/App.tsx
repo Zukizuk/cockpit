@@ -264,6 +264,11 @@ function Canvas({ initial }: { initial: Board }) {
         e.preventDefault()
         board.expand({ type: one.type, ref: one.data.ref })
       }
+      // two picked: side by side
+      if (e.key === ' ' && picked.length === 2) {
+        e.preventDefault()
+        board.compareCards(picked.map(n => n.id))
+      }
       // Alt+1 to 9: that space
       if (e.altKey && !ctrl && /^[1-9]$/.test(e.key)) {
         const to = board.spaces[Number(e.key) - 1]

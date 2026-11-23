@@ -127,7 +127,10 @@ export function freeSpot(pos: { x: number; y: number }, size: { w: number; h: nu
   return pos
 }
 
-export type Expanded = { type: 'item' | 'note'; ref: string } | null
+/** Something that opens full screen: a kept file or page, or a note. */
+export type Shown = { type: 'item' | 'note'; ref: string }
+/** Full screen: one thing, or two side by side (beside, on the right) to compare. */
+export type Expanded = (Shown & { beside?: Shown }) | null
 /** Where a new card goes: beside another card (near), at a point on the board (at, where something was dropped), or else the middle. */
 export type PlaceOpts = { near?: string; at?: { x: number; y: number }; size?: { w: number; h: number } }
 /** Something from Quick access: a pin or an often-opened thing. */
@@ -183,6 +186,8 @@ interface Ctx {
   focusing: boolean
   /** Focus on a card, or several side by side (the selected ones if none are named); again: everything back. */
   toggleFocus: (id?: string | string[]) => void
+  /** Two cards full screen side by side, the one further left on the left. Only files, pages and notes open full screen. */
+  compareCards: (ids: string[], inOrder?: boolean) => void
   /** Packs every card (but locked ones) from the top-left of the screen, sizes and order kept. */
   tidy: () => void
   /** The keyboard shortcuts list. */
@@ -1044,9 +1049,22 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   // Full screen, counted: what is kept being read in Cockpit shows up in Quick access by itself
   const expand = useCallback((e: Expanded) => {
     setExpanded(e)
-    if (e) track('item.fullscreen')
+    if (e) track(e.beside ? 'item.compare' : 'item.fullscreen')
     if (e) post('/api/usage', e.type === 'note' ? { note: e.ref } : { id: e.ref }).catch(() => {})
   }, [])
+
+  const compareCards = useCallback(
+    (ids: string[], inOrder?: boolean) => {
+      const cards = ids.map(id => rf.getNode(id) as CardNode | undefined).filter((n): n is CardNode => !!n)
+      if (cards.length !== 2) return toast('Pick two cards to compare')
+      const odd = cards.find(n => n.type !== 'item' && n.type !== 'note')
+      if (odd) return toast('Only files, pages and notes open side by side')
+      const [a, b] = inOrder ? cards : [...cards].sort((x, y) => x.position.x - y.position.x)
+      if (a.type === b.type && a.data.ref === b.data.ref) return toast('Those two cards show the same thing')
+      expand({ type: a.type as Shown['type'], ref: a.data.ref, beside: { type: b.type as Shown['type'], ref: b.data.ref } })
+    },
+    [rf, toast, expand],
+  )
 
   /** Reads a pin full screen in Cockpit (a file Cockpit can show, a page, a note) instead of its own program. */
   const readPin = useCallback(
@@ -1116,7 +1134,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const value = useMemo<Ctx>(
     () => ({
       addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
-      keysOpen, setKeysOpen, focusing, toggleFocus, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
+      keysOpen, setKeysOpen, focusing, toggleFocus, compareCards, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
@@ -1124,7 +1142,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled],
+    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

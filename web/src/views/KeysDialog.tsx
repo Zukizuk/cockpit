@@ -26,7 +26,7 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
     title: 'Selected cards',
     keys: [
       { keys: ['Enter'], what: 'Write in the selected one (or just start typing)' },
-      { keys: ['Space'], what: 'Open the selected one full screen' },
+      { keys: ['Space'], what: 'Open the selected one full screen (two selected: side by side)' },
       { keys: ['F2'], what: 'Give a note a title, or rename it' },
       { keys: ['F'], what: 'Fold or unfold them' },
       { keys: ['H'], what: 'Hide their contents, or show them (sharing the screen)' },

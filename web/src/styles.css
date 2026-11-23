@@ -3410,3 +3410,75 @@ table.data tbody tr:hover td {
 body:has(.focus-bar) .toast {
   bottom: 124px;
 }
+
+/* ---- side by side: two pages full screen ---------------------------------------------------------------------- */
+.reader.is-split {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.reader-halves {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.reader.is-split > .reader-side,
+.reader-halves > .reader-side {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.reader.is-split > .reader-side {
+  flex: 1;
+}
+.reader-halves > .reader-side:first-child {
+  flex-shrink: 0;
+  flex-grow: 0;
+}
+.reader-side .reader-page,
+.reader-side .reader-page.wide {
+  width: calc(100% - 40px);
+  max-width: 1320px;
+}
+.reader-divider {
+  position: relative;
+  flex: 0 0 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.reader-divider::after {
+  content: '';
+  position: absolute;
+  inset: 14px 5px;
+  border-radius: 1px;
+  background: oklch(var(--contrast) / 0.1);
+  transition: background-color 150ms var(--ease-out);
+}
+.reader-divider:hover::after,
+body.col-resizing .reader-divider::after {
+  background: var(--color-primary);
+}
+.compare-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  translate: -50% 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 13px;
+}
+@media (max-width: 900px) {
+  .reader-halves {
+    flex-direction: column;
+  }
+  .reader-halves > .reader-side:first-child {
+    flex: 1 1 50% !important;
+  }
+  .reader-divider {
+    display: none;
+  }
+}

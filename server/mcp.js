@@ -28,7 +28,8 @@ const BOARD_NOTE =
   'without moving the user there (make the space first with newSpace if it is new); tidy() lines the cards up, as the ' +
   "user's Ctrl+Alt+T does; focusOn(cards) puts one card or several (an array of titles, side by side in that order) " +
   "in focus, every other card folded into a column on the left, and bringBack() puts everything back where it was " +
-  "(the board's focus lists the cards in focus). Each card is a component (card) named by its title " +
+  "(the board's focus lists the cards in focus); compare(cardA, cardB) opens two files, pages or notes full screen " +
+  "side by side (cardA on the left) for the user to read and compare, notes still editable. Each card is a component (card) named by its title " +
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
   'its value has kind, space, selected, inView, folded, color (sticky notes), file or url, peek (its first lines) and ' +
   'comments; actions comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), ' +
