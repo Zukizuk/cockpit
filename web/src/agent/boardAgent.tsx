@@ -41,10 +41,10 @@ type BoardOptions = {
   onSwitchSpace?: (space: string) => void
   onNewSpace?: (name: string) => void
   onRenameSpace?: (space: string, name: string) => void
-  onAddSticky?: (text: string) => void
+  onAddSticky?: (text: string, space?: string) => void
   onJot?: (text: string) => void
-  onShow?: (target: string) => void
-  onAddTable?: (title: string, rows: string[][]) => void
+  onShow?: (target: string, space?: string) => void
+  onAddTable?: (title: string, rows: string[][], space?: string) => void
 }
 
 /** Rows an agent gives: an array of arrays (the first is the header), or text (tab-separated, Markdown or CSV). */
@@ -67,6 +67,8 @@ const boardPrimitive = definePrimitive({
       return fn as NonNullable<BoardOptions[K]>
     }
     const space = (which: string) => pick(v().spaces, which, s => s.name, s => s.name, 'space').name
+    // another space to put it in (the user stays where they are); none: the one shown
+    const into = (which: unknown) => (words(which) ? space(words(which)) : undefined)
     const text = (t: unknown, what = 'text') => {
       const w = words(t)
       if (!w) throw new Error(`Give the ${what}.`)
@@ -76,13 +78,13 @@ const boardPrimitive = definePrimitive({
       switchSpace: (s: string) => call('onSwitchSpace')(space(s)),
       newSpace: (name: string) => call('onNewSpace')(text(name, 'name')),
       renameSpace: (s: string, name: string) => call('onRenameSpace')(space(s), text(name, 'new name')),
-      addSticky: (t: string) => call('onAddSticky')(text(t, 'note')),
+      addSticky: (t: string, s?: string) => call('onAddSticky')(text(t, 'note'), into(s)),
       jot: (t: string) => call('onJot')(text(t, 'thought')),
-      show: (target: string) => call('onShow')(text(target, 'path or link')),
-      addTable: (title: string, rows: unknown) => {
+      show: (target: string, s?: string) => call('onShow')(text(target, 'path or link'), into(s)),
+      addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
-        fn(words(title) || 'Table', rowsOf(rows))
+        fn(words(title) || 'Table', rowsOf(rows), into(s))
       },
     }
   },
@@ -401,6 +403,12 @@ export function BoardAgent() {
     said(done)
   }
 
+  // made for another space: it goes there (the user's view stays where it is; the toast says where it went)
+  const place = (id: string | undefined, space?: string) => {
+    if (!id || !space || spaceId(space) === board.space) return
+    board.moveToSpace([id], spaceId(space))
+  }
+
   const focus = (id: string) => {
     const n = rf.getNode(id)
     if (!n) return
@@ -420,14 +428,15 @@ export function BoardAgent() {
           said(`Claude made the space "${name}"`)
         }}
         onRenameSpace={(s, name) => board.renameSpace(spaceId(s), name)}
-        onAddSticky={t => board.newSticky(t)}
+        onAddSticky={(t, s) => void board.newSticky(t).then(id => place(id, s))}
         onJot={t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message))}
-        onShow={t => (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t }))}
+        onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t })).then(id => place(id, s))}
         onAddTable={
           board.prefs.extras.tables
-            ? (title, rows) =>
+            ? (title, rows, s) =>
                 void newTable(board, { title, rows }).then(id => {
-                  if (id) said(`Claude made the table "${title}"`)
+                  if (id && !s) said(`Claude made the table "${title}"`)
+                  place(id, s)
                 })
             : undefined
         }

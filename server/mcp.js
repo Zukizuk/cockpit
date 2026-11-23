@@ -23,8 +23,9 @@ const BOARD_NOTE =
   "call board_snapshot: those cards have selected: true or inView: true, and 'Board' lists their titles. " +
   'Use the full snapshot for an overview. ' +
   "Components: 'Board' (board: the spaces with their card counts, the space shown, selected and in-view titles; " +
-  "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text), jot(text) into today's " +
-  'journal, show(pathOrUrl) to put a file or link on the board). Each card is a component (card) named by its title ' +
+  "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text, space?), jot(text) into today's " +
+  'journal, show(pathOrUrl, space?) to put a file or link on the board; give space to put it in another space ' +
+  'without moving the user there (make the space first with newSpace if it is new). Each card is a component (card) named by its title ' +
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
   'its value has kind, space, selected, inView, folded, color (sticky notes), file or url, peek (its first lines) and ' +
   'comments; actions comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), rename(title) ' +
@@ -38,7 +39,7 @@ const BOARD_NOTE =
   "and the board follows. The user's comments on a card may be for you: answer with the card's comment(). " +
   "Every removal waits for the user to allow it in Cockpit. If 'Today's tasks' is missing, the Today card is not on " +
   'the board (the user can press T). ' +
-  "Tables (an extra the user turns on in Settings > Extras): Board's addTable(title, rows) puts a new table on the " +
+  "Tables (an extra the user turns on in Settings > Extras): Board's addTable(title, rows, space?) puts a new table on the " +
   'board, rows being an array of arrays of text with the header first; use it when the user wants something compared ' +
   "or listed in a table they can edit. A table card's value has rows (header first) and rowCount; its actions are " +
   'setCell(row, column, text) (row: its number from 1 under the header, or its first cell; column: its heading or ' +

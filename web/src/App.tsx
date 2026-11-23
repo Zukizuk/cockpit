@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, SelectionMode, useNodesState, useReactFlow, useStore, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
+import { Bookmark, ChevronRight, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
 import { BoardProvider, offBoard, fitsContent, foldNode, isSticky, resizingRef, toNode, useBoard, type CardNode } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
 import { NoteCard } from './cards/NoteCard'
-import { OutputsCard, OutputsList, newSinceOf, summary } from './cards/OutputsCard'
+import { KindChips, OutputsCard, OutputsList, chatOf, newSinceOf, type KindFilter } from './cards/OutputsCard'
 import { TrackerCard } from './cards/WorkCards'
 import { TasksCard } from './cards/TasksCard'
 import { CommandCard } from './cards/CommandCard'
@@ -625,6 +625,25 @@ function OutputsSheet() {
     if (unseen.length) Promise.all(unseen.map(g => post(`/api/outputs/${g.id}`, { seen: true }))).then(board.reloadOutputs, () => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [board.outputsOpen, board.outputs])
+  // each chat folds; the newest is open, the others folded, unless opened or folded by hand (kept in this browser)
+  const [folds, setFolds] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('cockpit.outputs.folds') || '{}') || {}
+    } catch {
+      return {}
+    }
+  })
+  const isOpen = (id: string, n: number) => folds[id] ?? n === 0
+  const toggle = (id: string, n: number) =>
+    setFolds(f => {
+      const next = { ...f, [id]: !(f[id] ?? n === 0) }
+      try {
+        const live = Object.fromEntries(Object.entries(next).filter(([k]) => board.outputs.some(g => g.id === k)))
+        localStorage.setItem('cockpit.outputs.folds', JSON.stringify(live))
+      } catch {}
+      return next
+    })
+  const [filters, setFilters] = useState<Record<string, KindFilter>>({})
   const clear = async (id: string) => {
     await post(`/api/outputs/${id}`, { hidden: true })
     board.reloadOutputs()
@@ -648,16 +667,18 @@ function OutputsSheet() {
         </SheetHeader>
         <div className="grid min-w-0 grid-cols-1 gap-3 overflow-x-hidden overflow-y-auto px-3 pb-6">
           {!board.outputs.length && <p className="px-2 text-[13.5px] text-muted-foreground">Nothing here. Each chat's files, links, drafts and commands arrive as its turns end.</p>}
-          {board.outputs.map(g => (
-            <section key={g.id} className="out-group min-w-0">
+          {board.outputs.map((g, n) => (
+            <section key={g.id} className={cn('out-group min-w-0', !isOpen(g.id, n) && 'is-folded')}>
               <header className="group/head flex items-center gap-2 px-2 pb-1">
-                <Sparkles className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13.5px] font-medium">{summary(g)}</div>
-                  <div className="truncate text-[11.5px] text-muted-foreground">
-                    {g.from} · {ago(g.updatedAt || g.createdAt)}
-                  </div>
-                </div>
+                <button type="button" className="out-fold" aria-expanded={isOpen(g.id, n)} onClick={() => toggle(g.id, n)}>
+                  <ChevronRight className="out-fold-chev size-3.5 shrink-0 text-muted-foreground" strokeWidth={2} />
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block truncate text-[13.5px] font-medium">{chatOf(g)}</span>
+                    <span className="block truncate text-[11.5px] text-muted-foreground">
+                      {g.items.length} {g.items.length === 1 ? 'thing' : 'things'} · {ago(g.updatedAt || g.createdAt)}
+                    </span>
+                  </span>
+                </button>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -683,7 +704,12 @@ function OutputsSheet() {
                   <TooltipContent>Clear</TooltipContent>
                 </Tooltip>
               </header>
-              <OutputsList group={g} onView={() => board.setOutputsOpen(false)} newSince={since[g.id]} />
+              {isOpen(g.id, n) && (
+                <>
+                  <KindChips group={g} value={filters[g.id] || 'all'} onChange={f => setFilters(m => ({ ...m, [g.id]: f }))} />
+                  <OutputsList group={g} onView={() => board.setOutputsOpen(false)} newSince={since[g.id]} filter={filters[g.id] || 'all'} />
+                </>
+              )}
             </section>
           ))}
         </div>

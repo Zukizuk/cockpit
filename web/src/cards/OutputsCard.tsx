@@ -41,6 +41,44 @@ export function summary(g: OutputGroup) {
   return `Made ${parts.join(', ')}`
 }
 
+/** The chat a group came from, without "Claude · " (its folder or title). */
+export const chatOf = (g: OutputGroup) => g.from.replace(/^Claude · /, '') || 'Claude'
+
+/** What a group holds, by kind: each a filter. */
+export type KindFilter = 'all' | 'file' | 'link' | 'draft' | 'command'
+const KINDS: { kind: Exclude<KindFilter, 'all'>; one: string; many: string }[] = [
+  { kind: 'file', one: 'file', many: 'files' },
+  { kind: 'link', one: 'link', many: 'links' },
+  { kind: 'draft', one: 'draft', many: 'drafts' },
+  { kind: 'command', one: 'command', many: 'commands' },
+]
+const kindOf = (i: OutputItem): Exclude<KindFilter, 'all'> => (i.kind === 'prompt' ? 'draft' : i.kind)
+const matches = (i: OutputItem, f: KindFilter) => f === 'all' || kindOf(i) === f
+
+/** "36 files", "18 links"…: what a group made, each a chip that shows only those (a second click shows everything). */
+export function KindChips({ group, value, onChange }: { group: OutputGroup; value: KindFilter; onChange: (f: KindFilter) => void }) {
+  const counts = KINDS.map(k => ({ ...k, n: group.items.filter(i => kindOf(i) === k.kind).length })).filter(k => k.n)
+  if (counts.length < 2) return null
+  return (
+    <div className="kind-chips" role="group" aria-label="Show only">
+      {counts.map(k => (
+        <button
+          key={k.kind}
+          type="button"
+          aria-pressed={value === k.kind}
+          className={cn('kind-chip', value === k.kind && 'is-on')}
+          onClick={e => {
+            e.stopPropagation()
+            onChange(value === k.kind ? 'all' : k.kind)
+          }}
+        >
+          <b>{k.n}</b> {k.n === 1 ? k.one : k.many}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /** What counts as new in a group right now: turns after it was last looked at (all of it if never). */
 export const newSinceOf = (g?: OutputGroup) => (!g ? null : g.seen ? (g.seenAt ?? null) : (g.seenAt ?? ''))
 
@@ -240,9 +278,9 @@ function useCounts(group: OutputGroup) {
 }
 
 /** A group's rows, newest turn first; a dashed line and the time between turns, "New" on turns not seen yet. */
-export function OutputsList({ group, near, onView, newSince }: { group: OutputGroup; near?: string; onView?: () => void; newSince?: string | null }) {
+export function OutputsList({ group, near, onView, newSince, filter = 'all' }: { group: OutputGroup; near?: string; onView?: () => void; newSince?: string | null; filter?: KindFilter }) {
   const counts = useCounts(group)
-  const rows = group.items.map((item, index) => ({ item, index }))
+  const rows = group.items.map((item, index) => ({ item, index })).filter(r => matches(r.item, filter))
   const turns = new Set(rows.map(r => r.item.at)).size
   return (
     <div className="grid min-w-0 grid-cols-1">
@@ -273,6 +311,7 @@ export function OutputsCard({ id, data, selected }: NodeProps<CardNode>) {
   // what counted as new when the card was drawn (marking it seen must not take the badges away at once)
   const [since] = useState(() => newSinceOf(group))
   const unseen = group && !group.seen
+  const [filter, setFilter] = useState<KindFilter>('all')
   useEffect(() => {
     if (unseen) post(`/api/outputs/${data.ref}`, { seen: true }).then(board.reloadOutputs, () => {})
   }, [unseen, data.ref, board.reloadOutputs])
@@ -294,12 +333,19 @@ export function OutputsCard({ id, data, selected }: NodeProps<CardNode>) {
       pulse={data.pulse}
       born={data.born}
       icon={Sparkles}
-      title={group ? summary(group) : 'Output no longer kept'}
-      subtitle={group ? `${group.from} · ${ago(group.updatedAt || group.createdAt)}` : undefined}
+      title={group ? chatOf(group) : 'Output no longer kept'}
+      subtitle={group ? `Claude · ${ago(group.updatedAt || group.createdAt)}` : undefined}
       actions={actions}
       bodyClassName="tight"
     >
-      {group ? <OutputsList group={group} near={id} newSince={since} /> : <p className="px-2 text-[13px] text-muted-foreground">This output has been cleared.</p>}
+      {group ? (
+        <>
+          <KindChips group={group} value={filter} onChange={setFilter} />
+          <OutputsList group={group} near={id} newSince={since} filter={filter} />
+        </>
+      ) : (
+        <p className="px-2 text-[13px] text-muted-foreground">This output has been cleared.</p>
+      )}
     </CardShell>
   )
 }

@@ -15,6 +15,8 @@ Newest first. Each change is listed under New, Improved or Fixed.
   - **Tables.** A grid right on the board, from the + box: no card around it, just its name above it (drag it by that) and a + on its right and bottom edges for a column or a row. Right-click a cell to insert or delete its row or column. Type in the cells; Tab and Enter move along (Enter after Tab goes back to the row's first column, as in Excel) and add a row at the end. Paste a block copied from Excel and it fills the cells; Copy puts it back for Excel, or as Markdown for a note or a chat. Each table is a .csv file in your notes folder (tables/), so it opens in Excel too. A table taken off the board is kept, and the + box finds it by name to put it back; one you never typed in just goes. Delete table (in its menu) moves it to the notes folder's archive. Claude can make a table on your board, read it and fill it in; writing over all of it or taking a row out waits for your Allow.
 
 **Improved**
+- **Outputs, tidier.** Each chat in the Outputs panel folds: the newest is open, the rest show just their name and how much they made, and a click opens one. What a chat made ("18 links", "4 drafts"…) is shown as chips you click to see only those, in the panel and on its card on the board; the card is named after the chat.
+- Claude can put a sticky note, a file or link, or a table straight into another space ("put it in Research"), without taking you there.
 - After you select several cards by dragging, they're simply outlined: no box is left around them.
 - Claude can show you visuals (charts, diagrams, small pages) as cards, drawn safely.
 

@@ -3261,3 +3261,93 @@ table.data tbody tr:hover td {
 .card.is-bare.is-folded .tbl-free {
   display: none;
 }
+
+/* ---- Outputs: each chat folds; what it made, by kind, as filters ----------------------------------------------- */
+
+.out-group.is-folded {
+  padding-bottom: 4px;
+}
+
+.out-group.is-folded header {
+  padding-bottom: 0;
+}
+
+.out-fold {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 -4px -4px;
+  padding: 4px;
+  border-radius: 8px;
+  outline: none;
+  transition: background-color 150ms ease-out;
+}
+
+.out-fold:hover {
+  background: oklch(var(--contrast) / 0.05);
+}
+
+.out-fold:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.out-fold-chev {
+  transition: rotate 150ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.out-fold[aria-expanded='true'] .out-fold-chev {
+  rotate: 90deg;
+}
+
+.kind-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 6px 6px;
+}
+
+.kind-chip {
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  background: oklch(var(--contrast) / 0.05);
+  transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out;
+}
+
+.kind-chip b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+}
+
+.kind-chip:hover {
+  background: oklch(var(--contrast) / 0.09);
+  color: var(--foreground);
+}
+
+.kind-chip:active {
+  scale: 0.96;
+}
+
+.kind-chip.is-on {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.kind-chip.is-on b {
+  color: var(--background);
+}
+
+/* on a card, the filters stay at the top while its rows scroll */
+.card-body .kind-chips {
+  position: sticky;
+  top: -6px;
+  z-index: 2;
+  margin: -6px -6px 2px;
+  padding: 8px 12px 8px;
+  background: var(--card);
+}

@@ -170,7 +170,8 @@ interface Ctx {
   /** Names a kept thing by hand (a form whose page has no useful title, say). */
   renameItem: (id: string, title: string) => Promise<void>
   /** A new sticky note on the board, ready to type in (with some words already, if given). */
-  newSticky: (text?: string, opts?: PlaceOpts) => Promise<void>
+  /** Resolves to the new card's id (none if it failed). */
+  newSticky: (text?: string, opts?: PlaceOpts) => Promise<string | undefined>
   setColor: (id: string, color: StickyColor) => void
   /** Locks cards in place, or frees them. */
   setLocked: (ids: string[], locked: boolean) => void
@@ -639,7 +640,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     async (text = '', opts: PlaceOpts = {}) => {
       try {
         const r = await post<{ path: string }>('/api/notes/new', { kind: 'sticky', text })
-        addCard('note', r.path, opts)
+        return addCard('note', r.path, opts)
       } catch (err: any) {
         toast(err.message)
       }
