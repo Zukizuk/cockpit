@@ -11,7 +11,7 @@ import { Fragment, useMemo } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
-import { foldNode, isSticky, spaceOf, useBoard, type CardNode } from '../board'
+import { foldNode, freeSpot, isSticky, spaceOf, useBoard, type CardNode } from '../board'
 import { get, post, put, type Snippet, type StickyColor, type TableData } from '../api'
 import { newTable, rowsFromText } from '../cards/TableCard'
 import { useData } from '../lib'
@@ -45,6 +45,7 @@ type BoardOptions = {
   onJot?: (text: string) => void
   onShow?: (target: string, space?: string) => void
   onAddTable?: (title: string, rows: string[][], space?: string) => void
+  onTidy?: () => void
 }
 
 /** Rows an agent gives: an array of arrays (the first is the header), or text (tab-separated, Markdown or CSV). */
@@ -56,7 +57,7 @@ function rowsOf(rows: unknown): string[][] {
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -81,6 +82,7 @@ const boardPrimitive = definePrimitive({
       addSticky: (t: string, s?: string) => call('onAddSticky')(text(t, 'note'), into(s)),
       jot: (t: string) => call('onJot')(text(t, 'thought')),
       show: (target: string, s?: string) => call('onShow')(text(target, 'path or link'), into(s)),
+      tidy: () => call('onTidy')(),
       addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
@@ -89,7 +91,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -128,13 +130,18 @@ type CardOptions = {
   onTuck?: (tuck: boolean) => void
   onVeil?: (veil: boolean) => void
   onTable?: (change: TableChange) => Promise<void>
+  onPlaceNextTo?: (other: string, side: Side) => void
+  /** the other cards' titles (for placeNextTo) */
+  others?: string[]
 }
+export type Side = 'right' | 'left' | 'below' | 'above'
+const SIDES: Record<string, Side> = { right: 'right', left: 'left', below: 'below', under: 'below', beneath: 'below', above: 'above', over: 'above', top: 'above', bottom: 'below' }
 export type TableChange = { setCell?: [row: unknown, column: unknown, text: string]; addRows?: string[][]; setRows?: string[][]; removeRow?: unknown }
 const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', pink: 'pink', orange: 'orange', charcoal: 'ink', ink: 'ink', dark: 'ink', black: 'ink' }
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action' },
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', others: 'value' },
   state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -169,10 +176,15 @@ const cardPrimitive = definePrimitive({
       addRows: (rows: unknown) => call('onTable')({ addRows: rowsOf(rows) }),
       setRows: (rows: unknown) => call('onTable')({ setRows: rowsOf(rows) }),
       removeRow: (row: unknown) => call('onTable')({ removeRow: row }),
+      placeNextTo: (other: string, side?: string) => {
+        const s = words(side) ? SIDES[words(side).toLowerCase()] : 'right'
+        if (!s) throw new Error('A side is right, left, below or above.')
+        call('onPlaceNextTo')(pick(context.options().others || [], other, x => x, x => x, 'card'), s)
+      },
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'remove'] },
+  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'placeNextTo', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -344,6 +356,9 @@ export function BoardAgent() {
     [cards, board.spaces, board.space],
   )
   const spaceNames = useMemo(() => board.spaces.map(s => s.name), [board.spaces])
+  // every card's title, for "next to which card" (the same array while the cards stay the same)
+  const allTitles = useMemo(() => cards.map(c => [c.id, c.title] as const), [cards])
+  const titlesBut = (id: string) => allTitles.filter(([i]) => i !== id).map(([, t]) => t)
 
   const later: LaterItem[] = useMemo(
     () => board.items.filter(e => e.later).map(e => ({ id: e.id, title: e.title, ...(e.url ? { url: e.url } : {}), state: e.later === 'todo' ? 'to check' : e.later! })),
@@ -409,6 +424,37 @@ export function BoardAgent() {
     board.moveToSpace([id], spaceId(space))
   }
 
+  // a card beside another (a gap between them), in that card's space; if something is already there, the nearest free
+  // spot. It can be undone (Ctrl+Z) like any move.
+  const GAP = 28
+  const placeNextTo = (id: string, title: string, otherTitle: string, side: Side) => {
+    const other = cards.find(c => c.title === otherTitle && c.id !== id)
+    const a = rf.getNode(id)
+    const b = other && rf.getNode(other.id)
+    if (!a || !b) throw new Error(`No card "${otherTitle}" on the board.`)
+    const size = (n: CardNode) => ({ w: n.measured?.width ?? n.width ?? 400, h: n.measured?.height ?? n.height ?? 300 })
+    const sa = size(a)
+    const sb = size(b)
+    const want =
+      side === 'right' ? { x: b.position.x + sb.w + GAP, y: b.position.y }
+      : side === 'left' ? { x: b.position.x - sa.w - GAP, y: b.position.y }
+      : side === 'below' ? { x: b.position.x, y: b.position.y + sb.h + GAP }
+      : { x: b.position.x, y: b.position.y - sa.h - GAP }
+    const there = spaceOf(b)
+    const pos = freeSpot(want, sa, rf.getNodes().filter(n => n.id !== id && spaceOf(n) === there && !n.data.tucked))
+    board.remember()
+    rf.setNodes(ns =>
+      ns.map(n => {
+        if (n.id !== id) return n
+        const { space: _s, tucked: _t, ...data } = n.data
+        return { ...n, position: pos, hidden: there !== board.space, data: there === 'main' ? data : { ...data, space: there } }
+      }),
+    )
+    board.persist()
+    const plain = (t: string) => t.replace(/ card$/, '')
+    said(`Claude put ${plain(title)} ${side === 'right' || side === 'left' ? `to the ${side} of` : side} ${plain(otherTitle)}`)
+  }
+
   const focus = (id: string) => {
     const n = rf.getNode(id)
     if (!n) return
@@ -430,6 +476,7 @@ export function BoardAgent() {
         onRenameSpace={(s, name) => board.renameSpace(spaceId(s), name)}
         onAddSticky={(t, s) => void board.newSticky(t).then(id => place(id, s))}
         onJot={t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message))}
+        onTidy={() => board.tidy()}
         onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t })).then(id => place(id, s))}
         onAddTable={
           board.prefs.extras.tables
@@ -469,6 +516,8 @@ export function BoardAgent() {
             onTuck={t => (t ? board.tuck([c.id]) : board.untuck(c.id))}
             onVeil={v => board.setVeiled([c.id], v)}
             onTable={c.type === 'table' ? ch => changeTable(c.ref, c.title, ch) : undefined}
+            others={titlesBut(c.id)}
+            onPlaceNextTo={(other, side) => placeNextTo(c.id, c.title, other, side)}
           />
         </Fragment>
       ))}

@@ -25,10 +25,13 @@ const BOARD_NOTE =
   "Components: 'Board' (board: the spaces with their card counts, the space shown, selected and in-view titles; " +
   "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text, space?), jot(text) into today's " +
   'journal, show(pathOrUrl, space?) to put a file or link on the board; give space to put it in another space ' +
-  'without moving the user there (make the space first with newSpace if it is new). Each card is a component (card) named by its title ' +
+  'without moving the user there (make the space first with newSpace if it is new); tidy() lines the cards up, as the ' +
+  "user's Ctrl+Alt+T does. Each card is a component (card) named by its title " +
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
   'its value has kind, space, selected, inView, folded, color (sticky notes), file or url, peek (its first lines) and ' +
-  'comments; actions comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), rename(title) ' +
+  'comments; actions comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), ' +
+  'placeNextTo(otherCard, side?) to put it beside another card (side: right, left, below or above; right if not ' +
+  'given; it goes to that card\'s space), rename(title) ' +
   "(notes), setColor(yellow | green | pink | orange | charcoal) (sticky notes), tuck() to tuck it away as a tab at " +
   'the top edge, bringBack(), hideContents() and showContents() (blurred on the board, for sharing the screen; ' +
   "a card's tucked and hidden say which), remove(). 'Today's tasks' (task-list: " +
