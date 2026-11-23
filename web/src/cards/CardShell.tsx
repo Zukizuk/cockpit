@@ -63,6 +63,8 @@ interface Props {
   bodyClassName?: string
   /** As tall as its content (up to a limit, then it scrolls), until a height is dragged by hand. */
   autoHeight?: boolean
+  /** Exactly the size of its content, both ways (a table): no resize handles. */
+  hug?: boolean
   /** A sticky note: paper in this colour, a slim strip instead of a header. */
   sticky?: StickyColor
   /** Shown in the sticky strip (only when something needs saying, like "Not saved"). */
@@ -70,7 +72,7 @@ interface Props {
   children: ReactNode
 }
 
-export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, quick, actions, onExpand, bodyClassName, autoHeight, sticky, stripText, children }: Props) {
+export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, quick, actions, onExpand, bodyClassName, autoHeight, hug, sticky, stripText, children }: Props) {
   const nodeId = useNodeId()
   const rf = useReactFlow<CardNode>()
   const board = useBoard()
@@ -220,7 +222,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     <>
       {/* the comments hang off the card's top-right corner, outside it */}
       {nodeId && <CardComments nodeId={nodeId} />}
-      {locked ? null : (
+      {locked || hug ? null : (
         <NodeResizer
           minWidth={min.w}
           minHeight={min.h}
@@ -241,6 +243,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
               isNew && 'is-new',
               folded && 'is-folded',
               fits && 'is-auto',
+              hug && 'is-hug',
               locked && 'is-locked',
               sticky && `is-sticky paper-${sticky}`,
               veiled && 'is-veiled',

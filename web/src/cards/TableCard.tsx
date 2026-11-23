@@ -239,7 +239,8 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
       born={data.born}
       icon={Table2}
       title={naming ? <TitleInput value={title} onDone={keepTitle} /> : <TitleButton title={title} empty="Table" always onName={() => setNaming(true)} />}
-      subtitle={err || (rows.length ? `${Math.max(0, rows.length - 1)} rows · ${cols} columns` : '')}
+      subtitle={err || undefined}
+      hug
       quick={<IconButton icon={Copy} label="Copy for Excel" onClick={() => copy('tsv')} />}
       actions={actions}
       bodyClassName="table-body"

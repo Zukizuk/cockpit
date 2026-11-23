@@ -5,7 +5,7 @@
 // Similar and opposite words are links; "Keep" puts the word and its meaning in today's journal.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, BookA, BookmarkPlus, Search, Volume2, X } from 'lucide-react'
+import { ArrowLeft, BookmarkPlus, Search, Volume2, X } from 'lucide-react'
 import { get, post, type DictEntry, type DictResult } from '../api'
 import { useBoard } from '../board'
 import { emit, onEvent } from '../lib'
@@ -320,7 +320,7 @@ function DictionaryDialog({ open, setOpen, start }: { open: boolean; setOpen: (o
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
         showCloseButton={false}
-        className="glass-panel dict flex h-[min(640px,calc(100vh-48px))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[620px]"
+        className="glass-panel dict top-[14vh] flex max-h-[calc(86vh-24px)] translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]"
         onOpenAutoFocus={e => {
           e.preventDefault()
           input.current?.focus()
@@ -355,6 +355,7 @@ function DictionaryDialog({ open, setOpen, start }: { open: boolean; setOpen: (o
           <button type="button" className="dict-icon-btn" aria-label="Close" onClick={() => setOpen(false)}>
             <X className="size-4" strokeWidth={1.75} />
           </button>
+        </div>
           {hints.length > 0 && (
             <ul className="dict-hints" role="listbox" aria-label="Words">
               {hints.map((h, i) => (
@@ -366,8 +367,9 @@ function DictionaryDialog({ open, setOpen, start }: { open: boolean; setOpen: (o
               ))}
             </ul>
           )}
-        </div>
-        <div ref={body} className="dict-body">
+        {/* only what there is to show: nothing typed and nothing looked up before is just the bar */}
+        {!hints.length && (word || recent.length > 0) && (
+        <div ref={body} className={cn('dict-body', !word && 'is-recent')}>
           {!word ? (
             <Recent words={recent} go={w => go(w)} />
           ) : err ? (
@@ -389,25 +391,18 @@ function DictionaryDialog({ open, setOpen, start }: { open: boolean; setOpen: (o
             </>
           )}
         </div>
+        )}
       </DialogContent>
     </Dialog>
   )
 }
 
 function Recent({ words, go }: { words: string[]; go: (w: string) => void }) {
-  if (!words.length)
-    return (
-      <div className="dict-start">
-        <BookA className="size-6 text-muted-foreground" strokeWidth={1.5} />
-        <p>Type a word to look it up.</p>
-        <p className="text-muted-foreground">Anywhere in Cockpit, select a word and press Ctrl+D to see its meaning right there.</p>
-      </div>
-    )
   return (
     <div>
       <p className="dict-words-label mb-2">Looked up lately</p>
       <div className="flex flex-wrap gap-1.5">
-        {words.map(w => (
+        {words.slice(0, 10).map(w => (
           <button key={w} type="button" className="dict-chip" onClick={() => go(w)}>
             {w}
           </button>

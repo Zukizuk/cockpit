@@ -50,6 +50,8 @@ export type CardNode = Node<CardData, CardType>
 
 /** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
 export const AUTO_HEIGHT = new Set<CardType>(['snippets'])
+/** Cards exactly the size of what's in them, both ways, always (a table is its grid): no size of their own. */
+export const HUGS = new Set<CardType>(['table'])
 /** True while a card that fits its content is being resized by hand (so its height isn't put back meanwhile). */
 export const resizingRef = { current: false }
 /** Whether a card sizes itself to its content right now. */
@@ -62,8 +64,8 @@ export const toNode = (c: BoardCard): CardNode => ({
   type: c.type,
   position: { x: c.x, y: c.y },
   data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}) },
-  width: c.w,
-  height: c.folded ? FOLDED_H : AUTO_HEIGHT.has(c.type) && !keepsSize(c) ? undefined : c.h,
+  width: HUGS.has(c.type) ? undefined : c.w,
+  height: c.folded ? FOLDED_H : HUGS.has(c.type) || (AUTO_HEIGHT.has(c.type) && !keepsSize(c)) ? undefined : c.h,
   dragHandle: '.card-drag',
   ...(c.locked ? { draggable: false, deletable: false } : {}),
 })
@@ -96,7 +98,7 @@ export function foldNode(n: CardNode, fold: boolean): CardNode {
   if (!!n.data.folded === fold) return n
   if (fold) return { ...n, height: FOLDED_H, data: { ...n.data, folded: true, openH: n.height ?? n.measured?.height ?? SIZES[n.type as CardType].h } }
   const { folded, openH, ...data } = n.data
-  return { ...n, height: fitsContent({ type: n.type, data }) ? undefined : (openH ?? SIZES[n.type as CardType].h), data }
+  return { ...n, height: fitsContent({ type: n.type, data }) || HUGS.has(n.type as CardType) ? undefined : (openH ?? SIZES[n.type as CardType].h), data }
 }
 
 /** The same card locked in place (no moving by hand or by Tidy, no resizing, no Delete key), or free again. */
@@ -521,7 +523,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       } else
         rf.setNodes(ns => [
           ...ns.map(n => ({ ...n, selected: false })),
-          { id, type, position: pos, data: { ref, pulse: Date.now(), born: Date.now(), ...here }, width: size.w, height: AUTO_HEIGHT.has(type) ? undefined : size.h, selected: true, dragHandle: '.card-drag' },
+          { id, type, position: pos, data: { ref, pulse: Date.now(), born: Date.now(), ...here }, width: HUGS.has(type) ? undefined : size.w, height: AUTO_HEIGHT.has(type) || HUGS.has(type) ? undefined : size.h, selected: true, dragHandle: '.card-drag' },
         ])
       // dropped somewhere on purpose: stay where the user is looking
       if (!opts.at) requestAnimationFrame(() => rf.fitView({ nodes: [{ id }], duration: 320, padding: 0.25, maxZoom: 1, minZoom: Math.min(rf.getZoom(), 1) }))
