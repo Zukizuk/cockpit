@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next (version 0.2.1)
+
+**Fixed**
+- Show in folder opened your Documents folder instead of the file's own folder when its path had a space in it. It now opens the right folder with the file selected.
+
 ## 23 November 2026 (version 0.2.0)
 
 **New**

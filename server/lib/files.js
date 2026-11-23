@@ -126,7 +126,9 @@ export function openOutside(file, how) {
   const opts = { detached: true, stdio: 'ignore', windowsHide: false }
   let child
   if (process.platform === 'win32') {
-    if (how === 'reveal') child = spawn('explorer.exe', [`/select,${file}`], opts)
+    // Explorer reads /select,"<path with spaces>" only with the quotes around the path alone: left to Node, the
+    // whole argument gets quoted, Explorer doesn't understand it and opens Documents instead
+    if (how === 'reveal') child = spawn('explorer.exe', [`/select,"${path.resolve(file)}"`], { ...opts, windowsVerbatimArguments: true })
     else if (how === 'notepad') child = spawn('notepad.exe', [file], opts)
     else if (how === 'vscode') {
       const exe = vscodeExe()
