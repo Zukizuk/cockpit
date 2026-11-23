@@ -553,10 +553,11 @@ button.space-switch:active {
   padding: 0;
 }
 
+/* just above the dock at the bottom (the top edge is for tucked-away cards' tabs) */
 .focus-bar {
   position: fixed;
   left: 50%;
-  top: 14px;
+  bottom: 72px;
   translate: -50% 0;
   z-index: 20;
   display: flex;
@@ -3350,4 +3351,9 @@ table.data tbody tr:hover td {
   margin: -6px -6px 2px;
   padding: 8px 12px 8px;
   background: var(--card);
+}
+
+/* while a card is in focus its bar sits above the dock: a toast goes up above it */
+body:has(.focus-bar) .toast {
+  bottom: 124px;
 }
