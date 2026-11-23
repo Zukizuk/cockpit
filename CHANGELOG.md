@@ -2,12 +2,12 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next (version 0.2.1)
+## 23 November 2026 (version 0.2.1)
 
 **New**
 - Excel workbooks: long values no longer stay cut off. Click a cell to read all of it in a bar above the sheet. Drag a column's edge (on the A, B, C letters) to widen it, or double-click the edge to fit its longest value. Widths are kept for each file and sheet.
 
-**Changed**
+**Improved**
 - Anonymous usage counts (only if you said yes) no longer carry a rough location. PostHog used to work out a city and country from the connection they came from; Cockpit now tells it not to.
 
 **Fixed**
