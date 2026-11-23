@@ -589,13 +589,11 @@ function Dock() {
       <DockButton label="Snippets: things to copy" shortcut="C" onClick={() => board.addCard('snippets', 'snippets')}>
         <ClipboardList className="size-[16px]" strokeWidth={1.75} />
       </DockButton>
-      {/* Outputs come from Claude Code (see the README); until something has arrived there's nothing to show */}
-      {(board.outputs.length > 0 || board.outputsOpen) && (
-        <DockButton label="Outputs" shortcut="O" onClick={() => board.setOutputsOpen(true)} active={board.outputsOpen}>
-          <Inbox className="size-[17px]" strokeWidth={1.75} />
-          {board.unseenOutputs > 0 && <span className="dock-dot">{board.unseenOutputs > 9 ? '9+' : board.unseenOutputs}</span>}
-        </DockButton>
-      )}
+      {/* what Claude Code chats made; always here, so it can be found before anything has arrived */}
+      <DockButton label="Outputs" shortcut="O" onClick={() => board.setOutputsOpen(true)} active={board.outputsOpen}>
+        <Inbox className="size-[17px]" strokeWidth={1.75} />
+        {board.unseenOutputs > 0 && <span className="dock-dot">{board.unseenOutputs > 9 ? '9+' : board.unseenOutputs}</span>}
+      </DockButton>
       <span className="mx-0.5 h-5 w-px bg-ink/10" />
       <DockButton label="Show everything" shortcut="0" onClick={() => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 })}>
         <Maximize className="size-[16px]" strokeWidth={1.75} />
@@ -666,7 +664,24 @@ function OutputsSheet() {
           )}
         </SheetHeader>
         <div className="grid min-w-0 grid-cols-1 gap-3 overflow-x-hidden overflow-y-auto px-3 pb-6">
-          {!board.outputs.length && <p className="px-2 text-[13.5px] text-muted-foreground">Nothing here. Each chat's files, links, drafts and commands arrive as its turns end.</p>}
+          {!board.outputs.length && (
+            <div className="grid gap-3 px-2">
+              <p className="text-[13.5px] text-muted-foreground">Nothing here yet. Each Claude Code chat's files, links, drafts and commands arrive as its turns end.</p>
+              <p className="text-[13px] text-muted-foreground">Nothing arriving? Check that Cockpit is connected to Claude Code.</p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="justify-self-start"
+                onClick={() => {
+                  board.setOutputsOpen(false)
+                  board.setSettingsOpen(true)
+                  setTimeout(() => emit('settings-section', { section: 'claude' }), 0)
+                }}
+              >
+                Settings → Claude Code
+              </Button>
+            </div>
+          )}
           {board.outputs.map((g, n) => (
             <section key={g.id} className={cn('out-group min-w-0', !isOpen(g.id, n) && 'is-folded')}>
               <header className="group/head flex items-center gap-2 px-2 pb-1">

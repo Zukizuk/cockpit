@@ -3,9 +3,9 @@
 // between openings), so nothing jumps in after it opens.
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { ago } from '../lib'
+import { ago, onEvent } from '../lib'
 import { BookA, MessageSquare, Sparkles, Table2, X, type LucideIcon } from 'lucide-react'
-import { EDITORS, get, post, type Config, type TelemetryStatus, type TodoState, type Tracker, type UpdateStatus } from '../api'
+import { EDITORS, get, post, type ClaudeLink, type Config, type TelemetryStatus, type TodoState, type Tracker, type UpdateStatus } from '../api'
 import { useBoard } from '../board'
 import { STICKY_COLORS } from '../cards/CardShell'
 import { placeOf } from '../components/Viewer'
@@ -61,6 +61,8 @@ export function SettingsDialog() {
   const [usage, setUsage] = useState<TelemetryStatus | null>(null)
   const [upd, setUpd] = useState<UpdateStatus | null>(null)
   const [section, setSection] = useState<Section>('board')
+  // opened at a section from elsewhere (the empty Outputs panel points to Claude Code)
+  useEffect(() => onEvent('settings-section', (d: { section?: Section }) => d.section && setSection(d.section)), [])
   const [msg, setMsg] = useState<{ t: string; bad?: boolean } | null>(null)
 
   // loaded together (at start, and again on each opening), drawn once all three are here
@@ -391,7 +393,8 @@ function ClaudeSection({ cfg, save }: { cfg: Config; save: Save }) {
   }
   return (
     <section className="grid gap-5">
-      <Heading hint="What your Claude Code chats make shows up under Outputs by itself, through the hook the installer adds.">Claude Code</Heading>
+      <Heading hint="What your Claude Code chats make shows up under Outputs by itself, and Claude can put things on your board.">Claude Code</Heading>
+      <ClaudeConnection />
       <div className="grid gap-2">
         <h4 className="text-[13.5px] font-medium">Trackers</h4>
         <p className="text-[12.5px] text-muted-foreground">A tracker a chat works in (from the tracker mod) is added here by itself. Put one on the board from Ctrl+K.</p>
@@ -419,6 +422,68 @@ function ClaudeSection({ cfg, save }: { cfg: Config; save: Save }) {
         <OnOff on={cfg.scanTrackers} onChange={on => save({ scanTrackers: on }, on ? 'Looking for trackers in your folders.' : 'Only trackers your chats use are listed.')} />
       </Row>
     </section>
+  )
+}
+
+/** Whether Outputs and the board tools are connected to Claude Code, and a button that connects them. */
+function ClaudeConnection() {
+  const board = useBoard()
+  const [st, setSt] = useState<ClaudeLink | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    get<ClaudeLink>('/api/claude-link').then(setSt, () => {})
+  }, [])
+  if (!st) return null
+  // outputs coming in another way (an older hook, a mod) count as connected
+  const recent = st.lastOutput && Date.now() - st.lastOutput < 7 * 86_400_000
+  const outputs = st.hook === 'yes' || recent ? 'yes' : st.hook
+  const all = outputs === 'yes' && st.tools === 'yes'
+  const connect = async () => {
+    setBusy(true)
+    try {
+      const r = await post<ClaudeLink>('/api/claude-link/connect')
+      setSt(r)
+      board.toast(r.problems?.length ? r.problems[0] : 'Connected. New Claude Code chats will use it (restart the ones open now).')
+    } catch (e: any) {
+      board.toast(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const word = (s: string) => (s === 'yes' ? 'Connected' : s === 'other' ? 'Connected to another copy of Cockpit' : 'Not connected')
+  return (
+    <div className="grid gap-2.5 rounded-lg bg-ink/[0.03] p-3">
+      <LinkRow on={outputs === 'yes'} name="Outputs" what="What each chat made: files, links, drafts, commands" state={word(outputs)} />
+      <LinkRow on={st.tools === 'yes'} name="Board tools" what="Claude can show you things and work on your board" state={word(st.tools)} />
+      {!all && (
+        <div className="flex items-center gap-3 pt-1">
+          <p className="min-w-0 flex-1 text-[12.5px] text-muted-foreground">
+            {st.claude ? 'Connect them now: Cockpit adds itself to Claude Code for you.' : "Claude Code's command (claude) isn't on this PC, so only Outputs can be connected from here."}
+          </p>
+          <Button size="sm" onClick={connect} disabled={busy}>
+            {busy ? 'Connecting…' : 'Connect'}
+          </Button>
+        </div>
+      )}
+      {st.problems?.map(p => (
+        <p key={p} className="text-[12.5px] text-destructive">
+          {p}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function LinkRow({ on, name, what, state }: { on: boolean; name: string; what: string; state: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={cn('size-2 shrink-0 rounded-full', on ? 'bg-emerald-400' : 'bg-amber-400')} />
+      <div className="min-w-0 flex-1">
+        <div className="text-[13.5px]">{name}</div>
+        <div className="text-[12px] text-muted-foreground">{what}</div>
+      </div>
+      <span className="shrink-0 text-[12.5px] text-muted-foreground">{state}</span>
+    </div>
   )
 }
 

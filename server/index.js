@@ -20,6 +20,7 @@ import * as tasks from './lib/tasks.js'
 import * as comments from './lib/comments.js'
 import * as tables from './lib/tables.js'
 import * as dictionary from './lib/dictionary.js'
+import { claudeLink, connectClaude } from './lib/claude-link.js'
 import * as folders from './lib/folders.js'
 import { readOffice } from './lib/office.js'
 import * as outputs from './lib/outputs.js'
@@ -789,6 +790,12 @@ async function api(req, res, url) {
       broadcast('comments', {})
       return json(res, 200, r)
     }
+  }
+
+  // the connection to Claude Code (Settings > Claude Code): whether it's there, and making it
+  if (area === 'claude-link') {
+    if (!a && method === 'GET') return json(res, 200, await claudeLink())
+    if (a === 'connect' && method === 'POST') return json(res, 200, await connectClaude())
   }
 
   // extras: the offline dictionary, and tables (.csv files in the notes folder)

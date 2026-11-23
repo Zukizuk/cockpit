@@ -54,6 +54,22 @@ test('extras: off until turned on, one at a time, nothing else accepted', async 
   saveConfig({ extras: { dictionary: false, tables: false } })
 })
 
+test('claude link: says whether the Outputs hook and the board tools point at this copy', async () => {
+  const { claudeLink } = await import('../server/lib/claude-link.js')
+  const none = await claudeLink()
+  assert.equal(none.hook, 'no')
+  assert.equal(none.tools, 'no')
+  fs.mkdirSync(path.join(T, '.claude'), { recursive: true })
+  const hook = path.join(here, '..', 'server', 'claude', 'outputs-hook.js').replace(/\\/g, '/')
+  fs.writeFileSync(path.join(T, '.claude', 'settings.json'), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: `"node" "${hook}"` }] }] } }))
+  fs.writeFileSync(path.join(T, '.claude.json'), JSON.stringify({ mcpServers: { cockpit: { command: 'node', args: ['C:/Old/Cockpit/app/server/mcp.js'] } } }))
+  const now = await claudeLink()
+  assert.equal(now.hook, 'yes')
+  assert.equal(now.tools, 'other', 'registered for another copy: needs connecting again')
+  fs.rmSync(path.join(T, '.claude'), { recursive: true, force: true })
+  fs.rmSync(path.join(T, '.claude.json'), { force: true })
+})
+
 test('dictionary: meanings offline, forms lead to their word, suggestions start with what is typed', async () => {
   const dict = await import('../server/lib/dictionary.js')
   assert.ok(dict.dictionaryInfo().words > 100000)

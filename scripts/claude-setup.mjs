@@ -28,7 +28,7 @@ export function readSettings(file) {
   }
 }
 
-function write(file, settings) {
+export function write(file, settings) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   if (fs.existsSync(file)) fs.copyFileSync(file, file + '.cockpit-backup')
   const tmp = `${file}.${process.pid}.tmp`

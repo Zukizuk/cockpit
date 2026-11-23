@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next (version 0.2.0, being tried out)
+## 23 November 2026 (version 0.2.0)
 
 **New**
 - **Claude works on your board with you.** In a Claude Code chat, Claude can see your board and use it: name a card ("my sticky note Post ideas") or select one and say "the selected card", and it reads just that one. It sees each card's first lines and comments, and can comment back, fold or unfold, bring a card into view, move it to another space, rename a note or change a sticky note's colour. It can add and tick off today's tasks, keep links on Later, leave snippets, add a sticky note or a line to today's journal, and make and switch spaces. Everything it changes shows on the board as it happens, and taking anything away always waits for you to click Allow.
@@ -15,6 +15,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
   - **Tables.** A grid right on the board, from the + box: no card around it, just its name above it (drag it by that) and a + on its right and bottom edges for a column or a row. Right-click a cell to insert or delete its row or column. Type in the cells; Tab and Enter move along (Enter after Tab goes back to the row's first column, as in Excel) and add a row at the end. Paste a block copied from Excel and it fills the cells; Copy puts it back for Excel, or as Markdown for a note or a chat. Each table is a .csv file in your notes folder (tables/), so it opens in Excel too. A table taken off the board is kept, and the + box finds it by name to put it back; one you never typed in just goes. Delete table (in its menu) moves it to the notes folder's archive. Claude can make a table on your board, read it and fill it in; writing over all of it or taking a row out waits for your Allow.
 
 **Improved**
+- **Is Claude Code connected?** Settings → Claude Code now says whether Outputs and Claude's board tools are connected, and a Connect button sets them up if the installer didn't (if Claude Code's command wasn't found then, say). The Outputs button is always on the bottom toolbar, and while it's empty it points there.
 - **Outputs, tidier.** Each chat in the Outputs panel folds: the newest is open, the rest show just their name and how much they made, and a click opens one. What a chat made ("18 links", "4 drafts"…) is shown as chips you click to see only those, in the panel and on its card on the board; the card is named after the chat.
 - **Focus on several cards.** Select two or more (drag a box, or Shift+click) and choose Focus on these cards from a card's menu: they're laid out side by side in the middle, everything else folds into a column on the left, and Bring everything back puts every card back as it was. Claude can do it too ("put Post ideas and the Note apps table side by side and focus on them").
 - Claude can put a card next to another one ("put the table to the right of Post ideas": right, left, below or above, in a free spot) and tidy the board as Ctrl+Alt+T does; Ctrl+Z undoes either.

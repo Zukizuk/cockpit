@@ -300,6 +300,19 @@ export interface Config {
 }
 
 /** Updates (an installed copy only): what's running, the latest release, and whether an update is under way. */
+/** Whether Cockpit is connected to Claude Code (Settings > Claude Code). yes: to this copy; other: to another copy. */
+export interface ClaudeLink {
+  hook: 'yes' | 'other' | 'no'
+  tools: 'yes' | 'other' | 'no'
+  /** when a chat's outputs last came in (by any way), 0 if never */
+  lastOutput: number
+  /** Claude Code's command was found */
+  claude: boolean
+  /** the command that registers the board tools by hand */
+  command: string
+  problems?: string[]
+}
+
 export interface UpdateStatus {
   installed: boolean
   enabled: boolean
