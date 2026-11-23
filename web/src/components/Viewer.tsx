@@ -160,6 +160,7 @@ function SheetView({ read }: { read: ShownRead }) {
     })
   }
   const sheet = sheets[open]
+  const cells = useSheetCells(read.entry.path, sheet?.name || '')
   const loaded = sheet?.rows
   const drawn = useMemo(() => (all ? loaded || [] : (loaded || []).slice(0, FIRST_ROWS)), [loaded, all])
   if (!sheet) return <p className="text-muted-foreground">This workbook is empty.</p>
@@ -179,9 +180,19 @@ function SheetView({ read }: { read: ShownRead }) {
           ))}
         </div>
       )}
-      <div className="table-scroll min-h-0 flex-1">
+      {cells.picked && (
+        <div className="sheet-cellbar">
+          <span className="sheet-cellbar-at">
+            {colName(cells.picked[1])}
+            {cells.picked[0] + 1}
+          </span>
+          <span className="sheet-cellbar-value">{drawn[cells.picked[0]]?.[cells.picked[1]] ?? ''}</span>
+        </div>
+      )}
+      <div className="table-scroll min-h-0 flex-1" data-sheet={cells.scope}>
+        <style>{cells.css}</style>
         {loading && !sheet.rows && <p className="p-2 text-[13px] text-muted-foreground">Opening {sheet.name}…</p>}
-        <SheetTable rows={drawn} cols={sheet.cols} />
+        <SheetTable rows={drawn} cols={sheet.cols} onPick={cells.pick} onResize={cells.resize} onFit={c => cells.fit(c, drawn)} />
       </div>
       {drawn.length < rows.length && (
         <button type="button" className="w-fit text-[12.5px] text-muted-foreground underline underline-offset-4 hover:text-foreground" onClick={() => setAll(true)}>
@@ -197,11 +208,132 @@ function SheetView({ read }: { read: ShownRead }) {
   )
 }
 
+/** A column's letters, as Excel names them: A..Z, AA.. */
+function colName(i: number) {
+  let s = ''
+  for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s
+  return s
+}
+
+const WIDTHS_KEY = 'cockpit.sheet.widths'
+const FIT_MAX = 1200
+let measurer: CanvasRenderingContext2D | null = null
+
+/**
+ * A sheet's column widths (dragged or fitted; kept per file and sheet) and the cell picked to read in full. Both are
+ * drawn by a style rule rather than on each cell, so a drag doesn't redraw thousands of cells.
+ */
+function useSheetCells(file: string, sheetName: string) {
+  const key = `${file}|${sheetName}`
+  const [widths, setWidths] = useState<Record<number, number>>({})
+  const [picked, setPicked] = useState<[number, number] | null>(null)
+  useEffect(() => {
+    setPicked(null)
+    try {
+      setWidths(JSON.parse(localStorage.getItem(WIDTHS_KEY) || '{}')[key] || {})
+    } catch {
+      setWidths({})
+    }
+  }, [key])
+  const save = useCallback(
+    (w: Record<number, number>) => {
+      try {
+        const all = JSON.parse(localStorage.getItem(WIDTHS_KEY) || '{}')
+        all[key] = w
+        localStorage.setItem(WIDTHS_KEY, JSON.stringify(all))
+      } catch {}
+    },
+    [key],
+  )
+  const resize = useCallback(
+    (c: number, w: number, done: boolean) =>
+      setWidths(prev => {
+        const next = { ...prev, [c]: Math.max(36, Math.round(w)) }
+        if (done) save(next)
+        return next
+      }),
+    [save],
+  )
+  const fit = useCallback(
+    (c: number, rows: string[][]) => {
+      measurer ||= document.createElement('canvas').getContext('2d')
+      if (!measurer) return
+      measurer.font = `12.5px ${getComputedStyle(document.body).fontFamily}`
+      let w = measurer.measureText(colName(c)).width
+      for (const r of rows) if (r[c]) w = Math.max(w, measurer.measureText(r[c]).width)
+      resize(c, Math.min(FIT_MAX, w + 26), true)
+    },
+    [resize],
+  )
+  const pick = useCallback((r: number, c: number) => setPicked(p => (p && p[0] === r && p[1] === c ? null : [r, c])), [])
+  const scope = useMemo(() => 's' + Math.random().toString(36).slice(2, 8), [])
+  // nth-child counts the row-number column first
+  const css =
+    Object.entries(widths)
+      .map(([c, w]) => `[data-sheet=${scope}] tr > :nth-child(${+c + 2}){width:${w}px;min-width:${w}px;max-width:${w}px}`)
+      .join('') +
+    (picked ? `[data-sheet=${scope}] tbody tr:nth-child(${picked[0] + 1}) > td:nth-child(${picked[1] + 2}){box-shadow:inset 0 0 0 2px var(--color-primary)}` : '')
+  return { scope, css, picked, pick, resize, fit }
+}
+
 const NUM = /^-?[\d,. ]+%?$/
-/** One sheet's cells, drawn again only when the rows themselves change. */
-const SheetTable = memo(function SheetTable({ rows, cols }: { rows: string[][]; cols: number }) {
+/**
+ * One sheet's cells, drawn again only when the rows themselves change. Column letters on top: drag a column's edge to
+ * widen it, double-click the edge to fit its longest value; click a cell to read all of it above the table.
+ */
+const SheetTable = memo(function SheetTable({
+  rows,
+  cols,
+  onPick,
+  onResize,
+  onFit,
+}: {
+  rows: string[][]
+  cols: number
+  onPick: (r: number, c: number) => void
+  onResize: (c: number, w: number, done: boolean) => void
+  onFit: (c: number) => void
+}) {
+  const drag = (e: React.PointerEvent, c: number) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const th = (e.currentTarget as HTMLElement).parentElement!
+    const x0 = e.clientX
+    const w0 = th.getBoundingClientRect().width
+    const move = (ev: PointerEvent) => onResize(c, w0 + ev.clientX - x0, false)
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      document.body.classList.remove('col-resizing')
+      if (ev.clientX !== x0) onResize(c, w0 + ev.clientX - x0, true)
+    }
+    document.body.classList.add('col-resizing')
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
   return (
-    <table className="data">
+    <table
+      className="data sheet"
+      onClick={e => {
+        const td = (e.target as HTMLElement).closest('td')
+        const tr = td?.parentElement as HTMLTableRowElement | undefined
+        if (!td || !tr || td.cellIndex < 1 || tr.parentElement?.tagName !== 'TBODY') return
+        if (window.getSelection()?.toString()) return
+        onPick(tr.sectionRowIndex, td.cellIndex - 1)
+      }}
+    >
+      <thead>
+        <tr>
+          <th className="rownum" />
+          {Array.from({ length: cols }, (_, c) => (
+            <th key={c} className="colhead">
+              {colName(c)}
+              <span className="col-grip" onPointerDown={e => drag(e, c)} onDoubleClick={() => onFit(c)} title="Drag to widen. Double-click to fit." />
+            </th>
+          ))}
+        </tr>
+      </thead>
       <tbody>
         {rows.map((r, i) => (
           <tr key={i}>

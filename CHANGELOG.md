@@ -4,6 +4,9 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 ## Coming next (version 0.2.1)
 
+**New**
+- Excel workbooks: long values no longer stay cut off. Click a cell to read all of it in a bar above the sheet. Drag a column's edge (on the A, B, C letters) to widen it, or double-click the edge to fit its longest value. Widths are kept for each file and sheet.
+
 **Fixed**
 - Show in folder opened your Documents folder instead of the file's own folder when its path had a space in it. It now opens the right folder with the file selected.
 

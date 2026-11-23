@@ -1839,6 +1839,59 @@ table.data th {
   color: var(--color-muted-foreground);
 }
 
+/* workbook: column letters to widen columns by, and the picked cell's whole value above the table */
+table.data.sheet th.colhead {
+  text-align: center;
+  font-weight: 500;
+  font-size: 11.5px;
+  padding: 3px 11px;
+  z-index: 1;
+}
+table.data.sheet tbody td:not(.rownum) {
+  cursor: cell;
+}
+.col-grip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+}
+.col-grip:hover {
+  background: linear-gradient(to right, transparent 5px, var(--color-primary) 5px);
+}
+body.col-resizing,
+body.col-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+.sheet-cellbar {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: 8px;
+  box-shadow: var(--ring-1);
+  font-size: 13px;
+  max-height: 120px;
+  overflow: auto;
+  flex-shrink: 0;
+}
+.sheet-cellbar-at {
+  flex-shrink: 0;
+  min-width: 34px;
+  color: var(--color-muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.sheet-cellbar-value {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 table.data td.num {
   text-align: right;
 }
