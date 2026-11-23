@@ -27,6 +27,7 @@ export const EVENTS = new Set([
   'palette.open', 'keys.open', 'settings.open', 'feedback.open',
   'outputs.open', 'mcp.show', 'mcp.snippet',
   'add.pick', 'add.sendto', 'card.folder',
+  'dictionary.lookup', 'table.new', 'card.table',
 ])
 const ASK_AFTER = 24 * 3600_000
 const MAX_DAYS = 30

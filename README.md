@@ -48,6 +48,9 @@ Windows may warn that the installer is from an unknown publisher: the release is
 - **Today** (<kbd>T</kbd>): a simple to-do list on this PC, or today's Todoist tasks once you add your Todoist token
   in Settings.
 - **Folders**: paste a folder's path and it's a card with its files as a tree; click a file to open it beside it.
+- **Extras** (Settings → Extras, each off until you turn it on): a **Dictionary** that works offline (press
+  <kbd>D</kbd>, or select a word anywhere and press <kbd>Ctrl</kbd> <kbd>D</kbd> to see its meaning beside it), and
+  **Tables**, small grids saved as .csv files that paste to and from Excel and that Claude can fill in.
 - **The board**: drag, resize, fold, lock in place (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>), tidy
   (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd>), undo (<kbd>Ctrl</kbd> <kbd>Z</kbd>). Right-click the board for
   the rest, <kbd>Ctrl</kbd> <kbd>K</kbd> to add or find anything, <kbd>?</kbd> for every shortcut.
@@ -178,4 +181,5 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). The Dictionary's word list (`server/data/dictionary.bin`) is built from Open English WordNet
+(CC BY 4.0) and the CMU Pronouncing Dictionary (BSD); see [server/data/NOTICE.md](server/data/NOTICE.md).

@@ -1,12 +1,14 @@
 // The + box: paste a link or path to open it, type to add a line to today's journal, or find anything kept and put it on the board.
 import { useEffect, useMemo, useState } from 'react'
-import { BookOpenText, Bookmark, ClipboardList, FileText, FolderOpen, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
+import { BookA, BookOpenText, Bookmark, Table2, ClipboardList, FileText, FolderOpen, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
 import { post } from '../api'
 import { ago } from '../lib'
 import { useBoard } from '../board'
 import { summary } from '../cards/OutputsCard'
 import { basename, iconFor, kindLabel } from '../components/Viewer'
 import { isPath, isUrl, unquote } from './paste'
+import { openDictionary } from './Dictionary'
+import { looksTabular, newTable, rowsFromText } from '../cards/TableCard'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/components/ui/command'
 
 export function Palette() {
@@ -96,6 +98,19 @@ export function Palette() {
                 <span className="min-w-0 truncate text-muted-foreground">“{value.split('\n')[0].slice(0, 60)}”</span>
               </CommandItem>
             )}
+            {kind === 'text' && board.prefs.extras.dictionary && /^[\p{L}'’-]{2,40}$/u.test(value) && (
+              <CommandItem forceMount value={`__define ${value}`} onSelect={() => (close(), openDictionary(value))}>
+                <BookA strokeWidth={1.5} />
+                <span className="shrink-0">Look up</span>
+                <span className="min-w-0 truncate text-muted-foreground">“{value}”</span>
+              </CommandItem>
+            )}
+            {kind === 'text' && board.prefs.extras.tables && looksTabular(value) && (
+              <CommandItem forceMount value={`__table ${value}`} onSelect={() => (close(), newTable(board, { rows: rowsFromText(value) }))}>
+                <Table2 strokeWidth={1.5} />
+                Make a table from this
+              </CommandItem>
+            )}
             {kind === 'text' && (
               <CommandItem forceMount value={`__sticky ${value}`} onSelect={() => (close(), board.newSticky(value))}>
                 <NotebookText strokeWidth={1.5} />
@@ -129,6 +144,19 @@ export function Palette() {
         {kind !== 'link' && kind !== 'path' && (
           <>
             <CommandGroup heading="Add">
+              {board.prefs.extras.tables && (
+                <CommandItem value="table grid rows columns spreadsheet csv" onSelect={() => (close(), newTable(board))}>
+                  <Table2 strokeWidth={1.5} />
+                  Table
+                </CommandItem>
+              )}
+              {board.prefs.extras.dictionary && (
+                <CommandItem value="dictionary define word meaning look up" onSelect={() => (close(), openDictionary())}>
+                  <BookA strokeWidth={1.5} />
+                  Dictionary
+                  <CommandShortcut>D</CommandShortcut>
+                </CommandItem>
+              )}
               <CommandItem value="sticky note new note" onSelect={() => (close(), board.newSticky())}>
                 <NotebookText strokeWidth={1.5} />
                 Sticky note

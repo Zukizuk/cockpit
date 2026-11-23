@@ -5,7 +5,7 @@ import path from 'node:path'
 import { DATA_DIR, UserError, writeFileAtomic } from './config.js'
 import { newNote, setTitle } from './notes.js'
 
-const TYPES = new Set(['item', 'note', 'outputs', 'tasks', 'tracker', 'command', 'later', 'snippets', 'folder'])
+const TYPES = new Set(['item', 'note', 'outputs', 'tasks', 'tracker', 'command', 'later', 'snippets', 'folder', 'table'])
 const MAX_CARDS = 400
 /** A sticky note's paper. */
 export const COLORS = new Set(['yellow', 'green', 'pink', 'orange', 'ink'])

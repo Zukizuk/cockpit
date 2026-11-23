@@ -12,7 +12,8 @@ import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
 import { foldNode, isSticky, spaceOf, useBoard, type CardNode } from '../board'
-import { get, post, type Snippet, type StickyColor } from '../api'
+import { get, post, put, type Snippet, type StickyColor, type TableData } from '../api'
+import { newTable, rowsFromText } from '../cards/TableCard'
 import { useData } from '../lib'
 import { summary } from '../cards/OutputsCard'
 
@@ -43,11 +44,19 @@ type BoardOptions = {
   onAddSticky?: (text: string) => void
   onJot?: (text: string) => void
   onShow?: (target: string) => void
+  onAddTable?: (title: string, rows: string[][]) => void
+}
+
+/** Rows an agent gives: an array of arrays (the first is the header), or text (tab-separated, Markdown or CSV). */
+function rowsOf(rows: unknown): string[][] {
+  const out = typeof rows === 'string' ? rowsFromText(rows) : Array.isArray(rows) ? rows.map(r => (Array.isArray(r) ? r.map(c => String(c ?? '')) : [String(r ?? '')])) : []
+  if (!out.length || !out.some(r => r.some(c => c.trim()))) throw new Error('Give the rows: an array of arrays of text, the first being the header (or tab-separated text).')
+  return out
 }
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -70,10 +79,15 @@ const boardPrimitive = definePrimitive({
       addSticky: (t: string) => call('onAddSticky')(text(t, 'note')),
       jot: (t: string) => call('onJot')(text(t, 'thought')),
       show: (target: string) => call('onShow')(text(target, 'path or link')),
+      addTable: (title: string, rows: unknown) => {
+        const fn = context.options().onAddTable
+        if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
+        fn(words(title) || 'Table', rowsOf(rows))
+      },
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -94,6 +108,9 @@ export type CardValue = {
   url?: string
   /** the first lines of what it shows */
   peek?: string
+  /** a table: its rows, the first being the header (up to 60 more); rowCount says how many there are in all */
+  rows?: string[][]
+  rowCount?: number
   comments?: { by: string; text: string }[]
 }
 type CardOptions = {
@@ -108,12 +125,14 @@ type CardOptions = {
   onRemove?: () => void
   onTuck?: (tuck: boolean) => void
   onVeil?: (veil: boolean) => void
+  onTable?: (change: TableChange) => Promise<void>
 }
+export type TableChange = { setCell?: [row: unknown, column: unknown, text: string]; addRows?: string[][]; setRows?: string[][]; removeRow?: unknown }
 const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', pink: 'pink', orange: 'orange', charcoal: 'ink', ink: 'ink', dark: 'ink', black: 'ink' }
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action' },
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action' },
   state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -144,10 +163,14 @@ const cardPrimitive = definePrimitive({
       bringBack: () => call('onTuck')(false),
       hideContents: () => call('onVeil')(true),
       showContents: () => call('onVeil')(false),
+      setCell: (row: unknown, column: unknown, text: string) => call('onTable')({ setCell: [row, column, String(text ?? '')] }),
+      addRows: (rows: unknown) => call('onTable')({ addRows: rowsOf(rows) }),
+      setRows: (rows: unknown) => call('onTable')({ setRows: rowsOf(rows) }),
+      removeRow: (row: unknown) => call('onTable')({ removeRow: row }),
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'remove'] },
+  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -214,7 +237,7 @@ const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 
 // ---- on the page -------------------------------------------------------------------------------------------
 
-const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder' }
+const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder', table: 'table' }
 type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean]
 type Built = { id: string; type: string; ref: string; title: string; value: CardValue }
 
@@ -237,6 +260,13 @@ export function BoardAgent() {
     )
   })
   const snippets = useData(() => get<Snippet[]>('/api/snippets'), [], { refreshOn: ['snippets'] })
+  // the tables on the board, read so an agent sees their rows
+  const tableRefs = useMemo(() => [...new Set((JSON.parse(cardsKey) as Row[]).filter(r => r[1] === 'table').map(r => r[2]))].sort(), [cardsKey])
+  const tables = useData(
+    () => Promise.all(tableRefs.map(p => get<TableData>(`/api/tables?p=${encodeURIComponent(p)}`).catch(() => null))),
+    [tableRefs.join('|')],
+    { refreshOn: ['tables'] },
+  )
   const notes = board.notes
   const sep = notes?.root.includes('\\') ? '\\' : '/'
   const spaceName = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
@@ -268,6 +298,10 @@ export function BoardAgent() {
         const g = board.outputs.find(x => x.id === ref)
         title = g ? `Claude: ${summary(g)}` : 'Claude outputs'
         if (g) peek = g.items.map(i => `${i.kind}: ${i.label}`).join('\n')
+      } else if (type === 'table') {
+        const t = tables.data?.find(x => x?.path === ref)
+        title = t?.title || ref.split('/').pop()?.replace(/\.csv$/i, '') || 'Table'
+        if (notes) file = notes.root + sep + ref.split('/').join(sep)
       } else if (type === 'tracker') title = `Tracker: ${ref}`
       // the lists themselves are "Today's tasks", "Later" and "Snippets": their cards are named apart
       else if (type === 'tasks') title = 'Today card'
@@ -289,9 +323,13 @@ export function BoardAgent() {
         ...(peek ? { peek: peek.length > PEEK ? `${peek.slice(0, PEEK)}…` : peek } : {}),
         ...(thread?.length ? { comments: thread.slice(-10).map(c => ({ by: c.by, text: c.text })) } : {}),
       }
+      if (type === 'table') {
+        const t = tables.data?.find(x => x?.path === ref)
+        if (t) Object.assign(value, { rows: t.rows.slice(0, 61), rowCount: Math.max(0, t.rows.length - 1) })
+      }
       return { id, type, ref, title, value }
     })
-  }, [cardsKey, board.spaces, board.space, board.items, board.outputs, board.comments, notes, sep])
+  }, [cardsKey, board.spaces, board.space, board.items, board.outputs, board.comments, notes, sep, tables.data])
 
   const boardValue: BoardValue = useMemo(
     () => ({
@@ -319,6 +357,50 @@ export function BoardAgent() {
     rf.setNodes(ns => ns.map(n => (n.id === id ? foldNode(n, f) : n)))
     board.persist()
   }
+  // a change Claude makes to a table: read it, change it, save it (the card reads it again)
+  const changeTable = async (ref: string, title: string, ch: TableChange) => {
+    const t = await get<TableData>(`/api/tables?p=${encodeURIComponent(ref)}`)
+    let rows = t.rows.map(r => [...r])
+    const head = rows[0] || []
+    const col = (c: unknown) => {
+      const n = Number(c)
+      if (Number.isInteger(n) && n >= 1) return n - 1
+      const i = head.findIndex(h => h.trim().toLowerCase() === words(c).toLowerCase())
+      if (i < 0) throw new Error(`No column "${words(c)}". The columns: ${head.map(h => `"${h}"`).join(', ')} (or a number from 1).`)
+      return i
+    }
+    const row = (r: unknown) => {
+      const n = Number(r)
+      if (Number.isInteger(n) && n >= 1) {
+        if (n > rows.length - 1) throw new Error(`The table has ${rows.length - 1} rows (row 1 is the first under the header).`)
+        return n
+      }
+      const i = rows.findIndex((x, k) => k > 0 && (x[0] || '').trim().toLowerCase() === words(r).toLowerCase())
+      if (i < 0) throw new Error(`No row starting "${words(r)}". Name a row by its first cell, or by its number (1 is the first under the header).`)
+      return i
+    }
+    let done = ''
+    if (ch.setCell) {
+      const [r, c, text] = ch.setCell
+      const ri = row(r)
+      const ci = col(c)
+      while (rows[ri].length <= ci) rows.forEach(x => x.push(''))
+      rows[ri][ci] = text
+      done = `Claude filled in ${title}`
+    } else if (ch.addRows) {
+      rows.push(...ch.addRows)
+      done = `Claude added ${ch.addRows.length === 1 ? 'a row' : `${ch.addRows.length} rows`} to ${title}`
+    } else if (ch.setRows) {
+      rows = ch.setRows
+      done = `Claude rewrote ${title}`
+    } else if (ch.removeRow !== undefined) {
+      rows.splice(row(ch.removeRow), 1)
+      done = `Claude took a row out of ${title}`
+    }
+    await put('/api/tables', { path: ref, rows, baseMtime: t.mtime, by: 'Claude' })
+    said(done)
+  }
+
   const focus = (id: string) => {
     const n = rf.getNode(id)
     if (!n) return
@@ -341,6 +423,14 @@ export function BoardAgent() {
         onAddSticky={t => board.newSticky(t)}
         onJot={t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message))}
         onShow={t => (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t }))}
+        onAddTable={
+          board.prefs.extras.tables
+            ? (title, rows) =>
+                void newTable(board, { title, rows }).then(id => {
+                  if (id) said(`Claude made the table "${title}"`)
+                })
+            : undefined
+        }
       />
       {cards.map(c => (
         <Fragment key={c.id}>
@@ -369,6 +459,7 @@ export function BoardAgent() {
             onRemove={() => board.removeCard(c.id)}
             onTuck={t => (t ? board.tuck([c.id]) : board.untuck(c.id))}
             onVeil={v => board.setVeiled([c.id], v)}
+            onTable={c.type === 'table' ? ch => changeTable(c.ref, c.title, ch) : undefined}
           />
         </Fragment>
       ))}

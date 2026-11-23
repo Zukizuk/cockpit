@@ -27,6 +27,9 @@ export function startAgentBridge(ask: Ask) {
       // taking something away is the person's call
       // a card is named by its own label; a list item by the step's argument
       if (action === 'remove') return ask(`Claude wants to remove "${String(component === 'card' ? label : (args?.[0] ?? ''))}" ${where}`)
+      // a table: writing over all of it, or taking a row out, is the person's call too
+      if (component === 'card' && action === 'setRows') return ask(`Claude wants to replace everything in the table "${String(label)}"`)
+      if (component === 'card' && action === 'removeRow') return ask(`Claude wants to take row "${String(args?.[0] ?? '')}" out of the table "${String(label)}"`)
       return true
     },
   })

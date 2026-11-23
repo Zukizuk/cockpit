@@ -62,6 +62,14 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
 
 export function KeysDialog() {
   const board = useBoard()
+  // the extras turned on (Settings > Extras) bring their keys
+  const extra: Key[] = board.prefs.extras.dictionary
+    ? [
+        { keys: ['D'], what: 'The Dictionary' },
+        { keys: ['Ctrl', 'D'], what: 'The selected word’s meaning, right beside it (in a note too)' },
+      ]
+    : []
+  const groups = extra.length ? [...KEY_GROUPS, { title: 'Extras', keys: extra }] : KEY_GROUPS
   return (
     <Dialog open={board.keysOpen} onOpenChange={board.setKeysOpen}>
       <DialogContent className="glass-panel max-h-[calc(100vh-48px)] grid-cols-1 overflow-y-auto sm:max-w-[820px]">
@@ -72,7 +80,7 @@ export function KeysDialog() {
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
-          {KEY_GROUPS.map(g => (
+          {groups.map(g => (
             <section key={g.title}>
               <h3 className="mb-1 text-[12px] font-medium tracking-wide text-muted-foreground uppercase">{g.title}</h3>
               <ul>

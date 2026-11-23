@@ -7,7 +7,7 @@ import { startAgentBridge } from './agent/bridge'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReactFlow, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
-import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker } from './api'
+import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker } from './api'
 import { pack } from './layout'
 import { useData, useEvent } from './lib'
 
@@ -22,6 +22,7 @@ export const SIZES: Record<CardType, { w: number; h: number }> = {
   later: { w: 440, h: 560 },
   snippets: { w: 400, h: 140 },
   folder: { w: 420, h: 520 },
+  table: { w: 520, h: 320 },
 }
 
 /** A sticky note: any note that isn't a journal page or a draft (new ones live in notes/stickies). */
@@ -143,8 +144,8 @@ function savedTheme(): Theme {
   }
 }
 
-export type Prefs = { stickyColor: StickyColor; singleKeys: boolean; tidyGap: number; changelog: string; editor: Editor; theme: Theme }
-const DEFAULT_PREFS: Prefs = { stickyColor: 'ink', singleKeys: true, tidyGap: 24, changelog: '', editor: 'notepad', theme: savedTheme() }
+export type Prefs = { stickyColor: StickyColor; singleKeys: boolean; tidyGap: number; changelog: string; editor: Editor; theme: Theme; extras: Extras }
+const DEFAULT_PREFS: Prefs = { stickyColor: 'ink', singleKeys: true, tidyGap: 24, changelog: '', editor: 'notepad', theme: savedTheme(), extras: { dictionary: false, tables: false } }
 
 interface Ctx {
   addCard: (type: CardType, ref: string, opts?: PlaceOpts) => string
@@ -321,7 +322,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const pinned = useData(() => get<PinnedList>('/api/pinned'), [], { refreshOn: ['pinned'] })
   const config = useData(() => get<Config>('/api/config'), [])
   const prefs = useMemo<Prefs>(
-    () => (config.data ? { stickyColor: config.data.stickyColor, singleKeys: config.data.singleKeys, tidyGap: config.data.tidyGap, changelog: config.data.changelog, editor: config.data.editor || 'notepad', theme: config.data.theme || 'system' } : DEFAULT_PREFS),
+    () => (config.data ? { stickyColor: config.data.stickyColor, singleKeys: config.data.singleKeys, tidyGap: config.data.tidyGap, changelog: config.data.changelog, editor: config.data.editor || 'notepad', theme: config.data.theme || 'system', extras: { dictionary: !!config.data.extras?.dictionary, tables: !!config.data.extras?.tables } } : DEFAULT_PREFS),
     [config.data],
   )
   const prefsRef = useRef(prefs)

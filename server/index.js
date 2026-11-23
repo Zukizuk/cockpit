@@ -18,6 +18,8 @@ import { readTrackers } from './lib/tracker.js'
 import * as todoist from './lib/todoist.js'
 import * as tasks from './lib/tasks.js'
 import * as comments from './lib/comments.js'
+import * as tables from './lib/tables.js'
+import * as dictionary from './lib/dictionary.js'
 import * as folders from './lib/folders.js'
 import { readOffice } from './lib/office.js'
 import * as outputs from './lib/outputs.js'
@@ -393,6 +395,7 @@ function resolveOpenTarget(cfg, body) {
     return body.side === 'right' && e.path2 ? e.path2 : e.path
   }
   if (body.kind === 'note') return notes.resolveNote(cfg, body.path)
+  if (body.kind === 'table') return tables.resolveTable(cfg, body.path)
   if (body.kind === 'notes-folder') return notes.ensureNotes(cfg)
   if (body.kind === 'project') return projectFile(cfg, body.id)
   // a file or folder on a folder card: any full path that is there
@@ -784,6 +787,37 @@ async function api(req, res, url) {
     if (a && b === 'remove' && method === 'POST') {
       const r = comments.removeComment(a)
       broadcast('comments', {})
+      return json(res, 200, r)
+    }
+  }
+
+  // extras: the offline dictionary, and tables (.csv files in the notes folder)
+  if (area === 'dictionary' && method === 'GET') {
+    if (a === 'suggest') return json(res, 200, dictionary.suggest(url.searchParams.get('q')))
+    if (a === 'info') return json(res, 200, dictionary.dictionaryInfo())
+    if (!a) {
+      const r = dictionary.lookup(url.searchParams.get('word'))
+      counted('dictionary.lookup')
+      return json(res, 200, r)
+    }
+  }
+  if (area === 'tables') {
+    if (!a && method === 'GET') return json(res, 200, tables.readTable(cfg, url.searchParams.get('p')))
+    if (!a && method === 'PUT') {
+      const body = await readBody(req)
+      const r = tables.writeTable(cfg, body.path, body.rows, body.baseMtime)
+      broadcast('tables', { path: r.path, by: body.by === 'Claude' ? 'Claude' : 'you' })
+      return json(res, 200, r)
+    }
+    if (a === 'new' && method === 'POST') {
+      const body = await readBody(req)
+      counted('table.new')
+      return json(res, 200, tables.newTable(cfg, body.title, body.rows))
+    }
+    if (a === 'rename' && method === 'POST') {
+      const body = await readBody(req)
+      const r = tables.renameTable(cfg, body.path, body.title)
+      broadcast('tables', { path: body.path, to: r.path })
       return json(res, 200, r)
     }
   }

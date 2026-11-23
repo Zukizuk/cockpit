@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ago } from '../lib'
-import { MessageSquare, Sparkles, X } from 'lucide-react'
+import { BookA, MessageSquare, Sparkles, Table2, X, type LucideIcon } from 'lucide-react'
 import { EDITORS, get, post, type Config, type TelemetryStatus, type TodoState, type Tracker, type UpdateStatus } from '../api'
 import { useBoard } from '../board'
 import { STICKY_COLORS } from '../cards/CardShell'
@@ -27,7 +27,7 @@ const GAPS = [
   { value: 40, label: 'Roomy' },
 ]
 
-type Section = 'board' | 'tasks' | 'notes' | 'claude' | 'updates' | 'privacy'
+type Section = 'board' | 'tasks' | 'notes' | 'claude' | 'extras' | 'updates' | 'privacy'
 
 /** One setting: its name (and a short line under it) on the left, the control on the right. */
 function Row({ name, hint, children }: { name: string; hint?: string; children: React.ReactNode }) {
@@ -98,6 +98,7 @@ export function SettingsDialog() {
     { id: 'tasks', label: 'Tasks' },
     { id: 'notes', label: 'Notes' },
     { id: 'claude', label: 'Claude Code' },
+    { id: 'extras', label: 'Extras' },
     { id: 'updates', label: 'Updates', dot: !!upd?.available },
     ...(usage?.available ? [{ id: 'privacy' as Section, label: 'Privacy' }] : []),
   ]
@@ -146,6 +147,8 @@ export function SettingsDialog() {
                 <NotesSection cfg={cfg} save={save} />
               ) : section === 'claude' ? (
                 <ClaudeSection cfg={cfg} save={save} />
+              ) : section === 'extras' ? (
+                <ExtrasSection cfg={cfg} save={save} />
               ) : section === 'updates' ? (
                 <Updates st={upd} setSt={setUpd} />
               ) : (
@@ -242,6 +245,52 @@ function BoardSection({ cfg, save }: { cfg: Config; save: Save }) {
       <Row name="Single-letter shortcuts" hint="N, L, T… Off keeps only the Ctrl ones">
         <OnOff on={cfg.singleKeys !== false} onChange={on => save({ singleKeys: on }, on ? 'Single-letter shortcuts on.' : 'Single-letter shortcuts off.')} />
       </Row>
+    </section>
+  )
+}
+
+/** Extras: special things that stay out of the way until turned on here (each adds its shortcut, its entry in the
+ * + box and what Claude can do with it only then). */
+const EXTRAS: { id: keyof NonNullable<Config['extras']>; name: string; icon: LucideIcon; about: string; how: string }[] = [
+  {
+    id: 'dictionary',
+    name: 'Dictionary',
+    icon: BookA,
+    about: 'Meanings, examples, pronunciation, and words that mean the same or the opposite. 128,000 English words kept on this PC, so it works without the internet.',
+    how: 'Press D, or select a word anywhere (in a note, a page, a card) and press Ctrl+D to see it right there.',
+  },
+  {
+    id: 'tables',
+    name: 'Tables',
+    icon: Table2,
+    about: 'A small grid on the board: type in cells, paste from Excel, copy it back out. Each table is a .csv file in your notes folder, so it opens in Excel too.',
+    how: 'Add one from the + box ("Table"). Claude can make one for you, fill it in and read it.',
+  },
+]
+
+function ExtrasSection({ cfg, save }: { cfg: Config; save: Save }) {
+  const on = cfg.extras || { dictionary: false, tables: false }
+  return (
+    <section className="grid gap-3">
+      <Heading hint="Special things you can add to Cockpit. Each stays out of the way until you turn it on.">Extras</Heading>
+      {EXTRAS.map(x => (
+        <div key={x.id} className={cn('extra-row', on[x.id] && 'is-on')}>
+          <span className="extra-icon">
+            <x.icon className="size-[18px]" strokeWidth={1.75} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[13.5px] font-medium">{x.name}</span>
+              <OnOff on={!!on[x.id]} onChange={v => save({ extras: { [x.id]: v } }, `${x.name} ${v ? 'on' : 'off'}.`)} />
+            </div>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">{x.about}</p>
+            <p className="mt-1.5 text-[12.5px]">{x.how}</p>
+          </div>
+        </div>
+      ))}
+      <p className="text-[11.5px] text-muted-foreground">
+        The dictionary's words come from Open English WordNet (CC BY 4.0) and the CMU Pronouncing Dictionary.
+      </p>
     </section>
   )
 }

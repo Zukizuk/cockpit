@@ -154,7 +154,7 @@ export function NoteCard({ id, data, selected }: NodeProps<CardNode>) {
 
 /** The title, or a faint "Untitled" where one can go (on a sticky note, only on hover). A click names it; a
  * double-click still opens the note. */
-function TitleButton({ title, empty, always, onName }: { title: string; empty: string; always: boolean; onName: () => void }) {
+export function TitleButton({ title, empty, always, onName }: { title: string; empty: string; always: boolean; onName: () => void }) {
   const timer = useRef<number>(0)
   return (
     <button
@@ -174,7 +174,7 @@ function TitleButton({ title, empty, always, onName }: { title: string; empty: s
 }
 
 /** The title being typed: Enter keeps it (empty takes the title away), Esc leaves it as it was. */
-function TitleInput({ value, onDone }: { value: string; onDone: (v: string | null) => void }) {
+export function TitleInput({ value, onDone }: { value: string; onDone: (v: string | null) => void }) {
   const ref = useRef<HTMLInputElement>(null)
   const done = useRef(false)
   const born = useRef(Date.now())

@@ -271,6 +271,8 @@ export interface Config {
   trackers: string[]
   hiddenTrackers: string[]
   scanTrackers: boolean
+  /** Extras turned on in Settings > Extras (each off until then). */
+  extras?: Extras
   sessionsDays: number
   hasTodoistToken: boolean
   dataDir: string
@@ -319,7 +321,7 @@ export const EDITORS: { value: Editor; label: string }[] = [
 /** The menu line for opening in the chosen editor. */
 export const editorLabel = (e: Editor) => (e === 'notepad' ? 'Open in Notepad' : e === 'vscode' ? 'Open in VS Code' : 'Open in its own program')
 
-export const openOutside = (body: { kind: 'shown' | 'note' | 'project' | 'notes-folder' | 'output' | 'path'; id?: string; path?: string; index?: number | string; side?: 'left' | 'right'; how?: 'default' | 'reveal' | 'vscode' | 'notepad' | 'editor' }) =>
+export const openOutside = (body: { kind: 'shown' | 'note' | 'table' | 'project' | 'notes-folder' | 'output' | 'path'; id?: string; path?: string; index?: number | string; side?: 'left' | 'right'; how?: 'default' | 'reveal' | 'vscode' | 'notepad' | 'editor' }) =>
   post<{ ok: true }>('/api/open', body)
 
 export type OutputKind = 'file' | 'link' | 'draft' | 'command' | 'prompt'
@@ -360,7 +362,30 @@ export interface OutputGroup {
   items: OutputItem[]
 }
 
-export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets' | 'folder'
+export type Extras = { dictionary: boolean; tables: boolean }
+
+/** A table (the Table extra): a .csv in the notes folder's tables/; the first row is the header. */
+export interface TableData {
+  path: string
+  title: string
+  rows: string[][]
+  mtime: number
+}
+
+/** One word's meanings (the Dictionary extra): by part of speech, each [definition, examples, same, opposite]. */
+export interface DictEntry {
+  w: string
+  ipa?: string
+  m: [string, [string, string[], string[], string[]][]][]
+}
+export interface DictResult {
+  word: string
+  entries: DictEntry[]
+  /** a form ("ran") looked up as the word it comes from ("run") */
+  from?: string[]
+}
+
+export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets' | 'folder' | 'table'
 
 /** A task on the Today card's own list (when Todoist isn't connected). */
 export interface LocalTask {

@@ -26,6 +26,7 @@ export function TuckedTray() {
       return n?.title || n?.excerpt?.split('\n')[0] || 'Sticky note'
     }
     if (type === 'folder') return ref.split(/[\\/]/).filter(Boolean).pop() || 'Folder'
+    if (type === 'table') return ref.split('/').pop()?.replace(/\.csv$/i, '') || 'Table'
     return { tasks: 'Today', later: 'Later', snippets: 'Snippets', outputs: 'Outputs', tracker: `Tracker: ${ref}`, command: 'Command' }[type] || 'Card'
   }
 

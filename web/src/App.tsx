@@ -33,8 +33,10 @@ import { SpaceSwitcher } from './views/SpaceSwitcher'
 import { TuckedTray } from './views/TuckedTray'
 import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
+import { DictionaryExtra, openDictionary } from './views/Dictionary'
+import { TableCard } from './cards/TableCard'
 
-const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard }
+const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard, table: TableCard }
 
 export function App() {
   const [board, setBoard] = useState<Board | null>(null)
@@ -62,6 +64,7 @@ export function App() {
           <SpaceSwitcher />
           <TuckedTray />
           <BoardAgent />
+          <DictionaryExtra />
           <Toast />
           <Badge />
           <UrlState />
@@ -252,7 +255,7 @@ function Canvas({ initial }: { initial: Board }) {
         }
       }
       // F2 names a note, as in Explorer
-      if (e.key === 'F2' && one?.type === 'note') {
+      if (e.key === 'F2' && (one?.type === 'note' || one?.type === 'table')) {
         e.preventDefault()
         emit('note-rename', { id: one.id })
         return
@@ -312,6 +315,8 @@ function Canvas({ initial }: { initial: Board }) {
           if (i < board.spaces.length - 1) board.switchSpace(board.spaces[i + 1].id)
         },
         s: () => emit('spaces-open'),
+        // the Dictionary (an extra, when it's on)
+        d: () => board.prefs.extras.dictionary && openDictionary(),
         // hide the selected cards' contents (sharing the screen), or show them again
         h: () => {
           if (!picked.length) return board.toast('Select a card first, then H hides its contents')

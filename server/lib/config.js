@@ -31,6 +31,8 @@ export const TIDY_GAPS = [12, 24, 40]
 export const EDITORS = ['notepad', 'vscode', 'default']
 /** Light, dark, or whatever Windows is set to. */
 export const THEMES = ['system', 'dark', 'light']
+/** The extras there are (Settings > Extras). */
+export const EXTRAS = ['dictionary', 'tables']
 
 export function defaults() {
   return {
@@ -62,6 +64,8 @@ export function defaults() {
     updates: true,
     /** Look through Projects, Desktop and synced folders for tracker.json files (off: only the ones listed). */
     scanTrackers: false,
+    /** Extras: special things the person turns on themselves (Settings > Extras); each is off until then. */
+    extras: { dictionary: false, tables: false },
   }
 }
 
@@ -93,6 +97,7 @@ export function loadConfig() {
   if (THEMES.includes(raw.theme)) cfg.theme = raw.theme
   if (typeof raw.updates === 'boolean') cfg.updates = raw.updates
   if (typeof raw.scanTrackers === 'boolean') cfg.scanTrackers = raw.scanTrackers
+  for (const k of EXTRAS) if (typeof raw.extras?.[k] === 'boolean') cfg.extras[k] = raw.extras[k]
   return cfg
 }
 
@@ -132,6 +137,14 @@ export function saveConfig(patch) {
   if (patch.updates !== undefined) {
     if (typeof patch.updates !== 'boolean') throw new UserError('updates is true or false')
     raw.updates = patch.updates
+  }
+  if (patch.extras !== undefined) {
+    if (!patch.extras || typeof patch.extras !== 'object') throw new UserError('extras is an object')
+    raw.extras = typeof raw.extras === 'object' && raw.extras ? raw.extras : {}
+    for (const [k, v] of Object.entries(patch.extras)) {
+      if (!EXTRAS.includes(k) || typeof v !== 'boolean') throw new UserError(`extras are ${EXTRAS.join(', ')}, each true or false`)
+      raw.extras[k] = v
+    }
   }
   if (patch.theme !== undefined) {
     if (!THEMES.includes(patch.theme)) throw new UserError(`theme is one of ${THEMES.join(', ')}`)

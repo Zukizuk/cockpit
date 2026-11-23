@@ -37,7 +37,13 @@ const BOARD_NOTE =
   "Notes (sticky notes, journal) are files: peek has their start; read or edit the whole at the card's file path, " +
   "and the board follows. The user's comments on a card may be for you: answer with the card's comment(). " +
   "Every removal waits for the user to allow it in Cockpit. If 'Today's tasks' is missing, the Today card is not on " +
-  'the board (the user can press T).'
+  'the board (the user can press T). ' +
+  "Tables (an extra the user turns on in Settings > Extras): Board's addTable(title, rows) puts a new table on the " +
+  'board, rows being an array of arrays of text with the header first; use it when the user wants something compared ' +
+  "or listed in a table they can edit. A table card's value has rows (header first) and rowCount; its actions are " +
+  'setCell(row, column, text) (row: its number from 1 under the header, or its first cell; column: its heading or ' +
+  'number from 1), addRows(rows), setRows(rows) to replace it all, removeRow(row). setRows and removeRow wait for ' +
+  "the user's Allow. If addTable says tables are off, tell the user where to turn them on."
 
 export const TOOLS = [
   {
