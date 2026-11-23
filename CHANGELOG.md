@@ -16,6 +16,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 **Improved**
 - **Outputs, tidier.** Each chat in the Outputs panel folds: the newest is open, the rest show just their name and how much they made, and a click opens one. What a chat made ("18 links", "4 drafts"…) is shown as chips you click to see only those, in the panel and on its card on the board; the card is named after the chat.
+- **Focus on several cards.** Select two or more (drag a box, or Shift+click) and choose Focus on these cards from a card's menu: they're laid out side by side in the middle, everything else folds into a column on the left, and Bring everything back puts every card back as it was. Claude can do it too ("put Post ideas and the Note apps table side by side and focus on them").
 - Claude can put a card next to another one ("put the table to the right of Post ideas": right, left, below or above, in a free spot) and tidy the board as Ctrl+Alt+T does; Ctrl+Z undoes either.
 - Claude can put a sticky note, a file or link, or a table straight into another space ("put it in Research"), without taking you there.
 - After you select several cards by dragging, they're simply outlined: no box is left around them.

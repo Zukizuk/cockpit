@@ -26,7 +26,9 @@ const BOARD_NOTE =
   "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text, space?), jot(text) into today's " +
   'journal, show(pathOrUrl, space?) to put a file or link on the board; give space to put it in another space ' +
   'without moving the user there (make the space first with newSpace if it is new); tidy() lines the cards up, as the ' +
-  "user's Ctrl+Alt+T does. Each card is a component (card) named by its title " +
+  "user's Ctrl+Alt+T does; focusOn(cards) puts one card or several (an array of titles, side by side in that order) " +
+  "in focus, every other card folded into a column on the left, and bringBack() puts everything back where it was " +
+  "(the board's focus lists the cards in focus). Each card is a component (card) named by its title " +
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
   'its value has kind, space, selected, inView, folded, color (sticky notes), file or url, peek (its first lines) and ' +
   'comments; actions comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), ' +

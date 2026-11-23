@@ -35,7 +35,7 @@ function pick<T>(list: T[], which: unknown, id: (t: T) => string, name: (t: T) =
 
 // ---- the board -----------------------------------------------------------------------------------------------
 
-type BoardValue = { space: string; spaces: { name: string; cards: number }[]; selected: string[]; inView: string[] }
+type BoardValue = { space: string; spaces: { name: string; cards: number }[]; selected: string[]; inView: string[]; focus?: string[] }
 type BoardOptions = {
   value?: BoardValue
   onSwitchSpace?: (space: string) => void
@@ -46,6 +46,8 @@ type BoardOptions = {
   onShow?: (target: string, space?: string) => void
   onAddTable?: (title: string, rows: string[][], space?: string) => void
   onTidy?: () => void
+  onFocusOn?: (cards: string[]) => void
+  onBringBack?: () => void
 }
 
 /** Rows an agent gives: an array of arrays (the first is the header), or text (tab-separated, Markdown or CSV). */
@@ -57,7 +59,7 @@ function rowsOf(rows: unknown): string[][] {
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -83,6 +85,12 @@ const boardPrimitive = definePrimitive({
       jot: (t: string) => call('onJot')(text(t, 'thought')),
       show: (target: string, s?: string) => call('onShow')(text(target, 'path or link'), into(s)),
       tidy: () => call('onTidy')(),
+      focusOn: (...cards: unknown[]) => {
+        const list = cards.flat().map(words).filter(Boolean)
+        if (!list.length) throw new Error('Name the card or cards to focus on.')
+        call('onFocusOn')(list)
+      },
+      bringBack: () => call('onBringBack')(),
       addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
@@ -91,7 +99,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -351,9 +359,10 @@ export function BoardAgent() {
       spaces: board.spaces.map(s => ({ name: s.name, cards: cards.filter(c => c.value.space === s.name).length })),
       selected: cards.filter(c => c.value.selected).map(c => c.title),
       inView: cards.filter(c => c.value.inView).map(c => c.title),
+      ...(board.focusing ? { focus: cards.filter(c => c.value.selected).map(c => c.title) } : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cards, board.spaces, board.space],
+    [cards, board.spaces, board.space, board.focusing],
   )
   const spaceNames = useMemo(() => board.spaces.map(s => s.name), [board.spaces])
   // every card's title, for "next to which card" (the same array while the cards stay the same)
@@ -477,6 +486,17 @@ export function BoardAgent() {
         onAddSticky={(t, s) => void board.newSticky(t).then(id => place(id, s))}
         onJot={t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message))}
         onTidy={() => board.tidy()}
+        onFocusOn={titles => {
+          // in the order named, side by side; a focus already on is put back first
+          const ids = titles.map(t => pick(cards, t, c => c.id, c => c.title, 'card').id)
+          const go = () => board.toggleFocus(ids)
+          if (board.focusing) {
+            board.toggleFocus()
+            setTimeout(go, 400)
+          } else go()
+          said(ids.length > 1 ? `Claude put ${ids.length} cards in focus` : 'Claude put a card in focus')
+        }}
+        onBringBack={() => board.focusing && board.toggleFocus()}
         onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t })).then(id => place(id, s))}
         onAddTable={
           board.prefs.extras.tables

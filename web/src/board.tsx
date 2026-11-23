@@ -181,7 +181,8 @@ interface Ctx {
   redo: () => void
   /** Focus: one card in the middle, every other card folded onto a shelf at its left. Again: all back as it was. */
   focusing: boolean
-  toggleFocus: (id?: string) => void
+  /** Focus on a card, or several side by side (the selected ones if none are named); again: everything back. */
+  toggleFocus: (id?: string | string[]) => void
   /** Packs every card (but locked ones) from the top-left of the screen, sizes and order kept. */
   tidy: () => void
   /** The keyboard shortcuts list. */
@@ -413,7 +414,9 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     },
     [rf, glide, persist, discardIfEmpty],
   )
-  const focusSavedRef = useRef<{ focus: string } | null>(null)
+  const focusSavedRef = useRef<{ focus: string | string[] } | null>(null)
+  /** The cards in focus (one, or several side by side). */
+  const inFocus = (id: string) => [focusSavedRef.current?.focus ?? []].flat().includes(id)
   const undo = useCallback(() => {
     track('board.undo')
     if (focusSavedRef.current) return toast('Bring everything back first')
@@ -545,7 +548,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     (nodes: CardNode[]) => {
       if (!nodes.length) return
       remember()
-      if (focusSavedRef.current && nodes.some(n => n.id === focusSavedRef.current?.focus)) toggleFocusRef.current()
+      if (focusSavedRef.current && nodes.some(n => inFocus(n.id))) toggleFocusRef.current()
       for (const n of nodes) if (discardable(n)) discardIfEmpty(n.data.ref, n.type as CardType)
       toast(nodes.length === 1 ? 'Taken off the board' : `${nodes.length} cards taken off the board`, { label: 'Undo', run: () => undoRef.current() })
     },
@@ -558,7 +561,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       if (!n) return
       if (opts.quiet) {
         remember()
-        if (focusSavedRef.current?.focus === id) toggleFocusRef.current()
+        if (inFocus(id)) toggleFocusRef.current()
       } else removing([n])
       rf.setNodes(ns => ns.filter(x => x.id !== id))
       persist()
@@ -692,7 +695,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   // everything back.
   type Snap = Record<string, { x: number; y: number; w: number; h: number; folded: boolean; openH?: number }>
   const FOCUS_KEY = 'cockpit.focus'
-  const focusSaved = useRef<{ focus: string; cards: Snap } | null>(
+  const focusSaved = useRef<{ focus: string | string[]; cards: Snap } | null>(
     (() => {
       try {
         return JSON.parse(localStorage.getItem(FOCUS_KEY) || 'null')
@@ -706,16 +709,17 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const sizeOf = (n: CardNode) => ({ w: n.width ?? n.measured?.width ?? SIZES[n.type as CardType].w, h: n.height ?? n.measured?.height ?? SIZES[n.type as CardType].h })
 
   const toggleFocus = useCallback(
-    (id?: string) => {
+    (id?: string | string[]) => {
       const saved = focusSaved.current
       if (saved) {
+        const focused = [saved.focus].flat()
         rf.setNodes(ns =>
           ns.map(n => {
             const s = saved.cards[n.id]
             if (!s) return n
             const { folded, openH, ...data } = n.data
             const moved = { ...n, position: { x: s.x, y: s.y } }
-            if (n.id === saved.focus) return moved // the focused card keeps any resizing done while focused
+            if (focused.includes(n.id)) return moved // a focused card keeps any resizing done while focused
             if (s.folded) return { ...moved, width: s.w, height: FOLDED_H, data: { ...data, folded: true, openH: s.openH } }
             // a card as tall as its content stays that way (a fixed height would cut it off)
             return { ...moved, width: s.w, height: fitsContent({ type: n.type, data }) ? undefined : s.h, data }
@@ -734,13 +738,19 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
         requestAnimationFrame(() => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 }))
         return
       }
-      const target = rf.getNode(id ?? rf.getNodes().find(n => n.selected)?.id ?? '')
-      if (!target) return toast('Select a card first')
+      // which cards: the ones named; or, from a card's menu with several selected, all of those; or the selection
+      const picked = rf.getNodes().filter(n => n.selected && !n.hidden)
+      const ids = Array.isArray(id) ? id : id ? (picked.length > 1 && picked.some(n => n.id === id) ? picked.map(n => n.id) : [id]) : picked.map(n => n.id)
+      const targets = ids.map(i => rf.getNode(i)).filter((n): n is CardNode => !!n && !n.hidden)
+      if (!targets.length) return toast('Select a card first')
+      // side by side, left to right as they are on the board (or in the order named), from the first one's place
+      if (!Array.isArray(id)) targets.sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)
+      const target = targets[0]
       const nodes = rf.getNodes().filter(n => !n.hidden)
       const cards: Snap = Object.fromEntries(
         nodes.map(n => [n.id, { x: n.position.x, y: n.position.y, ...sizeOf(n), folded: !!n.data.folded, ...(n.data.openH ? { openH: n.data.openH } : {}) }]),
       )
-      focusSaved.current = { focus: target.id, cards }
+      focusSaved.current = { focus: targets.length > 1 ? targets.map(n => n.id) : target.id, cards }
       focusSavedRef.current = focusSaved.current
       try {
         localStorage.setItem(FOCUS_KEY, JSON.stringify(focusSaved.current))
@@ -750,17 +760,29 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const SHELF_W = 280
       const shelfX = target.position.x - SHELF_W - 64
       // locked cards stay where they are
-      const others = nodes.filter(n => n.id !== target.id && !n.data.locked).sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
+      const focused = new Set(targets.map(n => n.id))
+      const others = nodes.filter(n => !focused.has(n.id) && !n.data.locked).sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
       const spot = new Map(others.map((n, i) => [n.id, { x: shelfX, y: target.position.y + i * (FOLDED_H + 10) }]))
+      // the focused cards in a row, tops lined up, a gap between them
+      const row = new Map<string, { x: number; y: number }>()
+      let x = target.position.x
+      for (const n of targets) {
+        row.set(n.id, { x, y: target.position.y })
+        x += sizeOf(n).w + 32
+      }
       glide()
       rf.setNodes(ns =>
         ns.map(n =>
-          n.id === target.id ? { ...foldNode(n, false), selected: true } : spot.has(n.id) ? { ...foldNode(n, true), width: SHELF_W, position: spot.get(n.id)!, selected: false } : n,
+          row.has(n.id)
+            ? { ...foldNode(n, false), position: row.get(n.id)!, selected: true }
+            : spot.has(n.id)
+              ? { ...foldNode(n, true), width: SHELF_W, position: spot.get(n.id)!, selected: false }
+              : n,
         ),
       )
       setFocusing(true)
       persist()
-      requestAnimationFrame(() => rf.fitView({ nodes: [{ id: target.id }], duration: 320, padding: 0.12, maxZoom: 1 }))
+      requestAnimationFrame(() => rf.fitView({ nodes: targets.map(n => ({ id: n.id })), duration: 320, padding: 0.12, maxZoom: 1 }))
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rf, persist, toast, glide],

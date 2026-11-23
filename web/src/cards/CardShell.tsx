@@ -84,6 +84,8 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const folded = !!node?.data.folded
   const locked = !!node?.data.locked
   const veiled = !!node?.data.veiled
+  // several cards picked (a drag on the board): their outline says so; resize corners only for one
+  const manyPicked = useStore(s => s.nodes.reduce((k, n) => k + (n.selected ? 1 : 0), 0) > 1)
   const toggleVeil = () => nodeId && board.setVeiled([nodeId], !veiled)
   const min = minSize((node?.type || 'item') as CardType, node?.data.ref || '')
   // fits its content now (Snippets, until a height is dragged by hand)
@@ -127,7 +129,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const shown: CardAction[] = [
     ...here,
     { label: folded ? 'Unfold' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, hidden: !!sticky, keys: 'F', gap: here.length > 0 },
-    { label: board.focusing ? 'Bring everything back' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
+    { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
     { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
     { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) },
     { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },
@@ -222,8 +224,6 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       </DropdownMenuContent>
     </DropdownMenu>
   )
-  // several cards picked (a drag on the board): their outline says so; resize corners only for one
-  const manyPicked = useStore(s => s.nodes.reduce((k, n) => k + (n.selected ? 1 : 0), 0) > 1)
   const lockBadge = locked && <IconButton icon={Lock} label="Locked in place. Click to unlock" onClick={toggleLock} className="lock-badge" />
 
   return (
