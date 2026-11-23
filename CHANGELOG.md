@@ -2,6 +2,22 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next (version 0.2.0, being tried out)
+
+**New**
+- **Claude works on your board with you.** In a Claude Code chat, Claude can see your board and use it: name a card ("my sticky note Post ideas") or select one and say "the selected card", and it reads just that one. It sees each card's first lines and comments, and can comment back, fold or unfold, bring a card into view, move it to another space, rename a note or change a sticky note's colour. It can add and tick off today's tasks, keep links on Later, leave snippets, add a sticky note or a line to today's journal, and make and switch spaces. Everything it changes shows on the board as it happens, and taking anything away always waits for you to click Allow.
+- **Spaces.** Keep more than one board: the name at the top left switches between them, makes a new one, renames or removes one. [ and ] go to the space before or after, Alt+1 to 9 jumps to one. A card's menu sends it to another space, and Undo brings it back. Each space remembers where you were looking.
+- **Comments on cards.** Any card can have a thread, for you and for Claude: a small bubble on its corner shows how many, with a dot when Claude has the last word. Hover a card for a +, or use Comment in its menu.
+- **Paste anything on the board.** It lands where your mouse is, by what it is: an image becomes a card, and so does a link (the toast can send it to Later instead); a key, token or password goes straight into Snippets, hidden and encrypted; a file path becomes a card. Images dropped from Explorer become cards too.
+
+**Improved**
+- After you select several cards by dragging, they're simply outlined: no box is left around them.
+- Claude can show you visuals (charts, diagrams, small pages) as cards, drawn safely.
+
+**Fixed**
+- Snippets' paste box could come out squashed after the card was unfolded. It's now sized by the browser itself, and the card can never be shorter than the box.
+- Rows in the Outputs panel can be dragged onto the board.
+
 ## 22 November 2026 (version 0.1.8)
 
 **Fixed**

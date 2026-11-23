@@ -42,7 +42,7 @@ const KEEPS: { value: SnippetKeep; label: string }[] = [
 ]
 
 /** The same guess the server makes, so the lock shows before keeping it. */
-function looksSecret(text: string) {
+export function looksSecret(text: string) {
   const t = text.trim()
   if (/^(sk|pk|rk|ghp|gho|ghs|github_pat|xox[abp]|AKIA|eyJ)[A-Za-z0-9_\-.]{8,}/.test(t)) return true
   if (/\b(password|passwd|pwd|secret|api[_-]?key|token|client[_-]?secret)\s*[:=]/i.test(t)) return true

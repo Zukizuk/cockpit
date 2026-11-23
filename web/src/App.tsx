@@ -1,6 +1,6 @@
 // Cockpit: a free-form board. Paste a link or path anywhere (or press +) and it lands as a card you can read,
 // move, resize and put beside anything else. A small dock is the only chrome.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, SelectionMode, useNodesState, useReactFlow, useStore, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
 import { Bookmark, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
@@ -30,6 +30,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { SpaceSwitcher } from './views/SpaceSwitcher'
+import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
 
 const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard }
@@ -131,8 +132,15 @@ function Canvas({ initial }: { initial: Board }) {
     return () => el.removeEventListener('wheel', onWheel, { capture: true })
   }, [rf, board])
 
-  // Paste a link anywhere on the board and it's kept on Later (read in the background, nothing opens); a path
-  // becomes a card; other text opens the + box with it.
+  // Paste on the board, and what's pasted lands where the mouse is, by what it is (as in FigJam): an image or a link
+  // becomes a card (a link can go to Later instead, from the toast); a key, token or password goes to Snippets,
+  // encrypted, never onto the board; a file path becomes a card; other text opens the + box with it.
+  const pointer = useRef<{ x: number; y: number } | null>(null)
+  useEffect(() => {
+    const follow = (e: PointerEvent) => (pointer.current = { x: e.clientX, y: e.clientY })
+    addEventListener('pointermove', follow, { passive: true })
+    return () => removeEventListener('pointermove', follow)
+  }, [])
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const t = e.target as HTMLElement | null
@@ -144,11 +152,35 @@ function Canvas({ initial }: { initial: Board }) {
         emit('snippet-paste', { text: raw })
         return
       }
+      // where the mouse is on the board (else the middle of the screen)
+      const p = pointer.current
+      const at = p && document.elementFromPoint(p.x, p.y)?.closest('.react-flow') ? rf.screenToFlowPosition(p) : undefined
+      const image = [...(e.clipboardData?.items || [])].find(i => i.kind === 'file' && i.type.startsWith('image/'))?.getAsFile()
+      if (image) {
+        e.preventDefault()
+        board.showImage(image, at ? { at } : {})
+        return
+      }
       const text = raw.trim().replace(/^"(.*)"$/, '$1')
       if (!text) return
       e.preventDefault()
-      if (isUrl(text)) board.saveLater({ url: text })
-      else if (isPath(text)) board.showItem({ path: text })
+      if (isUrl(text)) {
+        board.showItem({ url: text }, at ? { at } : {}).then(id => {
+          if (!id) return
+          board.toast('Put on the board', {
+            label: 'Save for Later instead',
+            run: () => {
+              board.removeCard(id, { quiet: true })
+              board.saveLater({ url: text })
+            },
+          })
+        })
+      } else if (isPath(text)) board.showItem({ path: text }, at ? { at } : {})
+      else if (looksSecret(text))
+        post('/api/snippets', { text, secret: true }).then(
+          () => board.toast('Kept in Snippets as a secret: hidden and encrypted', { label: 'Show', run: () => board.addCard('snippets', 'snippets') }),
+          (err: Error) => board.toast(err.message),
+        )
       else board.setPalette(true, text)
     }
     addEventListener('paste', onPaste)
@@ -294,12 +326,22 @@ function Canvas({ initial }: { initial: Board }) {
   // so does a link dragged in from the browser
   const outside = (e: React.DragEvent) => e.dataTransfer.types.includes('text/uri-list') && !e.dataTransfer.types.includes('Files')
   const onDragOver = (e: React.DragEvent) => {
-    if (!e.dataTransfer.types.includes(QUICK_DRAG) && !outside(e)) return
+    if (!e.dataTransfer.types.includes(QUICK_DRAG) && !outside(e) && !e.dataTransfer.types.includes('Files')) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'copy'
   }
   const onDrop = (e: React.DragEvent) => {
     const at = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+    // images dropped from Explorer or another app: each a card, side by side (other files: the browser gives their
+    // contents, not where they are, so Send to or Choose files is the way for those)
+    const files = [...e.dataTransfer.files]
+    if (files.length) {
+      e.preventDefault()
+      const images = files.filter(f => f.type.startsWith('image/'))
+      if (!images.length) return board.toast('Only images can be dropped here. For other files: Send to → Cockpit in Explorer, or Choose files in the + box')
+      images.slice(0, 12).forEach((f, i) => board.showImage(f, { at: { x: at.x + i * 40, y: at.y + i * 40 } }))
+      return
+    }
     const raw = e.dataTransfer.getData(QUICK_DRAG)
     if (raw) {
       e.preventDefault()

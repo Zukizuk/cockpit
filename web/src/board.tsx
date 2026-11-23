@@ -149,7 +149,10 @@ interface Ctx {
   removing: (nodes: CardNode[]) => void
   /** Points a card at something else (with show, brings it into view and selects it). */
   retarget: (id: string, ref: string, show?: boolean) => void
-  showItem: (body: Record<string, unknown>, opts?: PlaceOpts) => Promise<void>
+  /** Puts a file, link, folder or written content on the board; resolves to the card's id (none if it failed). */
+  showItem: (body: Record<string, unknown>, opts?: PlaceOpts) => Promise<string | undefined>
+  /** A pasted or dropped image (the browser has its bytes, not a path): kept as a file, shown as a card. */
+  showImage: (file: File, opts?: PlaceOpts) => Promise<string | undefined>
   /** Keeps a link or a short note on the Later list (and puts the list on the board if it isn't there). */
   saveLater: (body: { url?: string; path?: string; text?: string; title?: string }) => Promise<void>
   /** Moves a kept thing on the Later list: to check, reading, done, or off the list (null). */
@@ -202,7 +205,7 @@ interface Ctx {
   /** Reads a pin full screen in Cockpit instead of its own program. */
   readPin: (p: QuickThing) => Promise<void>
   /** A card for a pin (or an often-opened thing), where it was dropped or in a free spot. */
-  putOnBoard: (p: QuickThing, at?: { x: number; y: number }) => Promise<void>
+  putOnBoard: (p: QuickThing, at?: { x: number; y: number }) => Promise<unknown>
   settingsOpen: boolean
   setSettingsOpen: (open: boolean) => void
   prefs: Prefs
@@ -525,16 +528,40 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       if (body.url) toast('Reading the page…')
       try {
         const e = await post<ShownEntry & { folder?: string }>('/api/shown', body)
-        if (e.folder) return void addCard('folder', e.folder, opts)
-        addCard('item', e.id, opts)
+        if (e.folder) return addCard('folder', e.folder, opts)
+        const id = addCard('item', e.id, opts)
         items.reload()
         if (e.readError) toast("Couldn't read that page here; it opens in the browser from its card")
         else if (body.url) clearToast()
+        return id
       } catch (err: any) {
         toast(err.message)
+        return undefined
       }
     },
     [addCard, items, toast, clearToast],
+  )
+
+  const showImage = useCallback(
+    async (file: File, opts: PlaceOpts = {}) => {
+      try {
+        const data = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader()
+          r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ''))
+          r.onerror = () => reject(new Error("Couldn't read that image"))
+          r.readAsDataURL(file)
+        })
+        const name = file.name && !/^image\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name) ? file.name.replace(/\.[a-z0-9]+$/i, '') : undefined
+        const e = await post<ShownEntry>('/api/shown/image', { data, type: file.type, name })
+        const id = addCard('item', e.id, opts)
+        items.reload()
+        return id
+      } catch (err: any) {
+        toast(err.message)
+        return undefined
+      }
+    },
+    [addCard, items, toast],
   )
 
   const newSticky = useCallback(
@@ -999,11 +1026,11 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
-      items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
+      showImage, items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
       comments: commentsData.data?.cards || {}, addComment, removeComment,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment],
+    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

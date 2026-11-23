@@ -27,9 +27,12 @@ Windows may warn that the installer is from an unknown publisher: the release is
 
 ## What it does
 
-- **Paste anything.** A link goes to **Later** (to check, reading, done), read in the background so you can read
-  it in Cockpit. A file path opens as a card: Markdown, code, CSV, JSON, diffs, images, PDF, audio and video, and
-  Word, Excel and PowerPoint previews.
+- **Paste anything.** It lands where your mouse is: a link or an image becomes a card, a file path opens as one
+  (Markdown, code, CSV, JSON, diffs, images, PDF, audio and video, and Word, Excel and PowerPoint previews), and a
+  key or password goes into Snippets, encrypted. **Later** (to check, reading, done) keeps links to read another time.
+- **Spaces and comments.** Several boards to switch between, and a comment thread on any card.
+- **Claude on your board.** From a Claude Code chat, Claude reads the cards you name or select, comments back, and
+  adds tasks, notes, links and snippets; anything it takes away waits for your Allow.
 - **Bring in files from Windows.** Right-click files or folders in Explorer and choose **Send to → Cockpit**, or
   pick **Choose files…** in the + box for Windows' own Open dialog. A folder becomes a card with its files as a tree.
   Something sent while Cockpit is closed is there when you open it.

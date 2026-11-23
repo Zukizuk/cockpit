@@ -126,6 +126,24 @@ function broadcast(event, data = {}) {
   for (const c of clients) c.write(msg)
 }
 
+const IMAGE_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp', 'image/svg+xml': 'svg' }
+/** Writes a pasted image ({ data: base64, type }) to ~/.cockpit/pasted and returns its path. */
+function savePasted({ data, type }) {
+  const ext = IMAGE_TYPES[type]
+  if (!ext) throw new UserError('Only images can be pasted as a file (PNG, JPEG, GIF, WebP, BMP or SVG)')
+  const bytes = Buffer.from(String(data || ''), 'base64')
+  if (!bytes.length) throw new UserError('That image was empty')
+  if (bytes.length > 25 * 1024 * 1024) throw new UserError('That image is over 25 MB')
+  const dir = path.join(DATA_DIR, 'pasted')
+  fs.mkdirSync(dir, { recursive: true })
+  const d = new Date()
+  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}.${String(d.getMinutes()).padStart(2, '0')}.${String(d.getSeconds()).padStart(2, '0')}`
+  let file = path.join(dir, `Pasted ${stamp}.${ext}`)
+  for (let i = 2; fs.existsSync(file); i++) file = path.join(dir, `Pasted ${stamp} (${i}).${ext}`)
+  fs.writeFileSync(file, bytes)
+  return file
+}
+
 // Cockpit's board tools (experimental, spike/ui-sdk-today): an agent's snapshot, act or query, from the MCP server,
 // goes to one open window (the one used last), which runs it with UI SDK's bridge and posts the result back.
 let nextClient = 0
@@ -463,6 +481,11 @@ async function api(req, res, url) {
   }
 
   if (area === 'shown') {
+    // a pasted or dropped image (the browser has its bytes, not a path): kept as a file, shown as a card
+    if (a === 'image' && !b && method === 'POST') {
+      const body = await readBody(req, 40 * 1024 * 1024)
+      return json(res, 200, shown.addShown({ path: savePasted(body), title: typeof body.name === 'string' && body.name.trim() ? body.name.trim().slice(0, 120) : 'Pasted image', from: 'you' }))
+    }
     if (!a && method === 'GET') return json(res, 200, shown.listShown({ includeHidden: url.searchParams.get('all') === '1' }))
     if (!a && method === 'POST') {
       const body = await readBody(req)
