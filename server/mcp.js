@@ -18,14 +18,22 @@ import { agentTools } from '@ui-sdk/core/agent'
 const here = path.dirname(fileURLToPath(import.meta.url))
 
 const BOARD_NOTE =
-  "The board's components: 'Board' (board: its value lists the spaces and every card with id, kind, title, space, " +
-  'folded, file or url, and its comments; actions switchSpace(space), newSpace(name), renameSpace(space, name), ' +
-  "moveToSpace(card, space), comment(card, text), addSticky(text), jot(text) into today's journal, show(pathOrUrl), " +
-  "fold(card), unfold(card), focus(card), remove(card)); 'Today's tasks' (task-list: add(text), complete(task), " +
-  "reopen(task), rename(task, newText), remove(task)); 'Later' (later-list: add(linkOrNote), setState(item, 'to check' | " +
-  "'reading' | 'done'), remove(item)); 'Snippets' (snippet-list: add(text, title?), remove(item); a secret's text is " +
-  'never shown). Cards and items are named by id or by words of their title. Notes (sticky notes, journal) are files: ' +
-  "read and edit them at the card's file path, and the board follows. The user's comments on a card may be for you. " +
+  'How to look: when the user names a card ("my sticky note Post ideas"), call board_query with { text: "<some of its ' +
+  'words>" } and you get just that card. When they say "this card", "the selected one" or "what I am looking at", ' +
+  "call board_snapshot: those cards have selected: true or inView: true, and 'Board' lists their titles. " +
+  'Use the full snapshot for an overview. ' +
+  "Components: 'Board' (board: the spaces with their card counts, the space shown, selected and in-view titles; " +
+  "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text), jot(text) into today's " +
+  'journal, show(pathOrUrl) to put a file or link on the board). Each card is a component (card) named by its title ' +
+  "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
+  'its value has kind, space, selected, inView, folded, color (sticky notes), file or url, peek (its first lines) and ' +
+  'comments; actions comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), rename(title) ' +
+  "(notes), setColor(yellow | green | pink | orange | charcoal) (sticky notes), remove(). 'Today's tasks' (task-list: " +
+  "add(text), complete(task), reopen(task), rename(task, newText), remove(task)); 'Later' (later-list: " +
+  "add(linkOrNote), setState(item, 'to check' | 'reading' | 'done'), remove(item)); 'Snippets' (snippet-list: " +
+  "add(text, title?), remove(item); a secret's text is never shown). " +
+  "Notes (sticky notes, journal) are files: peek has their start; read or edit the whole at the card's file path, " +
+  "and the board follows. The user's comments on a card may be for you: answer with the card's comment(). " +
   "Every removal waits for the user to allow it in Cockpit. If 'Today's tasks' is missing, the Today card is not on " +
   'the board (the user can press T).'
 

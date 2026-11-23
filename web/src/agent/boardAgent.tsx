@@ -1,18 +1,23 @@
-// The rest of the board as UI SDK components, so an agent (Claude Code, through Cockpit's board tools) can read it and
-// use it: the board itself (spaces, the cards on it, their comments), Later, and Snippets. Nothing here draws anything;
-// each is an invisible component whose value is the data and whose actions do what a click would.
-// Notes are files: their paths are in the board's value, so an agent reads and edits them where they are, and the
-// board follows. Removing anything waits for the person (the bridge's allow). Experimental (spike/ui-sdk-today).
-import { useMemo } from 'react'
+// The board as UI SDK components, so an agent (Claude Code, through Cockpit's board tools) can read it and use it.
+// Nothing here draws anything: each is an invisible component whose value is the data and whose actions do what a
+// click would.
+// - "Board": the spaces, what the user has selected and has in view; make spaces, sticky notes, journal lines, cards.
+// - One component per card, named by its title: so query({ text: "Post ideas" }) finds just that card. Its value says
+//   what it is, where (space, selected, in view), a peek at its content and its comments; its actions are the card's.
+// - "Later" and "Snippets": the lists themselves.
+// Notes are files: a card gives the path, so an agent reads and edits the note where it is, and the board follows.
+// Removing anything waits for the person (the bridge's allow). Experimental (spike/ui-sdk-today).
+import { Fragment, useMemo } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
-import { foldNode, spaceOf, useBoard, type CardNode } from '../board'
-import { get, post, type Snippet } from '../api'
+import { foldNode, isSticky, spaceOf, useBoard, type CardNode } from '../board'
+import { get, post, type Snippet, type StickyColor } from '../api'
 import { useData } from '../lib'
 import { summary } from '../cards/OutputsCard'
 
 const words = (s: unknown) => String(s ?? '').trim()
+const PEEK = 400
 
 /** Something named by its id, or by words only it has (titles first). */
 function pick<T>(list: T[], which: unknown, id: (t: T) => string, name: (t: T) => string, what: string): T {
@@ -29,40 +34,21 @@ function pick<T>(list: T[], which: unknown, id: (t: T) => string, name: (t: T) =
 
 // ---- the board -----------------------------------------------------------------------------------------------
 
-export type AgentCard = { card: string; kind: string; title: string; space: string; folded?: boolean; file?: string; url?: string; comments?: { by: string; text: string }[] }
-type BoardValue = { space: string; spaces: string[]; cards: AgentCard[] }
+type BoardValue = { space: string; spaces: { name: string; cards: number }[]; selected: string[]; inView: string[] }
 type BoardOptions = {
   value?: BoardValue
   onSwitchSpace?: (space: string) => void
   onNewSpace?: (name: string) => void
   onRenameSpace?: (space: string, name: string) => void
-  onMoveToSpace?: (card: string, space: string) => void
-  onComment?: (card: string, text: string) => void
   onAddSticky?: (text: string) => void
   onJot?: (text: string) => void
   onShow?: (target: string) => void
-  onFold?: (card: string, fold: boolean) => void
-  onFocus?: (card: string) => void
-  onRemove?: (card: string) => void
 }
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: {
-    value: 'value',
-    onSwitchSpace: 'action',
-    onNewSpace: 'action',
-    onRenameSpace: 'action',
-    onMoveToSpace: 'action',
-    onComment: 'action',
-    onAddSticky: 'action',
-    onJot: 'action',
-    onShow: 'action',
-    onFold: 'action',
-    onFocus: 'action',
-    onRemove: 'action',
-  },
-  state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: ['Main'], cards: [] } }),
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action' },
+  state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
     const v = () => context.store.get().value as BoardValue
@@ -71,8 +57,7 @@ const boardPrimitive = definePrimitive({
       if (typeof fn !== 'function') throw new Error('The board cannot do that here.')
       return fn as NonNullable<BoardOptions[K]>
     }
-    const card = (which: string) => pick(v().cards, which, c => c.card, c => c.title, 'card').card
-    const space = (which: string) => pick(v().spaces, which, s => s, s => s, 'space')
+    const space = (which: string) => pick(v().spaces, which, s => s.name, s => s.name, 'space').name
     const text = (t: unknown, what = 'text') => {
       const w = words(t)
       if (!w) throw new Error(`Give the ${what}.`)
@@ -82,21 +67,79 @@ const boardPrimitive = definePrimitive({
       switchSpace: (s: string) => call('onSwitchSpace')(space(s)),
       newSpace: (name: string) => call('onNewSpace')(text(name, 'name')),
       renameSpace: (s: string, name: string) => call('onRenameSpace')(space(s), text(name, 'new name')),
-      moveToSpace: (c: string, s: string) => call('onMoveToSpace')(card(c), space(s)),
-      comment: (c: string, t: string) => call('onComment')(card(c), text(t, 'comment')),
       addSticky: (t: string) => call('onAddSticky')(text(t, 'note')),
       jot: (t: string) => call('onJot')(text(t, 'thought')),
       show: (target: string) => call('onShow')(text(target, 'path or link')),
-      fold: (c: string) => call('onFold')(card(c), true),
-      unfold: (c: string) => call('onFold')(card(c), false),
-      focus: (c: string) => call('onFocus')(card(c)),
-      remove: (c: string) => call('onRemove')(card(c)),
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'moveToSpace', 'comment', 'addSticky', 'jot', 'show', 'fold', 'unfold', 'focus', 'remove'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
+
+// ---- a card --------------------------------------------------------------------------------------------------
+
+export type CardValue = {
+  kind: string
+  space: string
+  selected?: boolean
+  inView?: boolean
+  folded?: boolean
+  color?: string
+  file?: string
+  url?: string
+  /** the first lines of what it shows */
+  peek?: string
+  comments?: { by: string; text: string }[]
+}
+type CardOptions = {
+  value?: CardValue
+  spaces?: string[]
+  onComment?: (text: string) => void
+  onFold?: (fold: boolean) => void
+  onFocus?: () => void
+  onMoveToSpace?: (space: string) => void
+  onRename?: (title: string) => void
+  onColor?: (color: StickyColor) => void
+  onRemove?: () => void
+}
+const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', pink: 'pink', orange: 'orange', charcoal: 'ink', ink: 'ink', dark: 'ink', black: 'ink' }
+
+const cardPrimitive = definePrimitive({
+  name: 'card',
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action' },
+  state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' } }),
+  sync: options => (options.value === undefined ? {} : { value: options.value }),
+  api: context => {
+    const v = () => context.store.get().value as CardValue
+    const call = <K extends keyof CardOptions>(key: K) => {
+      const fn = context.options()[key]
+      if (typeof fn !== 'function') throw new Error(`A ${v().kind} card can't do that.`)
+      return fn as Extract<NonNullable<CardOptions[K]>, (...a: never[]) => unknown>
+    }
+    return {
+      comment: (text: string) => {
+        const t = words(text)
+        if (!t) throw new Error('Give the comment.')
+        call('onComment')(t)
+      },
+      fold: () => call('onFold')(true),
+      unfold: () => call('onFold')(false),
+      focus: () => call('onFocus')(),
+      moveToSpace: (space: string) => call('onMoveToSpace')(pick(context.options().spaces || [], space, s => s, s => s, 'space')),
+      rename: (title: string) => call('onRename')(words(title)),
+      setColor: (color: string) => {
+        const c = COLORS[words(color).toLowerCase()]
+        if (!c) throw new Error('A sticky note is yellow, green, pink, orange or charcoal.')
+        call('onColor')(c)
+      },
+      remove: () => call('onRemove')(),
+    }
+  },
+  slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
+  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'remove'] },
+})
+const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
 // ---- Later -------------------------------------------------------------------------------------------------
 
@@ -162,61 +205,93 @@ const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 // ---- on the page -------------------------------------------------------------------------------------------
 
 const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder' }
+type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string]
+type Built = { id: string; type: string; ref: string; title: string; value: CardValue }
 
 export function BoardAgent() {
   const board = useBoard()
   const rf = useReactFlow<CardNode>()
-  // the cards, as a string, so this only redraws when one is added, taken off, moved to a space or folded
-  const cardsKey = useStore(s =>
-    JSON.stringify(s.nodes.map(n => [n.id, n.type, (n.data as CardNode['data']).ref, spaceOf(n as CardNode), !!(n.data as CardNode['data']).folded])),
-  )
+  // the cards, as a string, so this only redraws when one is added, taken off, moved, folded, selected, or comes into
+  // or goes out of view
+  const cardsKey = useStore(s => {
+    const [tx, ty, z] = s.transform
+    const view = { x0: -tx / z, y0: -ty / z, x1: (s.width - tx) / z, y1: (s.height - ty) / z }
+    return JSON.stringify(
+      s.nodes.map(n => {
+        const d = n.data as CardNode['data']
+        const w = n.measured?.width ?? n.width ?? 0
+        const h = n.measured?.height ?? n.height ?? 0
+        const seen = !n.hidden && n.position.x < view.x1 && n.position.x + w > view.x0 && n.position.y < view.y1 && n.position.y + h > view.y0
+        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || ''] as Row
+      }),
+    )
+  })
   const snippets = useData(() => get<Snippet[]>('/api/snippets'), [], { refreshOn: ['snippets'] })
   const notes = board.notes
   const sep = notes?.root.includes('\\') ? '\\' : '/'
+  const spaceName = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
+  const spaceId = (name: string) => board.spaces.find(s => s.name === name)?.id ?? 'main'
+  const said = (t: string) => board.toast(t)
 
-  const value: BoardValue = useMemo(() => {
-    const spaceName = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
-    const cards = (JSON.parse(cardsKey) as [string, string, string, string, boolean][]).map(([id, type, ref, space, folded]): AgentCard => {
+  const cards: Built[] = useMemo(() => {
+    const spaceOfId = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
+    return (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color]) => {
       let title = KIND[type] ?? type
       let file: string | undefined
       let url: string | undefined
+      let peek: string | undefined
       if (type === 'item') {
         const e = board.items.find(x => x.id === ref)
         title = e?.title || 'File'
         if (e?.url) url = e.url
         else if (e?.path && e.kind === 'file') file = e.path
+        peek = e?.excerpt
       } else if (type === 'note') {
         const n = notes?.notes.find(x => x.path === ref)
         title = /^journal\//.test(ref) ? `Journal ${ref.slice(8, 18)}` : n?.title || n?.excerpt?.split('\n')[0] || 'Sticky note'
         if (notes) file = notes.root + sep + ref.split('/').join(sep)
+        peek = n?.excerpt
       } else if (type === 'folder') {
         title = ref.split(/[\\/]/).filter(Boolean).pop() || ref
         file = ref
       } else if (type === 'outputs') {
         const g = board.outputs.find(x => x.id === ref)
         title = g ? `Claude: ${summary(g)}` : 'Claude outputs'
+        if (g) peek = g.items.map(i => `${i.kind}: ${i.label}`).join('\n')
       } else if (type === 'tracker') title = `Tracker: ${ref}`
-      else if (type === 'tasks') title = 'Today'
-      else if (type === 'later') title = 'Later'
-      else if (type === 'snippets') title = 'Snippets'
+      // the lists themselves are "Today's tasks", "Later" and "Snippets": their cards are named apart
+      else if (type === 'tasks') title = 'Today card'
+      else if (type === 'later') title = 'Later card'
+      else if (type === 'snippets') title = 'Snippets card'
       const thread = board.comments[id]
-      return {
-        card: id,
-        kind: KIND[type] ?? type,
-        title,
-        space: spaceName(space),
+      const sticky = isSticky(type, ref)
+      const value: CardValue = {
+        kind: sticky ? 'sticky note' : KIND[type] ?? type,
+        space: spaceOfId(space),
+        ...(selected ? { selected: true } : {}),
+        ...(inView ? { inView: true } : {}),
         ...(folded ? { folded: true } : {}),
+        ...(sticky ? { color: color === 'ink' || !color ? 'charcoal' : color } : {}),
         ...(file ? { file } : {}),
         ...(url ? { url } : {}),
+        ...(peek ? { peek: peek.length > PEEK ? `${peek.slice(0, PEEK)}…` : peek } : {}),
         ...(thread?.length ? { comments: thread.slice(-10).map(c => ({ by: c.by, text: c.text })) } : {}),
       }
+      return { id, type, ref, title, value }
     })
-    return { space: spaceName(board.space), spaces: board.spaces.map(s => s.name), cards }
   }, [cardsKey, board.spaces, board.space, board.items, board.outputs, board.comments, notes, sep])
 
-  const spaceId = (name: string) => board.spaces.find(s => s.name === name)?.id ?? 'main'
-  const said = (t: string) => board.toast(t)
-  const titleOf = (card: string) => value.cards.find(c => c.card === card)?.title ?? 'a card'
+  const boardValue: BoardValue = useMemo(
+    () => ({
+      space: spaceName(board.space),
+      spaces: board.spaces.map(s => ({ name: s.name, cards: cards.filter(c => c.value.space === s.name).length })),
+      selected: cards.filter(c => c.value.selected).map(c => c.title),
+      inView: cards.filter(c => c.value.inView).map(c => c.title),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cards, board.spaces, board.space],
+  )
+  const spaceNames = useMemo(() => board.spaces.map(s => s.name), [board.spaces])
 
   const later: LaterItem[] = useMemo(
     () => board.items.filter(e => e.later).map(e => ({ id: e.id, title: e.title, ...(e.url ? { url: e.url } : {}), state: e.later === 'todo' ? 'to check' : e.later! })),
@@ -227,39 +302,62 @@ export function BoardAgent() {
     [snippets.data],
   )
 
+  const fold = (id: string, f: boolean) => {
+    board.remember()
+    rf.setNodes(ns => ns.map(n => (n.id === id ? foldNode(n, f) : n)))
+    board.persist()
+  }
+  const focus = (id: string) => {
+    const n = rf.getNode(id)
+    if (!n) return
+    if (spaceOf(n) !== board.space) board.switchSpace(spaceOf(n))
+    setTimeout(() => rf.fitView({ nodes: [{ id }], duration: 320, padding: 0.25, maxZoom: 1 }), 80)
+  }
+
   return (
     <>
       <BoardRoot
         aria-label="Board"
         className="sr-only"
-        value={value}
+        value={boardValue}
         onSwitchSpace={s => board.switchSpace(spaceId(s))}
         onNewSpace={name => {
           board.newSpace(name)
           said(`Claude made the space "${name}"`)
         }}
         onRenameSpace={(s, name) => board.renameSpace(spaceId(s), name)}
-        onMoveToSpace={(card, s) => board.moveToSpace([card], spaceId(s))}
-        onComment={(card, t) => {
-          board.addComment(card, t, 'Claude').catch(() => {})
-          said(`Claude commented on ${titleOf(card)}`)
-        }}
         onAddSticky={t => board.newSticky(t)}
         onJot={t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message))}
         onShow={t => (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t }))}
-        onFold={(card, fold) => {
-          board.remember()
-          rf.setNodes(ns => ns.map(n => (n.id === card ? foldNode(n, fold) : n)))
-          board.persist()
-        }}
-        onFocus={card => {
-          const n = rf.getNode(card)
-          if (!n) return
-          if (spaceOf(n) !== board.space) board.switchSpace(spaceOf(n))
-          setTimeout(() => rf.fitView({ nodes: [{ id: card }], duration: 320, padding: 0.25, maxZoom: 1 }), 80)
-        }}
-        onRemove={card => board.removeCard(card)}
       />
+      {cards.map(c => (
+        <Fragment key={c.id}>
+          <CardRoot
+            aria-label={c.title}
+            className="sr-only"
+            value={c.value}
+            spaces={spaceNames}
+            onComment={t => {
+              board.addComment(c.id, t, 'Claude').catch(() => {})
+              said(`Claude commented on ${c.title}`)
+            }}
+            onFold={f => fold(c.id, f)}
+            onFocus={() => focus(c.id)}
+            onMoveToSpace={s => board.moveToSpace([c.id], spaceId(s))}
+            onRename={
+              c.type === 'note'
+                ? t =>
+                    post('/api/notes/title', { path: c.ref, title: t }).then(
+                      () => said(t ? `Claude named the note "${t}"` : "Claude took the note's title off"),
+                      (e: Error) => said(e.message),
+                    )
+                : undefined
+            }
+            onColor={c.value.kind === 'sticky note' ? color => board.setColor(c.id, color) : undefined}
+            onRemove={() => board.removeCard(c.id)}
+          />
+        </Fragment>
+      ))}
       <LaterRoot
         aria-label="Later"
         className="sr-only"

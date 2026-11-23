@@ -12,7 +12,7 @@ type Call = { id: string; client: number; tool: 'snapshot' | 'act' | 'query'; in
 export type Ask = (text: string) => Promise<boolean>
 
 // what an agent may reach, and how a removal there is put to the person
-const WHERE: Record<string, string> = { 'task-list': 'from Today', board: 'from the board', 'later-list': 'from Later', 'snippet-list': 'from Snippets' }
+const WHERE: Record<string, string> = { 'task-list': 'from Today', board: 'from the board', card: 'from the board', 'later-list': 'from Later', 'snippet-list': 'from Snippets' }
 
 let started = false
 let me = 0
@@ -21,11 +21,12 @@ export function startAgentBridge(ask: Ask) {
   if (started) return
   started = true
   const agent = createAgent({
-    allow: ({ component, action, args }) => {
+    allow: ({ component, action, args, label }) => {
       const where = WHERE[component]
       if (!where) return false
       // taking something away is the person's call
-      if (action === 'remove') return ask(`Claude wants to remove "${String(args?.[0] ?? '')}" ${where}`)
+      // a card is named by its own label; a list item by the step's argument
+      if (action === 'remove') return ask(`Claude wants to remove "${String(component === 'card' ? label : (args?.[0] ?? ''))}" ${where}`)
       return true
     },
   })
