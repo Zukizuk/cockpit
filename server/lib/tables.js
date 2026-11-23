@@ -96,12 +96,65 @@ export function writeTable(cfg, rel, rows, baseMtime) {
   return { path: rel, title: titleOf(rel), mtime: fs.statSync(abs).mtimeMs }
 }
 
+const START = [['Name', 'Notes'], ['', ''], ['', '']]
+
 /** A new table: a header row and a couple of empty rows unless rows are given. */
 export function newTable(cfg, title, rows) {
   const rel = freePath(cfg, title || 'Table')
-  const start = Array.isArray(rows) && rows.length ? rows : [['Name', 'Notes'], ['', ''], ['', '']]
+  const start = Array.isArray(rows) && rows.length ? rows : START
   writeTable(cfg, rel, start)
   return readTable(cfg, rel)
+}
+
+/** Never typed in: as it was made (or every cell empty). */
+const untouched = rows => rows.every((r, i) => r.every((c, j) => !c.trim() || (i === 0 && START[0][j] === c)))
+
+/**
+ * A table taken off the board without anything typed in it is just a blank file: it goes, so blank tables don't
+ * pile up (and the next new one is "Table" again). Anything with writing in it is kept.
+ */
+export function discardEmpty(cfg, rel) {
+  const abs = resolveTable(cfg, rel)
+  if (!fs.existsSync(abs)) return { discarded: false }
+  if (!untouched(parseCsv(fs.readFileSync(abs, 'utf8')))) throw new UserError('That table has something in it, so it was kept', 409)
+  fs.unlinkSync(abs)
+  return { discarded: true }
+}
+
+/** The tables kept (newest first), to find one again and put it back on the board. */
+export function listTables(cfg) {
+  const dir = path.join(notesRoot(cfg), 'tables')
+  let names = []
+  try {
+    names = fs.readdirSync(dir).filter(n => /\.csv$/i.test(n) && !n.startsWith('.'))
+  } catch {
+    return []
+  }
+  return names
+    .map(n => {
+      const rel = `tables/${n}`
+      try {
+        const st = fs.statSync(path.join(dir, n))
+        const rows = parseCsv(fs.readFileSync(path.join(dir, n), 'utf8'))
+        return { path: rel, title: titleOf(rel), mtime: st.mtimeMs, rows: Math.max(0, rows.length - 1), columns: rows[0] || [] }
+      } catch {
+        return null
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.mtime - a.mtime)
+}
+
+/** Deleting a table moves its file to the notes folder's .archive (as notes are archived): nothing is lost. */
+export function archiveTable(cfg, rel) {
+  const abs = resolveTable(cfg, rel)
+  if (!fs.existsSync(abs)) throw new UserError('That table is gone', 404)
+  const root = notesRoot(cfg)
+  let target = path.join(root, '.archive', rel)
+  if (fs.existsSync(target)) target = target.replace(/(\.csv)$/i, `-${Date.now()}$1`)
+  fs.mkdirSync(path.dirname(target), { recursive: true })
+  fs.renameSync(abs, target)
+  return { archivedTo: path.relative(root, target).split(path.sep).join('/') }
 }
 
 /** Gives a table another name (its file is renamed); returns its new path. */

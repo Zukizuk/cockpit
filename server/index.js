@@ -812,7 +812,22 @@ async function api(req, res, url) {
     if (a === 'new' && method === 'POST') {
       const body = await readBody(req)
       counted('table.new')
-      return json(res, 200, tables.newTable(cfg, body.title, body.rows))
+      const t = tables.newTable(cfg, body.title, body.rows)
+      broadcast('tables', { path: t.path })
+      return json(res, 200, t)
+    }
+    if (a === 'list' && method === 'GET') return json(res, 200, tables.listTables(cfg))
+    if (a === 'discard' && method === 'POST') {
+      const body = await readBody(req)
+      const r = tables.discardEmpty(cfg, body.path)
+      if (r.discarded) broadcast('tables', { path: body.path, gone: true })
+      return json(res, 200, r)
+    }
+    if (a === 'archive' && method === 'POST') {
+      const body = await readBody(req)
+      const r = tables.archiveTable(cfg, body.path)
+      broadcast('tables', { path: body.path, gone: true })
+      return json(res, 200, r)
     }
     if (a === 'rename' && method === 'POST') {
       const body = await readBody(req)

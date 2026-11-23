@@ -3036,9 +3036,9 @@ table.data tbody tr:hover td {
   }
 }
 
-/* ---- the Table extra: a small grid, typed into ----------------------------------------------------------------- */
+/* ---- the Table extra: no card, the grid is the thing on the board ---------------------------------------------- */
 
-/* a table card is its grid: as wide and tall as the table, never larger (it scrolls past a limit) */
+/* as wide and tall as the table, never larger (it scrolls past a limit) */
 .react-flow__node-table {
   width: auto !important;
   height: auto !important;
@@ -3049,16 +3049,86 @@ table.data tbody tr:hover td {
   height: auto;
 }
 
+/* no card around it: only a small label above the grid, to drag it by */
+.card.is-bare {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.card.is-bare .bare-label {
+  height: 26px;
+  gap: 6px;
+  padding: 0 0 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12.5px;
+}
+
+.bare-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.bare-label .note-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  transition: color 150ms ease-out;
+}
+
+.card.is-bare:hover .bare-label .note-title,
+.card.is-bare.is-selected .bare-label .note-title {
+  color: var(--foreground);
+}
+
+.card.is-bare .card-actions {
+  opacity: 0;
+}
+
+.card.is-bare:hover .card-actions,
+.card.is-bare.is-selected .card-actions,
+.card.is-bare .card-actions:focus-within,
+.card.is-bare.is-locked .card-actions,
+.card.is-bare.is-veiled .card-actions {
+  opacity: 1;
+}
+
+.card.is-bare .icon-btn {
+  width: 22px;
+  height: 22px;
+}
+
 .table-body {
   flex: none !important;
   padding: 0 !important;
+  overflow: visible !important;
 }
 
-.tbl-wrap {
+/* room for the + on its right and bottom edges, inside the node (invisible until hovered) */
+.tbl-free {
+  position: relative;
+  padding: 0 24px 24px 0;
+}
+
+.tbl-grid {
   max-width: min(960px, 80vw);
   max-height: min(560px, 70vh);
   overflow: auto;
-  padding: 0 4px 6px 10px;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--ring-1), var(--lift);
+  transition: box-shadow 150ms ease-out;
+}
+
+.card.is-bare.is-selected .tbl-grid {
+  box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.26), var(--lift);
+}
+
+.card.is-bare.is-flash .tbl-grid {
+  box-shadow: 0 0 0 2px var(--ring), var(--lift);
 }
 
 .tbl {
@@ -3069,29 +3139,22 @@ table.data tbody tr:hover td {
 
 .tbl td {
   position: relative;
+  min-width: 72px;
   padding: 0;
-  box-shadow: inset -1px -1px 0 oklch(var(--contrast) / 0.08);
-}
-
-.tbl tr:first-child td:not(.tbl-side) {
   box-shadow:
-    inset -1px -1px 0 oklch(var(--contrast) / 0.08),
-    inset 0 1px 0 oklch(var(--contrast) / 0.08);
+    inset -1px 0 0 oklch(var(--contrast) / 0.07),
+    inset 0 -1px 0 oklch(var(--contrast) / 0.07);
 }
 
-.tbl td:first-child {
-  box-shadow:
-    inset -1px -1px 0 oklch(var(--contrast) / 0.08),
-    inset 1px 0 0 oklch(var(--contrast) / 0.08);
+.tbl td:last-child {
+  box-shadow: inset 0 -1px 0 oklch(var(--contrast) / 0.07);
 }
 
-.tbl tr:first-child td:first-child {
-  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.08);
+.tbl tr:last-child td {
+  box-shadow: inset -1px 0 0 oklch(var(--contrast) / 0.07);
 }
 
-.tbl td.tbl-side {
-  min-width: 28px;
-  width: 28px;
+.tbl tr:last-child td:last-child {
   box-shadow: none;
 }
 
@@ -3103,10 +3166,9 @@ table.data tbody tr:hover td {
   min-width: max(72px, 100%);
   max-width: 320px;
   height: 30px;
-  padding: 0 9px;
+  padding: 0 10px;
   background: transparent;
   outline: none;
-  border-radius: 2px;
   transition: background-color 150ms ease-out;
 }
 
@@ -3123,44 +3185,11 @@ table.data tbody tr:hover td {
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--card);
+  background: color-mix(in oklab, var(--card) 92%, var(--foreground));
 }
 
 .tbl-head input {
   font-weight: 600;
-}
-
-.tbl-head td:not(.tbl-side) {
-  background: color-mix(in oklab, var(--card) 92%, var(--foreground));
-}
-
-.tbl-drop,
-.tbl-add {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  margin-left: 4px;
-  border-radius: 6px;
-  color: var(--muted-foreground);
-  opacity: 0;
-  transition: opacity 150ms ease-out, background-color 150ms ease-out, color 150ms ease-out;
-}
-
-.tbl-add {
-  opacity: 0.7;
-}
-
-.tbl tr:hover .tbl-drop,
-.tbl-drop:focus-visible,
-.tbl-add:hover {
-  opacity: 1;
-}
-
-.tbl-drop:hover,
-.tbl-add:hover {
-  background: oklch(var(--contrast) / 0.08);
-  color: var(--foreground);
 }
 
 /* a column's delete sits in its heading's corner, on hover */
@@ -3168,15 +3197,14 @@ table.data tbody tr:hover td {
   position: absolute;
   top: 5px;
   right: 4px;
-  margin: 0;
-}
-
-.tbl-head td:hover .tbl-drop-col {
-  opacity: 1;
-}
-
-.tbl tr:hover .tbl-drop-col {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--muted-foreground);
   opacity: 0;
+  transition: opacity 150ms ease-out, background-color 150ms ease-out, color 150ms ease-out;
 }
 
 .tbl-head td:hover .tbl-drop-col,
@@ -3184,24 +3212,52 @@ table.data tbody tr:hover td {
   opacity: 1;
 }
 
-.tbl-add-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 2px;
-  height: 24px;
-  padding: 0 9px;
-  border-radius: 7px;
-  font-size: 12.5px;
-  color: var(--muted-foreground);
-  transition: background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out;
-}
-
-.tbl-add-row:hover {
-  background: oklch(var(--contrast) / 0.07);
+.tbl-drop-col:hover {
+  background: oklch(var(--contrast) / 0.08);
   color: var(--foreground);
 }
 
-.tbl-add-row:active {
+/* the + on the table's right edge (a column) and bottom edge (a row) */
+.tbl-edge {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--muted-foreground);
+  background: oklch(var(--contrast) / 0.05);
+  opacity: 0;
+  transition: opacity 150ms ease-out, background-color 150ms ease-out, color 150ms ease-out, scale 150ms ease-out;
+}
+
+.tbl-edge-col {
+  top: 0;
+  right: 2px;
+  bottom: 24px;
+  width: 18px;
+}
+
+.tbl-edge-row {
+  left: 0;
+  right: 24px;
+  bottom: 2px;
+  height: 18px;
+}
+
+.react-flow__node-table:hover .tbl-edge,
+.react-flow__node-table.selected .tbl-edge,
+.tbl-edge:focus-visible {
+  opacity: 1;
+}
+
+.tbl-edge:hover {
+  background: oklch(var(--contrast) / 0.1);
+  color: var(--foreground);
+}
+
+.tbl-edge:active {
   scale: 0.96;
+}
+
+.card.is-bare.is-folded .tbl-free {
+  display: none;
 }

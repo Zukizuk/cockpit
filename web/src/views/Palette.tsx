@@ -1,8 +1,8 @@
 // The + box: paste a link or path to open it, type to add a line to today's journal, or find anything kept and put it on the board.
 import { useEffect, useMemo, useState } from 'react'
 import { BookA, BookOpenText, Bookmark, Table2, ClipboardList, FileText, FolderOpen, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
-import { post } from '../api'
-import { ago } from '../lib'
+import { get, post } from '../api'
+import { ago, useData } from '../lib'
 import { useBoard } from '../board'
 import { summary } from '../cards/OutputsCard'
 import { basename, iconFor, kindLabel } from '../components/Viewer'
@@ -22,6 +22,12 @@ export function Palette() {
   const kind = !value ? '' : isUrl(value) ? 'link' : isPath(value) ? 'path' : 'text'
   const close = () => board.setPalette(false)
 
+  // tables kept in the notes folder (the Tables extra): one taken off the board can be put back
+  const tables = useData(
+    () => (board.prefs.extras.tables ? get<{ path: string; title: string; mtime: number; rows: number; columns: string[] }[]>('/api/tables/list') : Promise.resolve([])),
+    [board.prefs.extras.tables],
+    { refreshOn: ['tables'] },
+  )
   const noteItems = useMemo(() => (board.notes?.notes || []).filter(n => n.excerpt).slice(0, 60), [board.notes])
 
   const journal = async () => {
@@ -220,6 +226,22 @@ export function Palette() {
                 Settings
               </CommandItem>
             </CommandGroup>
+            {(tables.data?.length ?? 0) > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Tables">
+                  {tables.data!.slice(0, 30).map(t => (
+                    <CommandItem key={t.path} value={`table ${t.title} ${t.columns.join(' ')}`} onSelect={() => (close(), board.addCard('table', t.path))}>
+                      <Table2 strokeWidth={1.5} />
+                      <span className="truncate">{t.title}</span>
+                      <CommandShortcut>
+                        {t.rows === 1 ? '1 row' : `${t.rows} rows`} · {ago(t.mtime)}
+                      </CommandShortcut>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
             {board.outputs.length > 0 && (
               <>
                 <CommandSeparator />

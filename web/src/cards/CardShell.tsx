@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
-export type CardAction = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean; hidden?: boolean; keys?: string }
+export type CardAction = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean; hidden?: boolean; keys?: string; /** only in the right-click menu (about what was right-clicked) */ context?: boolean }
 
 export function IconButton({ icon: Icon, label, onClick, active, className }: { icon: LucideIcon; label: string; onClick: () => void; active?: boolean; className?: string }) {
   return (
@@ -65,6 +65,10 @@ interface Props {
   autoHeight?: boolean
   /** Exactly the size of its content, both ways (a table): no resize handles. */
   hug?: boolean
+  /** No card around it: the content is the thing on the board, with a small label above it to drag it by (a table). */
+  bare?: boolean
+  /** Right-click on the card, before its menu opens (to say what was right-clicked). */
+  onContext?: (e: React.MouseEvent) => void
   /** A sticky note: paper in this colour, a slim strip instead of a header. */
   sticky?: StickyColor
   /** Shown in the sticky strip (only when something needs saying, like "Not saved"). */
@@ -72,7 +76,7 @@ interface Props {
   children: ReactNode
 }
 
-export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, quick, actions, onExpand, bodyClassName, autoHeight, hug, sticky, stripText, children }: Props) {
+export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, quick, actions, onExpand, bodyClassName, autoHeight, hug, bare, onContext, sticky, stripText, children }: Props) {
   const nodeId = useNodeId()
   const rf = useReactFlow<CardNode>()
   const board = useBoard()
@@ -118,8 +122,11 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     board.persist()
   }
   const toggleLock = () => nodeId && board.setLocked([nodeId], !locked)
+  // what was right-clicked comes first; then the card's own
+  const here = actions.filter(a => a.context && !a.hidden)
   const shown: CardAction[] = [
-    { label: folded ? 'Unfold' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, hidden: !!sticky, keys: 'F' },
+    ...here,
+    { label: folded ? 'Unfold' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, hidden: !!sticky, keys: 'F', gap: here.length > 0 },
     { label: board.focusing ? 'Bring everything back' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
     { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
     { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) },
@@ -152,7 +159,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       },
       gap: board.spaces.length <= 1,
     },
-    ...actions,
+    ...actions.filter(a => !a.context),
   ].filter(a => !a.hidden)
   const [flash, setFlash] = useState(false)
   const [isNew] = useState(() => !!born && Date.now() - born < 1500)
@@ -167,6 +174,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     Item: typeof ContextMenuItem | typeof DropdownMenuItem,
     Sep: typeof ContextMenuSeparator | typeof DropdownMenuSeparator,
     Keys: typeof ContextMenuShortcut | typeof DropdownMenuShortcut,
+    context = false,
   ) => (
     <>
       {sticky && (
@@ -185,7 +193,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
           <Sep />
         </>
       )}
-      {shown.map(a => (
+      {shown.filter(a => context || !a.context).map(a => (
         <Fragment key={a.label}>
           {a.gap && <Sep />}
           <Item variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
@@ -236,6 +244,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
+            onContextMenuCapture={onContext}
             className={cn(
               'card',
               selected && 'is-selected',
@@ -244,12 +253,23 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
               folded && 'is-folded',
               fits && 'is-auto',
               hug && 'is-hug',
+              bare && 'is-bare',
               locked && 'is-locked',
               sticky && `is-sticky paper-${sticky}`,
               veiled && 'is-veiled',
             )}
           >
-            {sticky ? (
+            {bare ? (
+              <header className="card-head bare-label card-drag" onDoubleClick={folded ? toggleFold : undefined} title={folded ? 'Double-click to unfold' : 'Drag to move'}>
+                <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
+                <div className="bare-title min-w-0">{title}</div>
+                <div className="card-actions nodrag flex items-center">
+                  <IconButton icon={veiled ? Eye : EyeOff} label={veiled ? 'Show its contents' : 'Hide its contents (H)'} onClick={toggleVeil} className={cn('veil-btn', veiled && 'veil-on')} />
+                  {lockBadge}
+                  {menu}
+                </div>
+              </header>
+            ) : sticky ? (
               <header className="card-head sticky-strip card-drag" onDoubleClick={onExpand} title={onExpand ? 'Double-click to open full screen' : undefined}>
                 <span className="sticky-strip-text">{stripText}</span>
                 <div className="card-actions nodrag flex items-center gap-0.5">
@@ -292,7 +312,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
             )}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-60">{items(ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut)}</ContextMenuContent>
+        <ContextMenuContent className="w-60">{items(ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, true)}</ContextMenuContent>
       </ContextMenu>
     </>
   )

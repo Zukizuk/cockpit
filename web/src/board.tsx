@@ -371,16 +371,21 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     glideTimer.current = setTimeout(() => el?.classList.remove('is-arranging'), 460)
   }, [])
 
-  /** A sticky note taken off the board while still empty is just a blank file: it goes (the server checks it's empty). */
+  /** A sticky note or a table taken off the board while still empty is just a blank file: it goes (the server checks
+   * it's empty). A table waits out the toast's Undo first. */
   const discardIfEmpty = useCallback(
-    (ref: string) => {
-      setTimeout(() => {
-        if (rf.getNodes().some(n => n.type === 'note' && n.data.ref === ref)) return // brought back meanwhile
-        post('/api/notes/discard', { path: ref }).catch(() => {}) // refused when it has writing in it: kept
-      }, 1500)
+    (ref: string, type: CardType = 'note') => {
+      setTimeout(
+        () => {
+          if (rf.getNodes().some(n => n.type === type && n.data.ref === ref)) return // brought back meanwhile
+          post(type === 'table' ? '/api/tables/discard' : '/api/notes/discard', { path: ref }).catch(() => {}) // refused when it has writing in it: kept
+        },
+        type === 'table' ? 6000 : 1500,
+      )
     },
     [rf],
   )
+  const discardable = (n: CardNode) => isSticky(n.type, n.data.ref) || n.type === 'table'
 
   // ---- undo -----------------------------------------------------------------------------------------------------
   // The whole layout (every card with its place, size, fold and lock) before each change; Ctrl+Z puts it back.
@@ -400,7 +405,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const nodes = rf.getNodes()
       const picked = new Set(nodes.filter(n => n.selected).map(n => n.id))
       const kept = new Set(layout.map(c => c.id))
-      for (const n of nodes) if (!kept.has(n.id) && isSticky(n.type, n.data.ref)) discardIfEmpty(n.data.ref)
+      for (const n of nodes) if (!kept.has(n.id) && discardable(n)) discardIfEmpty(n.data.ref, n.type as CardType)
       glide()
       rf.setNodes(layout.map(c => ({ ...toNode(c), hidden: offBoard(c, spaceRef.current), selected: picked.has(c.id) })))
       persist()
@@ -540,7 +545,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       if (!nodes.length) return
       remember()
       if (focusSavedRef.current && nodes.some(n => n.id === focusSavedRef.current?.focus)) toggleFocusRef.current()
-      for (const n of nodes) if (isSticky(n.type, n.data.ref)) discardIfEmpty(n.data.ref)
+      for (const n of nodes) if (discardable(n)) discardIfEmpty(n.data.ref, n.type as CardType)
       toast(nodes.length === 1 ? 'Taken off the board' : `${nodes.length} cards taken off the board`, { label: 'Undo', run: () => undoRef.current() })
     },
     [remember, discardIfEmpty, toast],
