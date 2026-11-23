@@ -78,16 +78,42 @@ function SheetView({ read }: { read: ShownRead }) {
   const [all, setAll] = useState(false)
   const [loading, setLoading] = useState(false)
   const shownId = useRef(read.entry.id)
-  // The card reads the file again whenever it looks changed (a synced OneDrive folder touches files now and then):
-  // the same workbook stays on the sheet that's open, whose rows load again below.
+  // The card reads the file again whenever it looks changed (Excel's AutoSave, or a synced OneDrive folder, touch it
+  // every few seconds). The same workbook keeps the sheet that's open and the rows already drawn, so nothing empties
+  // and the scroll stays where it was; the fresh rows replace them quietly when they come (below).
+  const stale = useRef(new Set<number>())
   useEffect(() => {
     const same = shownId.current === read.entry.id
     shownId.current = read.entry.id
-    setSheets(read.sheets || [])
-    if (!same) setAt(read.sheet ?? 0)
+    if (!same) {
+      stale.current.clear()
+      setSheets(read.sheets || [])
+      setAt(read.sheet ?? 0)
+      return
+    }
+    setSheets(prev =>
+      (read.sheets || []).map((s, j) => {
+        if (s.rows) return s
+        const before = prev.find(x => x.name === s.name)?.rows
+        if (before) stale.current.add(j)
+        return before ? { ...s, rows: before } : s
+      }),
+    )
   }, [read])
   const open = Math.min(at, Math.max(0, sheets.length - 1))
   const missing = !!sheets[open] && !sheets[open].rows
+  // the open sheet's rows, read again after the file changed: swapped in when they come, the old ones shown meanwhile
+  useEffect(() => {
+    if (!stale.current.has(open)) return
+    stale.current.delete(open)
+    const id = read.entry.id
+    get<ShownRead>(`/api/shown/${id}?sheet=${open}`)
+      .then(r => {
+        const rows = r.sheets?.[open]?.rows
+        if (rows && shownId.current === id) setSheets(ss => ss.map((s, j) => (j === open ? { ...s, rows } : s)))
+      })
+      .catch(() => {})
+  }, [sheets, open, read.entry.id])
   useEffect(() => {
     if (!missing) return
     let live = true

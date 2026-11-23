@@ -21,6 +21,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 - Claude can show you visuals (charts, diagrams, small pages) as cards, drawn safely.
 
 **Fixed**
+- An Excel workbook on the board could jump back to its first row and column every so often, while Excel's AutoSave or OneDrive touched the file (on any sheet but the first). It now keeps your place and swaps in the new cells quietly.
 - Snippets' paste box could come out squashed after the card was unfolded. It's now sized by the browser itself, and the card can never be shorter than the box.
 - Rows in the Outputs panel can be dragged onto the board.
 
