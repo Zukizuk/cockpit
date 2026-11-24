@@ -1354,11 +1354,11 @@ button.space-switch:active {
   transition: visibility 0s 300ms;
 }
 
-.card.is-sticky.is-folded {
-  background: transparent;
+.card.is-sticky.is-rolled {
+  background: var(--paper);
 }
 
-.card.is-sticky.is-folded::after {
+.card.is-sticky.is-rolled::after {
   left: 3px;
   right: 3px;
   width: auto;

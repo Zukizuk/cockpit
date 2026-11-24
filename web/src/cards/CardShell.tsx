@@ -84,6 +84,14 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const folded = !!node?.data.folded
   const locked = !!node?.data.locked
   const veiled = !!node?.data.veiled
+  // a sticky note keeps its paper and curled corner while it rolls up, and takes the rolled look (the strip with the
+  // roll under it) once it's up; unrolling drops that look at once
+  const [rolled, setRolled] = useState(folded)
+  useEffect(() => {
+    if (!folded) return setRolled(false)
+    const t = setTimeout(() => setRolled(true), 300)
+    return () => clearTimeout(t)
+  }, [folded])
   // several cards picked (a drag on the board): their outline says so; resize corners only for one
   const pickedCount = useStore(s => s.nodes.reduce((k, n) => k + (n.selected ? 1 : 0), 0))
   const manyPicked = pickedCount > 1
@@ -134,63 +142,79 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     board.persist()
   }
   const toggleLock = () => nodeId && board.setLocked([nodeId], !locked)
-  // what was right-clicked comes first; then the card's own
+  // The menu, in groups: what was right-clicked (a table's row or column), then what this card does (open, copy,
+  // rename, pin…) and Comment; then how it shows (fold, focus, compare, tuck, fit), how it's held (lock, hide), agents,
+  // other spaces; and last, on its own, taking it off the board (archive or delete, for the cards that have them).
   const here = actions.filter(a => a.context && !a.hidden)
-  const shown: CardAction[] = [
-    ...here,
-    { label: folded ? 'Unfold' : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F', gap: here.length > 0 },
-    { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
-    {
-      label: 'Compare side by side',
-      icon: SquareSplitHorizontal,
-      run: () => board.compareCards(rf.getNodes().filter(n => n.selected).map(n => n.id)),
-      hidden: !(selected && pickedCount === 2),
-      keys: 'Space',
-    },
-    { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
-    { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) },
-    { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },
-    {
-      label: mark === 'shared' ? 'Stop sharing with agents' : 'Share with agents',
-      icon: Bot,
-      run: () => (mark === 'shared' ? setMark(null, 'Not shared with agents') : setMark('shared', 'Shared with agents: Claude can read it')),
-      gap: true,
-    },
-    {
-      label: mark === 'private' ? 'Not private any more' : 'Private from agents',
-      icon: ShieldOff,
-      run: () => (mark === 'private' ? setMark(null, 'Not private any more') : setMark('private', 'Private: agents never see it')),
-    },
-    { label: 'Tuck away at the top', icon: ArrowUpToLine, gap: true, run: () => nodeId && board.tuck([nodeId]) },
-    {
-      label: 'Fit to contents',
-      icon: Shrink,
-      run: () => {
-        board.remember()
-        setSized(false)
-        board.persist()
+  const isEnd = (a: CardAction) => /^(Remove from board|Archive|Delete)/.test(a.label)
+  const own = actions.filter(a => !a.context && !isEnd(a))
+  const end = actions.filter(a => !a.context && isEnd(a))
+  const groups: CardAction[][] = [
+    here,
+    [...own, { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) }],
+    [
+      { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F' },
+      { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
+      {
+        label: 'Compare side by side',
+        icon: SquareSplitHorizontal,
+        run: () => board.compareCards(rf.getNodes().filter(n => n.selected).map(n => n.id)),
+        hidden: !(selected && pickedCount === 2),
+        keys: 'Space',
       },
-      hidden: !autoHeight || fits || folded,
-    },
+      { label: 'Tuck away at the top', icon: ArrowUpToLine, run: () => nodeId && board.tuck([nodeId]) },
+      {
+        label: 'Fit to contents',
+        icon: Shrink,
+        run: () => {
+          board.remember()
+          setSized(false)
+          board.persist()
+        },
+        hidden: !autoHeight || fits || folded,
+      },
+    ],
+    [
+      { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
+      { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },
+    ],
+    [
+      {
+        label: mark === 'shared' ? 'Stop sharing with agents' : 'Share with agents',
+        icon: Bot,
+        run: () => (mark === 'shared' ? setMark(null, 'Not shared with agents') : setMark('shared', 'Shared with agents: Claude can read it')),
+      },
+      {
+        label: mark === 'private' ? 'Not private any more' : 'Private from agents',
+        icon: ShieldOff,
+        run: () => (mark === 'private' ? setMark(null, 'Not private any more') : setMark('private', 'Private: agents never see it')),
+      },
+    ],
     // other spaces: out of view here, there when you go to that space
-    ...board.spaces
-      .filter(x => x.id !== board.space)
-      .slice(0, 8)
-      .map((x, i): CardAction => ({ label: `Move to ${x.name}`, icon: Layers, run: () => void (nodeId && board.moveToSpace([nodeId], x.id)), gap: i === 0 })),
-    {
-      label: 'Move to a new space',
-      icon: Layers,
-      run: () => {
-        if (!nodeId) return
-        const here = board.space
-        const to = board.newSpace()
-        board.moveToSpace([nodeId], to)
-        board.toast('Moved to a new space', { label: 'Go back', run: () => board.switchSpace(here) })
+    [
+      ...board.spaces
+        .filter(x => x.id !== board.space)
+        .slice(0, 8)
+        .map((x): CardAction => ({ label: `Move to ${x.name}`, icon: Layers, run: () => void (nodeId && board.moveToSpace([nodeId], x.id)) })),
+      {
+        label: 'Move to a new space',
+        icon: Layers,
+        run: () => {
+          if (!nodeId) return
+          const was = board.space
+          const to = board.newSpace()
+          board.moveToSpace([nodeId], to)
+          board.toast('Moved to a new space', { label: 'Go back', run: () => board.switchSpace(was) })
+        },
       },
-      gap: board.spaces.length <= 1,
-    },
-    ...actions.filter(a => !a.context),
-  ].filter(a => !a.hidden)
+    ],
+    end,
+  ]
+  // a line between groups; inside one, a card's own items keep the lines they draw between theirs (its copy items, say)
+  const shown: CardAction[] = groups
+    .map(g => g.filter(a => !a.hidden))
+    .filter(g => g.length)
+    .flatMap((g, i) => g.map((a, j) => ({ ...a, gap: j === 0 ? i > 0 : !!a.gap })))
   const [flash, setFlash] = useState(false)
   const [isNew] = useState(() => !!born && Date.now() - born < 1500)
   useEffect(() => {
@@ -290,6 +314,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
               bare && 'is-bare',
               locked && 'is-locked',
               sticky && `is-sticky paper-${sticky}`,
+              sticky && rolled && 'is-rolled',
               veiled && 'is-veiled',
             )}
           >
@@ -314,6 +339,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
                   <IconButton icon={veiled ? Eye : EyeOff} label={veiled ? 'Show its contents' : 'Hide its contents (H)'} onClick={toggleVeil} className={cn('veil-btn', veiled && 'veil-on')} />
                   {!folded && quick}
                   {lockBadge}
+                  <IconButton icon={ArrowUpToLine} label="Tuck away at the top" onClick={() => nodeId && board.tuck([nodeId])} />
                   <IconButton icon={folded ? ChevronsUpDown : ChevronsDownUp} label={folded ? 'Unroll' : 'Roll up into its strip (F)'} onClick={toggleFold} />
                   {menu}
                 </div>

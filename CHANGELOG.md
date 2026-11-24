@@ -12,7 +12,10 @@ Newest first. Each change is listed under New, Improved or Fixed.
 - Claude can add a line to a shared note or rewrite it (a rewrite waits for your Allow), and now hears whether that worked. Before, a change written the wrong way did nothing and Claude was told it was done.
 
 **Improved**
-- Sticky notes roll up into their strip: the new button on the strip, F, or right-click → Roll up. A rolled note shows its title (or its first line) with the roll under it; double-click it, or the same button, to unroll it. Fold all cards leaves sticky notes as they are.
+- Drawings Claude shows in a chat now come to Outputs too, as artifacts do: each is kept as a page that opens in Cockpit looking as it did in the chat.
+- A sticky note's strip has a Tuck away button.
+- A card's right-click menu is in a clearer order: what the card does (open, copy, rename, pin) first, then how it shows (fold, focus, compare, tuck), lock and hide, agents, other spaces, and Remove from board last on its own.
+- Sticky notes roll up into their strip: the new button on the strip, F, or right-click → Roll up. The note rolls up as one piece, curled corner and all; rolled, it shows its title (or its first line) with the roll under it; double-click it, or the same button, to unroll it. Fold all cards leaves sticky notes as they are.
 
 **Fixed**
 - Fold all cards (right-click the board) folded cards in every space. It now folds only the cards in the space you're in.
