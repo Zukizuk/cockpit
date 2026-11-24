@@ -7,7 +7,7 @@ import { docxToHtml, pptxSlides, readSheets } from './office-parse.js'
 const { format, file } = workerData
 try {
   const out =
-    format === 'docx' ? { html: await docxToHtml(file) } : format === 'sheet' ? { sheets: readSheets(file) } : { slides: await pptxSlides(file) }
+    format === 'docx' ? { html: await docxToHtml(file) } : format === 'sheet' ? { sheets: await readSheets(file) } : { slides: await pptxSlides(file) }
   parentPort.postMessage(out)
 } catch (e) {
   parentPort.postMessage({ error: e?.message || String(e), user: e instanceof UserError })

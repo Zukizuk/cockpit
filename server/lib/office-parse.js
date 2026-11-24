@@ -1,10 +1,9 @@
 // Reading Office files for their previews: Word as HTML (mammoth), spreadsheets as tables (SheetJS, first rows
 // only), PowerPoint as each slide's text (the slide XML read with JSZip). This is the slow part (a big workbook
 // takes seconds), so office.js runs it in a worker thread and keeps what it makes on disk.
+// Each library is loaded only when its kind of file is read: the Word one alone (mammoth) took 4.6 s to load on a
+// PC just started, and a workbook doesn't need it. (office.js imports checkSize from here, so nothing heavy at the top.)
 import fs from 'node:fs'
-import mammoth from 'mammoth'
-import * as XLSX from 'xlsx'
-import JSZip from 'jszip'
 import { UserError } from './config.js'
 
 export const MAX_BYTES = 60 * 1024 * 1024
@@ -18,12 +17,14 @@ export function checkSize(file) {
 
 export async function docxToHtml(file) {
   checkSize(file)
+  const { default: mammoth } = await import('mammoth')
   const r = await mammoth.convertToHtml({ path: file })
   return r.value
 }
 
-export function readSheets(file) {
+export async function readSheets(file) {
   checkSize(file)
+  const XLSX = await import('xlsx')
   const wb = XLSX.read(fs.readFileSync(file), { type: 'buffer', sheetRows: MAX_ROWS + 1, cellDates: true, dense: true })
   return wb.SheetNames.map(name => {
     const ws = wb.Sheets[name]
@@ -45,6 +46,7 @@ const decode = s =>
 
 export async function pptxSlides(file) {
   checkSize(file)
+  const { default: JSZip } = await import('jszip')
   const zip = await JSZip.loadAsync(fs.readFileSync(file))
   const num = n => Number(/slide(\d+)\.xml$/.exec(n)?.[1] || 0)
   const names = Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => num(a) - num(b))
