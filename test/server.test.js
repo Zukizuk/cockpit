@@ -717,6 +717,10 @@ test('snippets: copy text back, secrets encrypted and hidden, expiry, instant de
   assert.equal(sn.looksSecret('the quick brown fox jumps'), false)
   assert.equal(sn.looksSecret('ghp_abcdefghijklmnop1234'), true)
   assert.equal(sn.looksSecret('password: hunter2'), true)
+  assert.equal(sn.looksSecret('nkC6Hsyvm8UnRe'), true, 'a short generated password')
+  assert.equal(sn.looksSecret('HelloWorld2024'), false, 'words with a number on the end')
+  assert.equal(sn.looksSecret('getUserById2'), false)
+  assert.equal(sn.looksSecret('2026-11-24T10:00'), false, 'a date')
 
   const day = await sn.addSnippet({ text: 'short-lived', secret: false, keep: 'day' }, now)
   assert.equal(sn.listSnippets(now + 2 * 86_400_000).some(s => s.id === day.id), false, 'gone when its time is up')

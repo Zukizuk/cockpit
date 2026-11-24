@@ -46,8 +46,13 @@ export function looksSecret(text: string) {
   const t = text.trim()
   if (/^(sk|pk|rk|ghp|gho|ghs|github_pat|xox[abp]|AKIA|eyJ)[A-Za-z0-9_\-.]{8,}/.test(t)) return true
   if (/\b(password|passwd|pwd|secret|api[_-]?key|token|client[_-]?secret)\s*[:=]/i.test(t)) return true
-  if (/\s/.test(t) || t.length < 20 || t.length > 400) return false
-  return [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(t)).length >= 3
+  if (/\s/.test(t) || t.length < 12 || t.length > 400) return false
+  const kinds = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(t)).length
+  if (t.length >= 20) return kinds >= 3
+  const cls = (c: string) => (/[a-z]/.test(c) ? 0 : /[A-Z]/.test(c) ? 1 : /[0-9]/.test(c) ? 2 : 3)
+  let switches = 0
+  for (let i = 1; i < t.length; i++) if (cls(t[i]) !== cls(t[i - 1])) switches++
+  return kinds >= 3 && /[a-z]/.test(t) && /[A-Z]/.test(t) && /[A-Za-z][^A-Za-z]+[A-Za-z]/.test(t) && switches >= (t.length - 1) / 2
 }
 
 /** "6d", "5h": how long a snippet has left; nothing when it stays. */
@@ -145,6 +150,7 @@ function SnippetRow({ s }: { s: Snippet }) {
   const from = s.from && s.from !== 'you' ? `From ${s.from.replace(/^Claude · /, 'Claude in ')}, ` : 'Kept '
   const hint = `${from}${ago(s.createdAt)}${s.expiresAt ? `; goes ${new Date(s.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}`
 
+  const untitled = !s.secret && s.title === s.preview.trim().split('\n')[0].trim().slice(0, 80)
   let value: ReactNode
   if (copied) value = <span className="text-foreground/80">Copied</span>
   else if (s.secret) value = shown !== null ? <span className="snip-shown">{shown}</span> : <span className="snip-dots">{'•'.repeat(Math.min(18, Math.max(8, s.length)))}</span>
@@ -192,7 +198,8 @@ function SnippetRow({ s }: { s: Snippet }) {
                   }}
                 />
               ) : (
-                <span className="snip-title">{s.title}</span>
+                // no name given: the title is just the value again, so the row shows the value once
+                !untitled && <span className="snip-title">{s.title}</span>
               )}
               <span className={cn('snip-value', shown !== null && s.secret && 'is-open')}>{value}</span>
             </span>

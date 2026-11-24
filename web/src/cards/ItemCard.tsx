@@ -1,7 +1,7 @@
 // A file or link on the board, drawn in place. Expand for full screen; everything else is one click away.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
-import { Code2, Copy, ExternalLink, PenLine, FolderOpen, Globe, Maximize2, Pin, RefreshCw, X } from 'lucide-react'
+import { Bookmark, Check, Code2, Copy, ExternalLink, PenLine, FolderOpen, Globe, Maximize2, Pin, RefreshCw, X } from 'lucide-react'
 import { get, openOutside, post, type ShownEntry, type ShownRead } from '../api'
 import { ago } from '../lib'
 import { SIZES, useBoard, type CardNode } from '../board'
@@ -54,6 +54,14 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
           hidden: !textual || e.kind !== 'file' || board.prefs.editor === 'default',
         },
         { label: 'Read the page again', icon: RefreshCw, run: readAgain, hidden: e.kind !== 'link' },
+        // Later is a list of the same kept things: the card stays on the board either way
+        {
+          label: 'Keep on Later',
+          icon: Bookmark,
+          run: () => board.setLater(e.id, 'reading').then(() => (reload(), board.toast('On Later, under Reading'))),
+          hidden: (e.kind !== 'link' && e.kind !== 'file') || (!!e.later && e.later !== 'done'),
+        },
+        { label: 'Done reading', icon: Check, run: () => board.setLater(e.id, 'done').then(() => (reload(), board.toast('Done, on Later'))), hidden: !e.later || e.later === 'done' },
         { label: 'Pin to Quick access', icon: Pin, run: () => board.pin(e.kind === 'link' ? { url: e.url, title: e.title } : { path: e.path, title: e.title }), hidden: e.kind !== 'link' && e.kind !== 'file' },
         { label: e.kind === 'link' ? 'Copy link' : 'Copy path', icon: Copy, run: () => board.copy(e.kind === 'link' ? e.url || '' : e.path, e.kind === 'link' ? 'Link copied' : 'Path copied'), gap: true, hidden: e.kind === 'content' },
         // written content (a draft Claude made, a note kept): its words are what you came for

@@ -118,9 +118,15 @@ export function looksSecret(text) {
   const t = String(text || '').trim()
   if (/^(sk|pk|rk|ghp|gho|ghs|github_pat|xox[abp]|AKIA|eyJ)[A-Za-z0-9_\-.]{8,}/.test(t)) return true
   if (/\b(password|passwd|pwd|secret|api[_-]?key|token|client[_-]?secret)\s*[:=]/i.test(t)) return true
-  if (/\s/.test(t) || t.length < 20 || t.length > 400) return false
+  if (/\s/.test(t) || t.length < 12 || t.length > 400) return false
   const kinds = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(r => r.test(t)).length
-  return kinds >= 3
+  if (t.length >= 20) return kinds >= 3
+  // 12 to 19 characters (a generated password): both cases and a digit or symbol, mixed all through as random text
+  // is, not words with a number on the end (HelloWorld2024) or a date (2026-11-24T10:00)
+  const cls = c => (/[a-z]/.test(c) ? 0 : /[A-Z]/.test(c) ? 1 : /[0-9]/.test(c) ? 2 : 3)
+  let switches = 0
+  for (let i = 1; i < t.length; i++) if (cls(t[i]) !== cls(t[i - 1])) switches++
+  return kinds >= 3 && /[a-z]/.test(t) && /[A-Z]/.test(t) && /[A-Za-z][^A-Za-z]+[A-Za-z]/.test(t) && switches >= (t.length - 1) / 2
 }
 
 const firstLine = t => String(t).trim().split('\n')[0].trim()

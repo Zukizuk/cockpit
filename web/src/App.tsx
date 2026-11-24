@@ -138,13 +138,25 @@ function Canvas({ initial }: { initial: Board }) {
   }, [rf, board])
 
   // Paste on the board, and what's pasted lands where the mouse is, by what it is (as in FigJam): an image or a link
-  // becomes a card (a link can go to Later instead, from the toast); a key, token or password goes to Snippets,
+  // becomes a card (and can be kept on Later too, from the toast); a key, token or password goes to Snippets,
   // encrypted, never onto the board; a file path becomes a card; other text opens the + box with it.
   const pointer = useRef<{ x: number; y: number } | null>(null)
   useEffect(() => {
     const follow = (e: PointerEvent) => (pointer.current = { x: e.clientX, y: e.clientY })
     addEventListener('pointermove', follow, { passive: true })
     return () => removeEventListener('pointermove', follow)
+  }, [])
+  // Ctrl+Shift+V on the board: the link that's pasted goes straight to Later (the paste event follows the key)
+  const laterPaste = useRef(false)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyV') {
+        laterPaste.current = true
+        setTimeout(() => (laterPaste.current = false), 500)
+      }
+    }
+    addEventListener('keydown', onKey, true)
+    return () => removeEventListener('keydown', onKey, true)
   }, [])
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
@@ -169,14 +181,19 @@ function Canvas({ initial }: { initial: Board }) {
       const text = raw.trim().replace(/^"(.*)"$/, '$1')
       if (!text) return
       e.preventDefault()
-      if (isUrl(text)) {
+      // straight to Later, without reading it on the board first: Ctrl+Shift+V, or Later selected (as with Snippets)
+      const toLater = laterPaste.current || rf.getNodes().some(n => n.selected && n.type === 'later')
+      laterPaste.current = false
+      if (isUrl(text) && toLater) board.saveLater({ url: text })
+      else if (isUrl(text)) {
         board.showItem({ url: text }, at ? { at } : {}).then(id => {
           if (!id) return
+          // it stays on the board either way; Later keeps it (under Reading) for when the card is gone
           board.toast('Put on the board', {
-            label: 'Save for Later instead',
+            label: 'Keep on Later too',
             run: () => {
-              board.removeCard(id, { quiet: true })
-              board.saveLater({ url: text })
+              const ref = rf.getNode(id)?.data.ref
+              if (ref) board.setLater(ref, 'reading').then(() => board.toast('On Later, under Reading'))
             },
           })
         })

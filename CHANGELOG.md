@@ -5,6 +5,9 @@ Newest first. Each change is listed under New, Improved or Fixed.
 ## Coming next (version 0.2.6)
 
 **Improved**
+- Pasting a link and Later work together better. Press Ctrl+Shift+V (or select Later and paste) and the link goes straight to Later, without opening on the board first. A link pasted the usual way stays on the board as before, and the toast's Keep on Later too (or Keep on Later in the card's menu) also puts it on Later, under Reading, instead of taking the card away. Done reading in the card's menu ticks it off.
+- A short password pasted on the board, 12 characters or more of mixed letters and digits like `nkC6Hsyvm8UnRe`, now goes into Snippets as a secret. Before, only 20 characters or more counted. Words with a number on the end or a date still don't.
+- A snippet you keep without a name shows its value once, instead of the same text twice as its name and its value.
 - Installing and updating are quicker. Cockpit is now about 250 files instead of 2,250, so it unzips in a few seconds.
 - The journal is now an extra, off until you turn it on in Settings → Extras. If you already write in it, it stays on. With it off, words typed in the + box become a sticky note, and Keep in the Dictionary keeps the word on a sticky note.
 

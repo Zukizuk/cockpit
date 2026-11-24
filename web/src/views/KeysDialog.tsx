@@ -15,6 +15,7 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
       { keys: ['Ctrl', 'K'], what: 'Add, or find anything kept (also /)' },
       { keys: ['N'], what: 'New sticky note' },
       { keys: ['L'], what: 'Later' },
+      { keys: ['Ctrl', 'Shift', 'V'], what: 'Paste a link straight to Later' },
       { keys: ['C'], what: 'Snippets' },
       { keys: ['T'], what: "Today's tasks" },
       { keys: ['Q'], what: 'Quick access (then 1 to 9 opens one)' },
