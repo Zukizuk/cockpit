@@ -22,4 +22,4 @@ jobs:
         shell: pwsh
         run: |
           $zip = Get-ChildItem release/*.zip | Select-Object -First 1
-          gh release create $env:GITHUB_REF_NAME $zip.FullName --title "Cockpit $($env:GITHUB_REF_NAME)" --notes "Download the zip, unzip it and double-click Install.cmd. What changed: see CHANGELOG.md."
+          gh release create $env:GITHUB_REF_NAME $zip.FullName --title "Cockpit $($env:GITHUB_REF_NAME)" --notes "To install, paste this in PowerShell: ``irm https://raw.githubusercontent.com/Zukizuk/cockpit/main/scripts/package/get.ps1 | iex``. Or download the zip, unzip it and double-click Install.cmd. What changed: see CHANGELOG.md."

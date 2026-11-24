@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Improved**
+- A one-line install: paste `irm https://raw.githubusercontent.com/Zukizuk/cockpit/main/scripts/package/get.ps1 | iex` in PowerShell. It downloads the latest Cockpit, checks it and installs it, without the long wait for Windows to check a downloaded zip before Install.cmd will run.
+
 ## 24 November 2026 (version 0.2.4)
 
 **Fixed**

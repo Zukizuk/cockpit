@@ -10,6 +10,15 @@ It runs on your PC only (a small local server on `127.0.0.1`) and opens in its o
 
 ## Install
 
+The quickest way: open PowerShell (Windows key, type PowerShell, Enter), paste this line and press Enter.
+
+```powershell
+irm https://raw.githubusercontent.com/Zukizuk/cockpit/main/scripts/package/get.ps1 | iex
+```
+
+It downloads the latest release, checks it against the checksum GitHub publishes, and runs the installer, without
+Windows stopping to check each file as it does for a zip downloaded in the browser. Or by hand:
+
 1. Download `Cockpit-<version>-win-x64.zip` from the [latest release](../../releases/latest).
 2. Unzip it and double-click **Install.cmd**. No admin rights needed. Cockpit brings its own Node, so there's nothing
    else to install.
