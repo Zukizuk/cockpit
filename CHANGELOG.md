@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 24 November 2026 (version 0.2.7)
 
 **New**
 - **You decide what Claude sees on your board.** Until now, Claude could read every card in every space. Now agents see only what you share with them: the cards you select, cards you share (right-click a card: Share with agents), the cards in a space you share (the space menu at the top left), and cards Claude made itself. Keep a card or a whole space private and agents never see it, whatever else is set. Settings → Agents sets this for Claude Code and for other agents: Nothing, What I share (the default), or Everything except private cards. Shared and private cards show a small mark in their corner.
