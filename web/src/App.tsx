@@ -404,13 +404,16 @@ function Canvas({ initial }: { initial: Board }) {
 
   // right-click on empty board: what applies to the whole board
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; at: { x: number; y: number } } | null>(null)
-  const foldable = nodes.filter(n => !isSticky(n.type, n.data.ref))
+  // the cards on this space that fold (sticky notes don't; cards in other spaces or tucked away are left as they are)
+  const foldable = nodes.filter(n => !n.hidden && !isSticky(n.type, n.data.ref))
   const foldAll = (fold: boolean) => {
     if (fold) track('board.foldall')
+    const ids = new Set(foldable.filter(n => !!n.data.folded !== fold).map(n => n.id))
     board.remember()
-    rf.setNodes(ns => ns.map(n => (isSticky(n.type, n.data.ref) ? n : foldNode(n, fold))))
+    rf.setNodes(ns => ns.map(n => (ids.has(n.id) ? foldNode(n, fold) : n)))
     board.persist()
   }
+  const onlyStickies = nodes.some(n => !n.hidden) && !foldable.length
   const fitAll = () => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 })
 
   return (
@@ -433,7 +436,7 @@ function Canvas({ initial }: { initial: Board }) {
           <DropdownMenuSeparator />
           <DropdownMenuItem disabled={!foldable.some(n => !n.data.folded)} onSelect={() => foldAll(true)}>
             <ChevronsDownUp strokeWidth={1.75} />
-            Fold all cards
+            {onlyStickies ? "Fold all cards (sticky notes don't fold)" : 'Fold all cards'}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!foldable.some(n => n.data.folded)} onSelect={() => foldAll(false)}>
             <ChevronsUpDown strokeWidth={1.75} />
