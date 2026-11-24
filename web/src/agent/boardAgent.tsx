@@ -7,7 +7,7 @@
 // - "Later" and "Snippets": the lists themselves.
 // Notes are files: a card gives the path, so an agent reads and edits the note where it is, and the board follows.
 // Removing anything waits for the person (the bridge's allow). Experimental (spike/ui-sdk-today).
-import { Fragment, useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
@@ -16,6 +16,7 @@ import { get, post, put, type Snippet, type StickyColor, type TableData } from '
 import { newTable, rowsFromText } from '../cards/TableCard'
 import { useData } from '../lib'
 import { summary } from '../cards/OutputsCard'
+import { setVisible, useAgentView } from './view'
 
 const words = (s: unknown) => String(s ?? '').trim()
 const PEEK = 400
@@ -35,7 +36,7 @@ function pick<T>(list: T[], which: unknown, id: (t: T) => string, name: (t: T) =
 
 // ---- the board -----------------------------------------------------------------------------------------------
 
-type BoardValue = { space: string; spaces: { name: string; cards: number }[]; selected: string[]; inView: string[]; focus?: string[] }
+type BoardValue = { space: string; spaces: { name: string; cards: number }[]; selected: string[]; inView: string[]; focus?: string[]; sharing?: string }
 type BoardOptions = {
   value?: BoardValue
   onSwitchSpace?: (space: string) => void
@@ -130,6 +131,8 @@ export type CardValue = {
   url?: string
   /** the first lines of what it shows */
   peek?: string
+  /** a note: all its text (up to 20,000 characters) */
+  text?: string
   /** a table: its rows, the first being the header (up to 60 more); rowCount says how many there are in all */
   rows?: string[][]
   rowCount?: number
@@ -149,6 +152,7 @@ type CardOptions = {
   onVeil?: (veil: boolean) => void
   onTable?: (change: TableChange) => Promise<void>
   onPlaceNextTo?: (other: string, side: Side) => void
+  onWrite?: (change: { text: string; append: boolean }) => Promise<void>
   /** the other cards' titles (for placeNextTo) */
   others?: string[]
 }
@@ -159,7 +163,7 @@ const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', 
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', others: 'value' },
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', others: 'value' },
   state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -194,6 +198,9 @@ const cardPrimitive = definePrimitive({
       addRows: (rows: unknown) => call('onTable')({ addRows: rowsOf(rows) }),
       setRows: (rows: unknown) => call('onTable')({ setRows: rowsOf(rows) }),
       removeRow: (row: unknown) => call('onTable')({ removeRow: row }),
+      // a note: add to its end, or write all of it anew (that waits for the user's Allow)
+      append: (text: string) => call('onWrite')({ text: String(text ?? ''), append: true }),
+      setText: (text: string) => call('onWrite')({ text: String(text ?? ''), append: false }),
       placeNextTo: (other: string, side?: string) => {
         const s = words(side) ? SIDES[words(side).toLowerCase()] : 'right'
         if (!s) throw new Error('A side is right, left, below or above.')
@@ -202,7 +209,7 @@ const cardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'placeNextTo', 'remove'] },
+  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -270,8 +277,8 @@ const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 // ---- on the page -------------------------------------------------------------------------------------------
 
 const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder', table: 'table' }
-type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean]
-type Built = { id: string; type: string; ref: string; title: string; value: CardValue }
+type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string]
+type Built = { id: string; type: string; ref: string; title: string; value: CardValue; mark: string; spaceId: string }
 
 export function BoardAgent() {
   const board = useBoard()
@@ -287,7 +294,7 @@ export function BoardAgent() {
         const w = n.measured?.width ?? n.width ?? 0
         const h = n.measured?.height ?? n.height ?? 0
         const seen = !n.hidden && n.position.x < view.x1 && n.position.x + w > view.x0 && n.position.y < view.y1 && n.position.y + h > view.y0
-        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled] as Row
+        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || ''] as Row
       }),
     )
   })
@@ -307,7 +314,7 @@ export function BoardAgent() {
 
   const cards: Built[] = useMemo(() => {
     const spaceOfId = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
-    return (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled]) => {
+    return (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark]) => {
       let title = KIND[type] ?? type
       let file: string | undefined
       let url: string | undefined
@@ -359,24 +366,70 @@ export function BoardAgent() {
         const t = tables.data?.find(x => x?.path === ref)
         if (t) Object.assign(value, { rows: t.rows.slice(0, 61), rowCount: Math.max(0, t.rows.length - 1) })
       }
-      return { id, type, ref, title, value }
+      return { id, type, ref, title, value, mark, spaceId: space }
     })
   }, [cardsKey, board.spaces, board.space, board.items, board.outputs, board.comments, notes, sep, tables.data])
 
+  // What the agent calling may see (Settings > Agents): with "what I share", the cards selected or shared, the cards in
+  // a shared space, and those an agent made; with "everything", every card. A private card, or any card in a private
+  // space, never. The rest are drawn inside data-agent-hidden: not listed, not found, not used.
+  const { access } = useAgentView()
+  const markOf = (spaceIdOf: string) => board.spaces.find(s => s.id === spaceIdOf)?.agents
+  const sees = (c: Built) => {
+    if (access === 'off' || c.mark === 'private' || markOf(c.spaceId) === 'private') return false
+    return access === 'all' || c.mark === 'shared' || markOf(c.spaceId) === 'shared' || !!c.value.selected
+  }
+  const visible = useMemo(() => cards.filter(sees), [cards, access, board.spaces]) // eslint-disable-line react-hooks/exhaustive-deps
+  const visibleIds = useMemo(() => new Set(visible.map(c => c.id)), [visible])
+  useEffect(() => setVisible(visibleIds, visible.map(c => c.title)), [visibleIds, visible])
+  // the spaces it may name: not private; with "what I share", a shared one or one with a card it can see
+  const openSpaces = useMemo(
+    () => board.spaces.filter(s => s.agents !== 'private' && (access === 'all' || s.agents === 'shared' || visible.some(c => c.spaceId === s.id))),
+    [board.spaces, access, visible],
+  )
+  // the notes it can see, read whole: it reads and writes them through the board, not the files (Settings > Agents
+  // can fence the notes folder off from Claude Code)
+  const noteRefs = useMemo(() => [...new Set(visible.filter(c => c.type === 'note').map(c => c.ref))].sort(), [visible])
+  const noteTexts = useData(
+    () => Promise.all(noteRefs.map(p => get<{ path: string; text: string }>(`/api/notes/file?p=${encodeURIComponent(p)}`).catch(() => null))),
+    [noteRefs.join('|')],
+    { refreshOn: ['notes'] },
+  )
+  const textOf = (ref: string) => {
+    const t = noteTexts.data?.find(n => n?.path === ref)?.text
+    return t === undefined ? undefined : t.length > 20_000 ? `${t.slice(0, 20_000)}…` : t
+  }
+  const writeNote = async (ref: string, title: string, { text, append }: { text: string; append: boolean }) => {
+    const cur = await get<{ text: string; mtime: number }>(`/api/notes/file?p=${encodeURIComponent(ref)}`)
+    const next = append ? `${cur.text.replace(/\s+$/, '')}${cur.text.trim() ? '\n\n' : ''}${text.trim()}\n` : text
+    const r = await put<{ conflict?: boolean }>('/api/notes/file', { path: ref, text: next, baseMtime: cur.mtime })
+    if (r.conflict) throw new Error('The note changed while you were writing; read it again and retry.')
+    said(append ? `Claude added to ${title}` : `Claude rewrote ${title}`)
+  }
+  // a list (Today, Later, Snippets) is readable when its card is; with "everything", unless that card is private
+  const listOpen = (type: string) => {
+    const of = cards.filter(c => c.type === type)
+    if (access === 'all') return !of.some(c => !sees(c))
+    return of.some(c => visibleIds.has(c.id))
+  }
+
   const boardValue: BoardValue = useMemo(
     () => ({
-      space: spaceName(board.space),
-      spaces: board.spaces.map(s => ({ name: s.name, cards: cards.filter(c => c.value.space === s.name).length })),
-      selected: cards.filter(c => c.value.selected).map(c => c.title),
-      inView: cards.filter(c => c.value.inView).map(c => c.title),
-      ...(board.focusing ? { focus: cards.filter(c => c.value.selected).map(c => c.title) } : {}),
+      space: openSpaces.some(s => s.id === board.space) ? spaceName(board.space) : '(not shared with you)',
+      spaces: openSpaces.map(s => ({ name: s.name, cards: visible.filter(c => c.spaceId === s.id).length })),
+      selected: visible.filter(c => c.value.selected).map(c => c.title),
+      inView: visible.filter(c => c.value.inView).map(c => c.title),
+      ...(board.focusing ? { focus: visible.filter(c => c.value.selected).map(c => c.title) } : {}),
+      ...(access === 'shared'
+        ? { sharing: 'You see only what the user shares with agents: cards they select or share, shared spaces, and cards you made. If they mean something you cannot see, ask them to select it or share it (right-click a card: Share with agents).' }
+        : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cards, board.spaces, board.space, board.focusing],
+    [visible, openSpaces, board.space, board.focusing, access],
   )
-  const spaceNames = useMemo(() => board.spaces.map(s => s.name), [board.spaces])
-  // every card's title, for "next to which card" (the same array while the cards stay the same)
-  const allTitles = useMemo(() => cards.map(c => [c.id, c.title] as const), [cards])
+  const spaceNames = useMemo(() => openSpaces.map(s => s.name), [openSpaces])
+  // every visible card's title, for "next to which card" (the same array while the cards stay the same)
+  const allTitles = useMemo(() => visible.map(c => [c.id, c.title] as const), [visible])
   const titlesBut = (id: string) => allTitles.filter(([i]) => i !== id).map(([, t]) => t)
 
   const later: LaterItem[] = useMemo(
@@ -439,6 +492,8 @@ export function BoardAgent() {
 
   // made for another space: it goes there (the user's view stays where it is; the toast says where it went)
   const place = (id: string | undefined, space?: string) => {
+    // what an agent makes is shared with agents: it can go on working with it
+    if (id) board.setCardAgents([id], 'shared')
     if (!id || !space || spaceId(space) === board.space) return
     board.moveToSpace([id], spaceId(space))
   }
@@ -447,7 +502,7 @@ export function BoardAgent() {
   // spot. It can be undone (Ctrl+Z) like any move.
   const GAP = 28
   const placeNextTo = (id: string, title: string, otherTitle: string, side: Side) => {
-    const other = cards.find(c => c.title === otherTitle && c.id !== id)
+    const other = visible.find(c => c.title === otherTitle && c.id !== id)
     const a = rf.getNode(id)
     const b = other && rf.getNode(other.id)
     if (!a || !b) throw new Error(`No card "${otherTitle}" on the board.`)
@@ -498,7 +553,7 @@ export function BoardAgent() {
         onTidy={() => board.tidy()}
         onFocusOn={titles => {
           // in the order named, side by side; a focus already on is put back first
-          const ids = titles.map(t => pick(cards, t, c => c.id, c => c.title, 'card').id)
+          const ids = titles.map(t => pick(visible, t, c => c.id, c => c.title, 'card').id)
           const go = () => board.toggleFocus(ids)
           if (board.focusing) {
             board.toggleFocus()
@@ -509,7 +564,7 @@ export function BoardAgent() {
         onBringBack={() => board.focusing && board.toggleFocus()}
         onCompare={titles => {
           // full screen, side by side, in the order named (the first on the left)
-          const [a, b] = titles.map(t => pick(cards, t, c => c.id, c => c.title, 'card').id)
+          const [a, b] = titles.map(t => pick(visible, t, c => c.id, c => c.title, 'card').id)
           board.compareCards([a, b], true)
           said('Claude put two cards side by side')
         }}
@@ -525,11 +580,11 @@ export function BoardAgent() {
         }
       />
       {cards.map(c => (
-        <Fragment key={c.id}>
+        <div key={c.id} {...(visibleIds.has(c.id) ? {} : { 'data-agent-hidden': '' })}>
           <CardRoot
             aria-label={c.title}
             className="sr-only"
-            value={c.value}
+            value={c.type === 'note' && visibleIds.has(c.id) && textOf(c.ref) !== undefined ? { ...c.value, text: textOf(c.ref) } : c.value}
             spaces={spaceNames}
             onComment={t => {
               board.addComment(c.id, t, 'Claude').catch(() => {})
@@ -552,23 +607,24 @@ export function BoardAgent() {
             onTuck={t => (t ? board.tuck([c.id]) : board.untuck(c.id))}
             onVeil={v => board.setVeiled([c.id], v)}
             onTable={c.type === 'table' ? ch => changeTable(c.ref, c.title, ch) : undefined}
+            onWrite={c.type === 'note' ? ch => writeNote(c.ref, c.title, ch) : undefined}
             others={titlesBut(c.id)}
             onPlaceNextTo={(other, side) => placeNextTo(c.id, c.title, other, side)}
           />
-        </Fragment>
+        </div>
       ))}
       <LaterRoot
-        aria-label="Later"
+        aria-label={listOpen('later') ? 'Later' : 'Later (not shared with you: you can add to it, not read it)'}
         className="sr-only"
-        value={later}
+        value={listOpen('later') ? later : []}
         onAdd={t => board.saveLater(/^https?:\/\//i.test(t) ? { url: t } : { text: t })}
         onSetState={(id, s) => board.setLater(id, s as 'todo' | 'reading' | 'done')}
         onRemove={id => board.setLater(id, null)}
       />
       <SnippetRoot
-        aria-label="Snippets"
+        aria-label={listOpen('snippets') ? 'Snippets' : 'Snippets (not shared with you: you can leave one, not read them)'}
         className="sr-only"
-        value={snippetList}
+        value={listOpen('snippets') ? snippetList : []}
         onAdd={(text, title) =>
           post('/api/snippets', { text, ...(title ? { title } : {}) }).then(() => (snippets.reload(), said('Claude left a snippet')), (e: Error) => said(e.message))
         }

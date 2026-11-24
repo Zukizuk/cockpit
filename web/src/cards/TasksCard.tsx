@@ -2,6 +2,7 @@
 // this PC. Either way: add, tick off, change the words (click them), remove. Everything shows at once and is saved
 // behind the scenes; if saving fails, the list goes back and says why.
 import { TaskList, type AgentTask } from '../agent/todayList'
+import { useAgentView } from '../agent/view'
 import { useMemo, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Check, ExternalLink, ListTodo, RefreshCw, Trash2, X } from 'lucide-react'
@@ -229,6 +230,8 @@ export function TasksCard({ id, data, selected }: NodeProps<CardNode>) {
   const ready = () => {
     if (!s || (!todoist && !local.data)) throw new Error('The Today list is still loading. Try again in a moment.')
   }
+  // an agent reads the tasks only when this card is shared with it (Settings > Agents); it can still add one
+  const agentSees = useAgentView().visible.has(id)
   const byAgent = {
     onAdd: (line: string) => {
       ready()
@@ -278,7 +281,12 @@ export function TasksCard({ id, data, selected }: NodeProps<CardNode>) {
   return (
     <>
     {/* the list as an agent sees it: always there, even with the card folded */}
-    <TaskList aria-label="Today's tasks" value={agentTasks} {...byAgent} className="sr-only" />
+    <TaskList
+      aria-label={agentSees ? "Today's tasks" : "Today's tasks (not shared with you: you can add a task, not read them)"}
+      value={agentSees ? agentTasks : []}
+      {...byAgent}
+      className="sr-only"
+    />
     <CardShell
       selected={!!selected}
       pulse={data.pulse}

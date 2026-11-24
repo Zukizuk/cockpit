@@ -273,6 +273,10 @@ export interface Config {
   scanTrackers: boolean
   /** Extras turned on in Settings > Extras (each off until then). */
   extras?: Extras
+  /** What each agent may see on the board (Settings > Agents). */
+  agentAccess?: Record<AgentName, AgentAccess>
+  /** Connect also asks Claude Code not to read Cockpit's files or call its API directly. */
+  agentFence?: boolean
   sessionsDays: number
   hasTodoistToken: boolean
   dataDir: string
@@ -304,6 +308,8 @@ export interface Config {
 export interface ClaudeLink {
   hook: 'yes' | 'other' | 'no'
   tools: 'yes' | 'other' | 'no'
+  /** Claude Code's deny rules for Cockpit's notes and data folders are in its settings */
+  fence?: 'yes' | 'no'
   /** when a chat's outputs last came in (by any way), 0 if never */
   lastOutput: number
   /** Claude Code's command was found */
@@ -449,6 +455,24 @@ export interface BoardCard {
   tucked?: boolean
   /** Its contents hidden (blurred), as when sharing the screen. */
   veiled?: boolean
+  /** Shared with agents, or private (agents never see it); left out: as its space and Settings say. */
+  agents?: AgentMark
+}
+
+/** A card or space shared with agents, or kept from them. */
+export type AgentMark = 'shared' | 'private'
+/** What an agent may see on the board: nothing, what's shared with agents, or everything that isn't private. */
+export type AgentAccess = 'off' | 'shared' | 'all'
+export type AgentName = 'claude-code' | 'other'
+
+/** One call an agent made with the board tools (Settings > Agents). */
+export interface AgentLogEntry {
+  at: number
+  agent: string
+  tool: string
+  what?: string
+  saw?: string[]
+  refused?: string
 }
 
 /** A board of its own: cards in other spaces stay saved, out of view. Each keeps where its view was. */
@@ -456,6 +480,8 @@ export interface Space {
   id: string
   name: string
   viewport?: { x: number; y: number; zoom: number } | null
+  /** Its cards shared with agents, or all of them private. */
+  agents?: AgentMark
 }
 
 /** A comment on a card: the user's or Claude's. */

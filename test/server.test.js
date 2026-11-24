@@ -1196,6 +1196,28 @@ test('board tools: a call goes to the open window, its answer comes back; with n
     assert.deepEqual(c.input.steps[0].args, ['x'])
     await fetch(`${base}/api/agent/result`, { method: 'POST', headers: { 'X-Cockpit': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id, output: { ok: true } }) })
     assert.deepEqual(await answer, { output: { ok: true } })
+    assert.equal(c.access, 'shared', "the window is told what this agent may see: only what's shared, by default")
+
+    // each call is in the log: who, and the cards it could see (titles only)
+    const seen = call({ tool: 'snapshot', agent: 'claude-code', label: 'Claude · cockpit' }).then(r => r.json())
+    text = ''
+    const asked2 = JSON.parse((await until(/event: agent-call\ndata: (\{.*\})/))[1])
+    assert.equal(asked2.agent, 'Claude · cockpit')
+    await fetch(`${base}/api/agent/result`, { method: 'POST', headers: { 'X-Cockpit': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ id: asked2.id, output: [], saw: ['Post ideas'] }) })
+    await seen
+    const log = await fetch(`${base}/api/agent/log`, { headers: { 'X-Cockpit': '1' } }).then(r => r.json())
+    assert.equal(log[0].agent, 'Claude · cockpit')
+    assert.deepEqual(log[0].saw, ['Post ideas'])
+
+    // turned off in Settings: refused before it reaches the window, and logged
+    const { saveConfig } = await import('../server/lib/config.js')
+    saveConfig({ agentAccess: { 'claude-code': 'off' } })
+    const off = await call({ tool: 'snapshot', agent: 'claude-code' })
+    assert.notEqual(off.status, 200)
+    assert.match((await off.json()).error, /turned off agents' access/)
+    const log2 = await fetch(`${base}/api/agent/log`, { headers: { 'X-Cockpit': '1' } }).then(r => r.json())
+    assert.equal(log2[0].refused, 'access is off')
+    saveConfig({ agentAccess: { 'claude-code': 'shared' } })
 
     const bad = await call({ tool: 'rm' })
     assert.notEqual(bad.status, 200)
@@ -1203,6 +1225,46 @@ test('board tools: a call goes to the open window, its answer comes back; with n
     ac.abort()
     child.kill()
   }
+})
+
+test('agents: cards and spaces shared or private are kept; access is checked; the fence goes in and out', async () => {
+  const { readBoard, saveBoard } = await import('../server/lib/board.js')
+  saveBoard({
+    cards: [{ id: 'a', type: 'note', ref: 'n.md', agents: 'shared' }, { id: 'b', type: 'note', ref: 'm.md', agents: 'private' }, { id: 'c', type: 'note', ref: 'o.md', agents: 'yes' }],
+    viewport: null,
+    spaces: [{ id: 'main', name: 'Main', agents: 'private' }, { id: 'work', name: 'Work', agents: 'shared' }, { id: 'home', name: 'Home', agents: 'all' }],
+  })
+  const b = readBoard()
+  assert.deepEqual(b.cards.map(c => c.agents), ['shared', 'private', undefined], 'only shared or private')
+  assert.deepEqual(b.spaces.map(s => s.agents), ['private', 'shared', undefined])
+
+  const { saveConfig, loadConfig: load } = await import('../server/lib/config.js')
+  assert.deepEqual(load().agentAccess, { 'claude-code': 'shared', other: 'shared' }, "only what's shared, by default")
+  assert.equal(saveConfig({ agentAccess: { other: 'off' } }).agentAccess.other, 'off')
+  assert.equal(load().agentAccess['claude-code'], 'shared', 'one agent at a time')
+  assert.throws(() => saveConfig({ agentAccess: { other: 'some' } }), /agentAccess/)
+  assert.throws(() => saveConfig({ agentAccess: { codex: 'all' } }), /agentAccess/)
+  saveConfig({ agentAccess: { other: 'shared' } })
+
+  const link = await import('../server/lib/claude-link.js')
+  assert.equal(link.rulePath('C:\\Users\\me\\Documents\\Cockpit'), '//c/Users/me/Documents/Cockpit')
+  // Claude Code's settings in the temporary home: the user's own rules stay, Cockpit's go in and out
+  const settings = path.join(T, '.claude', 'settings.json')
+  fs.mkdirSync(path.dirname(settings), { recursive: true })
+  fs.writeFileSync(settings, JSON.stringify({ permissions: { deny: ['Bash(rm *)'] }, hooks: {} }))
+  const cfg = load()
+  link.applyFence(cfg, true)
+  const deny = JSON.parse(fs.readFileSync(settings, 'utf8')).permissions.deny
+  assert.equal(deny[0], 'Bash(rm *)')
+  assert.deepEqual(deny.slice(1), link.fenceRules(cfg))
+  assert.ok(deny.slice(1).every(r => /^Read\(\/\/.*\/\*\*\)$/.test(r)), 'Read(//c/…/**) rules')
+  assert.equal(link.fenceState(cfg), 'yes')
+  link.applyFence(cfg, true)
+  assert.equal(JSON.parse(fs.readFileSync(settings, 'utf8')).permissions.deny.length, 3, 'not added twice')
+  link.applyFence(cfg, false)
+  assert.deepEqual(JSON.parse(fs.readFileSync(settings, 'utf8')).permissions, { deny: ['Bash(rm *)'] })
+  assert.equal(link.fenceState(cfg), 'no')
+  fs.rmSync(path.join(T, '.claude'), { recursive: true, force: true })
 })
 
 test('spaces: kept with the board, each card in one; a card whose space is gone goes back to Main', async () => {

@@ -5,10 +5,11 @@
 // removal waits for the person to allow it.
 // Experimental (spike/ui-sdk-today).
 import { createAgent } from '@ui-sdk/react/agent'
-import { post } from '../api'
+import { post, type AgentAccess } from '../api'
+import { agentView, setAgentAccess } from './view'
 import { lastEvent, onEvent } from '../lib'
 
-type Call = { id: string; client: number; tool: 'snapshot' | 'act' | 'query'; input?: unknown }
+type Call = { id: string; client: number; tool: 'snapshot' | 'act' | 'query'; input?: unknown; access?: AgentAccess; agent?: string }
 export type Ask = (text: string) => Promise<boolean>
 
 // what an agent may reach, and how a removal there is put to the person
@@ -29,6 +30,7 @@ export function startAgentBridge(ask: Ask) {
       if (action === 'remove') return ask(`Claude wants to remove "${String(component === 'card' ? label : (args?.[0] ?? ''))}" ${where}`)
       // a table: writing over all of it, or taking a row out, is the person's call too
       if (component === 'card' && action === 'setRows') return ask(`Claude wants to replace everything in the table "${String(label)}"`)
+      if (component === 'card' && action === 'setText') return ask(`Claude wants to rewrite the note "${String(label)}"`)
       if (component === 'card' && action === 'removeRow') return ask(`Claude wants to take row "${String(args?.[0] ?? '')}" out of the table "${String(label)}"`)
       return true
     },
@@ -48,7 +50,19 @@ export function startAgentBridge(ask: Ask) {
   onEvent('agent-call', async (c: Call) => {
     if (!me || c.client !== me) return
     let output: unknown
+    // for the log (Settings > Agents): what it asked, and the cards it could see then (titles only)
+    let what = ''
+    let saw: string[] = []
     try {
+      // the board shows this agent only what its access allows (agent/view.ts)
+      await setAgentAccess(c.access === 'all' || c.access === 'off' ? c.access : 'shared', c.agent || '')
+      saw = agentView().titles
+      if (c.tool === 'query') what = `looked for "${String((c.input as { text?: unknown })?.text ?? '').slice(0, 80)}"`
+      if (c.tool === 'act') {
+        const steps = ((c.input as { steps?: { ref?: unknown; action?: unknown }[] })?.steps || []).slice(0, 5)
+        what = steps.map(s => `${String(s.action ?? '')} on ${String(s.ref ?? '')}`).join(', ')
+        saw = []
+      }
       if (c.tool === 'snapshot') output = agent.snapshot()
       else if (c.tool === 'act') output = await agent.act(c.input as Parameters<typeof agent.act>[0])
       else if (c.tool === 'query') output = await agent.query((c.input || {}) as Parameters<typeof agent.query>[0])
@@ -56,6 +70,6 @@ export function startAgentBridge(ask: Ask) {
     } catch (e: any) {
       output = { error: e?.message || String(e) }
     }
-    post('/api/agent/result', { id: c.id, output }).catch(() => {})
+    post('/api/agent/result', { id: c.id, output, what, saw }).catch(() => {})
   })
 }

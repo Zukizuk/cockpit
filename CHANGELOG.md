@@ -2,6 +2,14 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**New**
+- **You decide what Claude sees on your board.** Until now, Claude could read every card in every space. Now agents see only what you share with them: the cards you select, cards you share (right-click a card: Share with agents), the cards in a space you share (the space menu at the top left), and cards Claude made itself. Keep a card or a whole space private and agents never see it, whatever else is set. Settings → Agents sets this for Claude Code and for other agents: Nothing, What I share (the default), or Everything except private cards. Shared and private cards show a small mark in their corner.
+- **What agents looked at.** Settings → Agents lists each time an agent read or used the board, and which cards it could see then (their titles, never what's in them).
+- **Claude Code is kept out of Cockpit's files.** Connect now also asks Claude Code not to read your notes folder or Cockpit's own data folder directly; it gets what you share through the board instead. If Claude Code is already connected, this is added once when the new version starts. Settings → Agents turns it off. It stops Claude Code's file tools and the common shell commands, but on Windows a command that reads files another way still could: it's a fence, not a lock.
+- Claude reads a shared note's whole text through the board, and can add to it or rewrite it (a rewrite waits for your Allow).
+
 ## 24 November 2026 (version 0.2.6)
 
 **Improved**

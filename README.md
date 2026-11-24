@@ -41,8 +41,10 @@ Windows may warn that the installer is from an unknown publisher: the release is
   key or password goes into Snippets, encrypted. **Later** (to check, reading, done) keeps links to read another time:
   Ctrl+Shift+V pastes a link straight there, and a card's menu keeps it on Later without taking it off the board.
 - **Spaces and comments.** Several boards to switch between, and a comment thread on any card.
-- **Claude on your board.** From a Claude Code chat, Claude reads the cards you name or select, comments back, and
-  adds tasks, notes, links and snippets; anything it takes away waits for your Allow.
+- **Claude on your board.** From a Claude Code chat, Claude reads the cards you share with it, comments back, and
+  adds tasks, notes, links and snippets; anything it takes away waits for your Allow. It sees only what you share:
+  cards you select or share (right-click: Share with agents) and shared spaces. A card or space kept private never
+  shows. Settings → Agents sets this per agent and lists what agents looked at.
 - **Bring in files from Windows.** Right-click files or folders in Explorer and choose **Send to → Cockpit**, or
   pick **Choose files…** in the + box for Windows' own Open dialog. A folder becomes a card with its files as a tree.
   Something sent while Cockpit is closed is there when you open it.
@@ -87,7 +89,13 @@ claude mcp add --scope user cockpit -- "$env:LOCALAPPDATA\Programs\Cockpit\runti
 & "$env:LOCALAPPDATA\Programs\Cockpit\runtime\node.exe" "$env:LOCALAPPDATA\Programs\Cockpit\app\scripts\claude-setup.mjs" add-hook --node "$env:LOCALAPPDATA\Programs\Cockpit\runtime\node.exe"
 ```
 
-`remove-hook` takes the hook out again; nothing else in your Claude Code settings is touched.
+`remove-hook` takes the hook out again.
+
+Connect also adds two rules to Claude Code's settings (`permissions.deny`), so Claude Code doesn't read your notes
+folder or Cockpit's data folder (`~/.cockpit`) directly: it gets what you share through the board tools instead.
+Settings → Agents turns them off. They stop Claude Code's own file tools and the common shell commands; on Windows,
+Claude Code doesn't sandbox the commands it runs, so a command that reads files another way still could. It's a
+fence, not a lock.
 
 The Outputs button appears in the dock once something has arrived. Any other program or agent can add to it too, by
 writing a JSON file to `%USERPROFILE%\.cockpit\inbox\`:

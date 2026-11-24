@@ -33,6 +33,13 @@ export const EDITORS = ['notepad', 'vscode', 'default']
 export const THEMES = ['system', 'dark', 'light']
 /** The extras there are (Settings > Extras). */
 export const EXTRAS = ['dictionary', 'tables', 'journal']
+/**
+ * What an agent may see on the board through Cockpit's board tools: nothing, only what's shared with agents (cards
+ * selected or shared, shared spaces, cards an agent made), or every card that isn't private.
+ */
+export const AGENT_ACCESS = ['off', 'shared', 'all']
+/** The agents told apart: Claude Code (its MCP server runs with CLAUDECODE set), and any other. */
+export const AGENTS = ['claude-code', 'other']
 
 export function defaults() {
   return {
@@ -66,6 +73,10 @@ export function defaults() {
     scanTrackers: false,
     /** Extras: special things the person turns on themselves (Settings > Extras); each is off until then. */
     extras: { dictionary: false, tables: false, journal: false },
+    /** What each agent may see on the board (Settings > Agents). */
+    agentAccess: { 'claude-code': 'shared', other: 'shared' },
+    /** Connect also asks Claude Code not to read Cockpit's files or call its API directly (deny rules). */
+    agentFence: true,
   }
 }
 
@@ -98,6 +109,8 @@ export function loadConfig() {
   if (typeof raw.updates === 'boolean') cfg.updates = raw.updates
   if (typeof raw.scanTrackers === 'boolean') cfg.scanTrackers = raw.scanTrackers
   for (const k of EXTRAS) if (typeof raw.extras?.[k] === 'boolean') cfg.extras[k] = raw.extras[k]
+  for (const k of AGENTS) if (AGENT_ACCESS.includes(raw.agentAccess?.[k])) cfg.agentAccess[k] = raw.agentAccess[k]
+  if (typeof raw.agentFence === 'boolean') cfg.agentFence = raw.agentFence
   return cfg
 }
 
@@ -164,6 +177,18 @@ export function saveConfig(patch) {
       if (!EXTRAS.includes(k) || typeof v !== 'boolean') throw new UserError(`extras are ${EXTRAS.join(', ')}, each true or false`)
       raw.extras[k] = v
     }
+  }
+  if (patch.agentAccess !== undefined) {
+    if (!patch.agentAccess || typeof patch.agentAccess !== 'object') throw new UserError('agentAccess is an object')
+    raw.agentAccess = typeof raw.agentAccess === 'object' && raw.agentAccess ? raw.agentAccess : {}
+    for (const [k, v] of Object.entries(patch.agentAccess)) {
+      if (!AGENTS.includes(k) || !AGENT_ACCESS.includes(v)) throw new UserError(`agentAccess: ${AGENTS.join(', ')}, each one of ${AGENT_ACCESS.join(', ')}`)
+      raw.agentAccess[k] = v
+    }
+  }
+  if (patch.agentFence !== undefined) {
+    if (typeof patch.agentFence !== 'boolean') throw new UserError('agentFence is true or false')
+    raw.agentFence = patch.agentFence
   }
   if (patch.theme !== undefined) {
     if (!THEMES.includes(patch.theme)) throw new UserError(`theme is one of ${THEMES.join(', ')}`)

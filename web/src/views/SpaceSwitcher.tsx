@@ -1,7 +1,8 @@
 // The space you're in, at the top left: click for the others, a new one, rename or remove. Double-click renames.
+// The space can be shared with agents (all its cards) or private (none of them, whatever else says).
 // [ and ] step through them, Alt+1 to 9 jumps to one, S opens this list (App's keys).
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Layers, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Bot, Check, ChevronDown, Layers, Pencil, Plus, ShieldOff, Trash2 } from 'lucide-react'
 import { useBoard } from '../board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { onEvent } from '../lib'
@@ -51,6 +52,8 @@ export function SpaceSwitcher() {
         <button type="button" className="space-switch glass" aria-label={`Space: ${current.name}. Change space`} onDoubleClick={() => setEditing(true)}>
           <Layers className="size-[15px] shrink-0 opacity-70" strokeWidth={1.75} />
           <span className="truncate">{current.name}</span>
+          {current.agents === 'shared' && <Bot className="size-[13px] shrink-0 opacity-60" strokeWidth={1.75} aria-label="shared with agents" />}
+          {current.agents === 'private' && <ShieldOff className="size-[13px] shrink-0 opacity-60" strokeWidth={1.75} aria-label="private from agents" />}
           <ChevronDown className="size-[14px] shrink-0 opacity-60" strokeWidth={1.75} />
         </button>
       </DropdownMenuTrigger>
@@ -59,6 +62,8 @@ export function SpaceSwitcher() {
           <DropdownMenuItem key={s.id} onSelect={() => board.switchSpace(s.id)}>
             <Check className={s.id === board.space ? '' : 'invisible'} strokeWidth={1.75} />
             <span className="truncate">{s.name}</span>
+            {s.agents === 'shared' && <Bot className="opacity-50" strokeWidth={1.75} />}
+            {s.agents === 'private' && <ShieldOff className="opacity-50" strokeWidth={1.75} />}
             {i < 9 && <DropdownMenuShortcut>Alt {i + 1}</DropdownMenuShortcut>}
           </DropdownMenuItem>
         ))}
@@ -70,6 +75,27 @@ export function SpaceSwitcher() {
         <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 50)}>
           <Pencil strokeWidth={1.75} />
           Rename this space
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            const on = current.agents === 'shared'
+            board.setSpaceAgents(current.id, on ? null : 'shared')
+            board.toast(on ? `${current.name} isn't shared with agents` : `${current.name} is shared with agents: Claude can read its cards`)
+          }}
+        >
+          <Bot strokeWidth={1.75} />
+          {current.agents === 'shared' ? 'Stop sharing this space with agents' : 'Share this space with agents'}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            const on = current.agents === 'private'
+            board.setSpaceAgents(current.id, on ? null : 'private')
+            board.toast(on ? `${current.name} isn't private any more` : `${current.name} is private: agents never see its cards`)
+          }}
+        >
+          <ShieldOff strokeWidth={1.75} />
+          {current.agents === 'private' ? 'Make this space not private' : 'Keep this space private from agents'}
         </DropdownMenuItem>
         {current.id !== 'main' && (
           <DropdownMenuItem

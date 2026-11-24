@@ -19,6 +19,11 @@ import { agentTools } from '@ui-sdk/core/agent'
 const here = appPath('server')
 
 const BOARD_NOTE =
+  "What you see: only what the user lets agents see (Cockpit: Settings > Agents). Usually that is the cards they " +
+  "select or share with agents, the cards in shared spaces, and cards you made; private cards and spaces never show. " +
+  "'Board' has a sharing line when that is so. If the user means a card you cannot see, ask them to select it or share " +
+  "it (right-click the card: Share with agents). Never go around this: don't read Cockpit's notes folder, its data " +
+  "folder (~/.cockpit) or its local web API (127.0.0.1:4790) to get at what isn't shared; use only these tools. " +
   'How to look: when the user names a card ("my sticky note Post ideas"), call board_query with { text: "<some of its ' +
   'words>" } and you get just that card. When they say "this card", "the selected one" or "what I am looking at", ' +
   "call board_snapshot: those cards have selected: true or inView: true, and 'Board' lists their titles. " +
@@ -42,8 +47,9 @@ const BOARD_NOTE =
   "add(text), complete(task), reopen(task), rename(task, newText), remove(task)); 'Later' (later-list: " +
   "add(linkOrNote), setState(item, 'to check' | 'reading' | 'done'), remove(item)); 'Snippets' (snippet-list: " +
   "add(text, title?), remove(item); a secret's text is never shown). " +
-  "Notes (sticky notes, journal) are files: peek has their start; read or edit the whole at the card's file path, " +
-  "and the board follows. The user's comments on a card may be for you: answer with the card's comment(). " +
+  "Notes (sticky notes, journal): a note card you can see has its whole text in its value (text); change it with the " +
+  "card's append(text), or setText(text) to write it all anew (that waits for the user's Allow), not by editing its " +
+  "file.The user's comments on a card may be for you: answer with the card's comment(). " +
   "Every removal waits for the user to allow it in Cockpit. If 'Today's tasks' is missing, the Today card is not on " +
   'the board (the user can press T). ' +
   "Tables (an extra the user turns on in Settings > Extras): Board's addTable(title, rows, space?) puts a new table on the " +
@@ -205,7 +211,7 @@ export async function callTool(name, args = {}) {
   if (name.startsWith('board_')) {
     try {
       if (!(await ensureServer())) throw new Error("Cockpit isn't running.")
-      const r = await postJson('/api/agent/call', { tool: name.slice(6), input: args })
+      const r = await postJson('/api/agent/call', { tool: name.slice(6), input: args, agent: process.env.CLAUDECODE ? 'claude-code' : 'other', label: fromLabel() })
       if (r.status !== 200) throw new Error(r.body?.error || `Cockpit answered ${r.status}`)
       return { content: [{ type: 'text', text: JSON.stringify(r.body.output) }] }
     } catch (e) {

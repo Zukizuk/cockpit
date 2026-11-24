@@ -3,7 +3,7 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { NodeResizer, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -88,6 +88,13 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const pickedCount = useStore(s => s.nodes.reduce((k, n) => k + (n.selected ? 1 : 0), 0))
   const manyPicked = pickedCount > 1
   const toggleVeil = () => nodeId && board.setVeiled([nodeId], !veiled)
+  // agents: this card shared with them, or private (never shown to them); several picked: all of them
+  const mark = node?.data.agents
+  const markIds = () => (manyPicked && selected ? rf.getNodes().filter(n => n.selected).map(n => n.id) : nodeId ? [nodeId] : [])
+  const setMark = (m: 'shared' | 'private' | null, said: string) => {
+    board.setCardAgents(markIds(), m)
+    board.toast(said)
+  }
   const min = minSize((node?.type || 'item') as CardType, node?.data.ref || '')
   // fits its content now (Snippets, until a height is dragged by hand)
   const fits = !!autoHeight && !node?.data.sized
@@ -141,7 +148,18 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
     { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) },
     { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },
-    { label: 'Tuck away at the top', icon: ArrowUpToLine, run: () => nodeId && board.tuck([nodeId]) },
+    {
+      label: mark === 'shared' ? 'Stop sharing with agents' : 'Share with agents',
+      icon: Bot,
+      run: () => (mark === 'shared' ? setMark(null, 'Not shared with agents') : setMark('shared', 'Shared with agents: Claude can read it')),
+      gap: true,
+    },
+    {
+      label: mark === 'private' ? 'Not private any more' : 'Keep private from agents',
+      icon: ShieldOff,
+      run: () => (mark === 'private' ? setMark(null, 'Not private any more') : setMark('private', 'Private: agents never see it')),
+    },
+    { label: 'Tuck away at the top', icon: ArrowUpToLine, gap: true, run: () => nodeId && board.tuck([nodeId]) },
     {
       label: 'Fit to contents',
       icon: Shrink,
@@ -232,7 +250,13 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       </DropdownMenuContent>
     </DropdownMenu>
   )
-  const lockBadge = locked && <IconButton icon={Lock} label="Locked in place. Click to unlock" onClick={toggleLock} className="lock-badge" />
+  const lockBadge = (
+    <>
+      {mark === 'shared' && <IconButton icon={Bot} label="Shared with agents. Click to stop sharing" onClick={() => setMark(null, 'Not shared with agents')} className="lock-badge" />}
+      {mark === 'private' && <IconButton icon={ShieldOff} label="Private: agents never see it. Click to undo" onClick={() => setMark(null, 'Not private any more')} className="lock-badge" />}
+      {locked && <IconButton icon={Lock} label="Locked in place. Click to unlock" onClick={toggleLock} className="lock-badge" />}
+    </>
+  )
 
   return (
     <>

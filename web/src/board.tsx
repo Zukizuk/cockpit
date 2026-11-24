@@ -7,7 +7,7 @@ import { startAgentBridge } from './agent/bridge'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReactFlow, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
-import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker } from './api'
+import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
 import { pack } from './layout'
 import { useData, useEvent } from './lib'
 
@@ -45,7 +45,7 @@ export const SNIPPETS_MIN_H = 160
 export const FOLDED_H = 46
 
 /** openH: the height a folded card goes back to when it's unfolded. */
-export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean }
+export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean; agents?: AgentMark }
 export type CardNode = Node<CardData, CardType>
 
 /** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
@@ -63,7 +63,7 @@ export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}) },
   width: HUGS.has(c.type) ? undefined : c.w,
   height: c.folded ? FOLDED_H : HUGS.has(c.type) || (AUTO_HEIGHT.has(c.type) && !keepsSize(c)) ? undefined : c.h,
   dragHandle: '.card-drag',
@@ -85,6 +85,7 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.space && n.data.space !== 'main' ? { space: n.data.space } : {}),
   ...(n.data.tucked ? { tucked: true } : {}),
   ...(n.data.veiled ? { veiled: true } : {}),
+  ...(n.data.agents ? { agents: n.data.agents } : {}),
 })
 
 /** Off the board right now: in another space, or tucked away at the top edge. */
@@ -258,6 +259,10 @@ interface Ctx {
   untuck: (id: string) => void
   /** Hides (blurs) cards' contents, or shows them again: for sharing the screen. */
   setVeiled: (ids: string[], veiled: boolean) => void
+  /** Shares cards with agents, makes them private, or puts them back to their space's say (null). */
+  setCardAgents: (ids: string[], mark: AgentMark | null) => void
+  /** The same for a whole space. */
+  setSpaceAgents: (id: string, mark: AgentMark | null) => void
 }
 
 const BoardCtx = createContext<Ctx | null>(null)
@@ -485,6 +490,35 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       })
     },
     [rf, remember, persist],
+  )
+  const setCardAgents = useCallback(
+    (ids: string[], mark: AgentMark | null) => {
+      const set = new Set(ids)
+      rf.setNodes(ns =>
+        ns.map(n => {
+          if (!set.has(n.id)) return n
+          const { agents: _a, ...data } = n.data
+          return { ...n, data: mark ? { ...data, agents: mark } : data }
+        }),
+      )
+      persist()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf],
+  )
+  const setSpaceAgents = useCallback(
+    (id: string, mark: AgentMark | null) => {
+      setSpaces(
+        spacesRef.current.map(x => {
+          if (x.id !== id) return x
+          const { agents: _a, ...rest } = x
+          return mark ? { ...rest, agents: mark } : rest
+        }),
+      )
+      persist()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   )
   const setVeiled = useCallback(
     (ids: string[], veiled: boolean) => {
@@ -1140,9 +1174,9 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
       showImage, items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
-      comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled,
+      comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled],
+    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

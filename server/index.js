@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { appPath } from './lib/app-root.js'
-import { DATA_DIR, HOST, PORT, VERSION, UserError, loadConfig, publicConfig, saveConfig, settleJournalExtra, within } from './lib/config.js'
+import { AGENTS, DATA_DIR, HOST, PORT, VERSION, UserError, loadConfig, publicConfig, saveConfig, settleJournalExtra, within } from './lib/config.js'
 import { checkApiRequest, checkHost } from './lib/security.js'
 import { mimeOf, openOutside, openUrl } from './lib/files.js'
 import * as shown from './lib/shown.js'
@@ -21,7 +21,7 @@ import * as tasks from './lib/tasks.js'
 import * as comments from './lib/comments.js'
 import * as tables from './lib/tables.js'
 import * as dictionary from './lib/dictionary.js'
-import { claudeLink, connectClaude } from './lib/claude-link.js'
+import { applyFence, claudeLink, connectClaude, fenceRules, fenceState, settleFence } from './lib/claude-link.js'
 import * as folders from './lib/folders.js'
 import { readOffice } from './lib/office.js'
 import * as outputs from './lib/outputs.js'
@@ -31,6 +31,7 @@ import * as updates from './lib/updates.js'
 import * as runs from './lib/runs.js'
 import { changesFor } from './lib/changes.js'
 import { pickFiles } from './lib/pick.js'
+import { clearAgentLog, logAgentCall, readAgentLog } from './lib/agent-log.js'
 
 const here = appPath('server')
 const DIST = appPath('web', 'dist')
@@ -158,8 +159,17 @@ function windowForAgent() {
   if (agentWindow && clients.has(agentWindow)) return agentWindow
   return [...clients].at(-1) || null
 }
-function callBoard(tool, input) {
+const agentCallInfo = new Map() // id -> { agent, tool } (for the log, when the window answers)
+function callBoard(tool, input, { agent = 'other', label = '' } = {}) {
   if (!AGENT_TOOLS.has(tool)) throw new UserError(`No board tool ${tool}`)
+  const who = AGENTS.includes(agent) ? agent : 'other'
+  const name = label || (who === 'claude-code' ? 'Claude Code' : 'An agent')
+  // what this agent may see (Settings > Agents); the window shows it only that
+  const access = loadConfig().agentAccess[who]
+  if (access === 'off') {
+    logAgentCall({ agent: name, tool, refused: 'access is off' })
+    throw new UserError("The user has turned off agents' access to the board (Cockpit: Settings > Agents). Don't try to read the board another way.")
+  }
   const target = windowForAgent()
   if (!target) throw new UserError('No Cockpit window is open. Ask the user to open Cockpit (Ctrl+Alt+K), then try again.')
   const id = Math.random().toString(36).slice(2, 12)
@@ -171,7 +181,8 @@ function callBoard(tool, input) {
       reject(new UserError('Cockpit did not answer in time. Is its window open?'))
     }, wait)
     agentCalls.set(id, { resolve, timer })
-    target.write(`event: agent-call\ndata: ${JSON.stringify({ id, client: target.cockpitClient, tool, input: input ?? {} })}\n\n`)
+    agentCallInfo.set(id, { agent: name, tool })
+    target.write(`event: agent-call\ndata: ${JSON.stringify({ id, client: target.cockpitClient, tool, input: input ?? {}, access, agent: name })}\n\n`)
   })
 }
 
@@ -439,17 +450,32 @@ async function api(req, res, url) {
     return
   }
 
+  // what agents did on the board (Settings > Agents)
+  if (area === 'agent' && a === 'log' && method === 'GET') return json(res, 200, readAgentLog().reverse())
+
   // board tools (experimental): the MCP server's call, a window's answer, and which window was used last
   if (area === 'agent' && method === 'POST') {
     const body = await readBody(req)
-    if (a === 'call') return json(res, 200, { output: await callBoard(String(body.tool || ''), body.input) })
+    if (a === 'call') return json(res, 200, { output: await callBoard(String(body.tool || ''), body.input, { agent: String(body.agent || ''), label: String(body.label || '') }) })
     if (a === 'result') {
       const c = agentCalls.get(String(body.id || ''))
+      const info = agentCallInfo.get(String(body.id || ''))
+      agentCallInfo.delete(String(body.id || ''))
+      // the log: what it asked, and the cards it could see or used (titles only)
+      if (c && info) {
+        try {
+          logAgentCall({ agent: info.agent, tool: info.tool, what: body.what, saw: body.saw })
+        } catch {}
+      }
       if (c) {
         clearTimeout(c.timer)
         agentCalls.delete(String(body.id))
         c.resolve(body.output ?? null)
       }
+      return json(res, 200, { ok: true })
+    }
+    if (a === 'log' && b === 'clear') {
+      clearAgentLog()
       return json(res, 200, { ok: true })
     }
     if (a === 'here') {
@@ -478,8 +504,17 @@ async function api(req, res, url) {
     if (method === 'GET') return json(res, 200, { ...publicConfig(cfg), mcpScript: path.join(here, 'mcp.js') })
     if (method === 'POST') {
       const body = await readBody(req)
+      const before = fenceRules(cfg)
       const next = saveConfig(body)
       if (body.notesDir) startWatchers(next)
+      // the fence follows its switch, and a new notes folder (the old folder's rule goes)
+      if (body.agentFence !== undefined || body.notesDir) {
+        try {
+          if (body.agentFence !== undefined || fenceState(cfg) === 'yes') applyFence(next, next.agentFence, { previous: before })
+        } catch (e) {
+          log(`fence: ${e.message}`)
+        }
+      }
       if (typeof body.todoistToken === 'string') todoist.forgetCache()
       return json(res, 200, { ...publicConfig(next), mcpScript: path.join(here, 'mcp.js') })
     }
@@ -927,6 +962,11 @@ function isCockpitRunning() {
 export function start() {
   rotateLog()
   settleJournalExtra()
+  try {
+    settleFence()
+  } catch (e) {
+    log(`fence: ${e.message}`)
+  }
   const cfg = loadConfig()
   notes.ensureNotes(cfg)
   startWatchers(cfg)

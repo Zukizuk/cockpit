@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ago, onEvent } from '../lib'
 import { BookA, MessageSquare, NotebookPen, Sparkles, Table2, X, type LucideIcon } from 'lucide-react'
+import type { AgentAccess, AgentLogEntry, AgentName } from '../api'
 import { EDITORS, get, post, type ClaudeLink, type Config, type TelemetryStatus, type TodoState, type Tracker, type UpdateStatus } from '../api'
 import { useBoard } from '../board'
 import { STICKY_COLORS } from '../cards/CardShell'
@@ -27,7 +28,7 @@ const GAPS = [
   { value: 40, label: 'Roomy' },
 ]
 
-type Section = 'board' | 'tasks' | 'notes' | 'claude' | 'extras' | 'updates' | 'privacy'
+type Section = 'board' | 'tasks' | 'notes' | 'claude' | 'agents' | 'extras' | 'updates' | 'privacy'
 
 /** One setting: its name (and a short line under it) on the left, the control on the right. */
 function Row({ name, hint, children }: { name: string; hint?: string; children: React.ReactNode }) {
@@ -100,6 +101,7 @@ export function SettingsDialog() {
     { id: 'tasks', label: 'Tasks' },
     { id: 'notes', label: 'Notes' },
     { id: 'claude', label: 'Claude Code' },
+    { id: 'agents', label: 'Agents' },
     { id: 'extras', label: 'Extras' },
     { id: 'updates', label: 'Updates', dot: !!upd?.available },
     ...(usage?.available ? [{ id: 'privacy' as Section, label: 'Privacy' }] : []),
@@ -149,6 +151,8 @@ export function SettingsDialog() {
                 <NotesSection cfg={cfg} save={save} />
               ) : section === 'claude' ? (
                 <ClaudeSection cfg={cfg} save={save} />
+              ) : section === 'agents' ? (
+                <AgentsSection cfg={cfg} save={save} />
               ) : section === 'extras' ? (
                 <ExtrasSection cfg={cfg} save={save} />
               ) : section === 'updates' ? (
@@ -428,6 +432,111 @@ function ClaudeSection({ cfg, save }: { cfg: Config; save: Save }) {
       <Row name="Look for more trackers" hint="In Projects, Desktop and synced OneDrive folders">
         <OnOff on={cfg.scanTrackers} onChange={on => save({ scanTrackers: on }, on ? 'Looking for trackers in your folders.' : 'Only trackers your chats use are listed.')} />
       </Row>
+    </section>
+  )
+}
+
+const ACCESS: { value: AgentAccess; label: string }[] = [
+  { value: 'off', label: 'Nothing' },
+  { value: 'shared', label: 'What I share' },
+  { value: 'all', label: 'Everything' },
+]
+const AGENT_ROWS: { id: AgentName; name: string }[] = [
+  { id: 'claude-code', name: 'Claude Code' },
+  { id: 'other', name: 'Other agents' },
+]
+
+/**
+ * Agents: what each may see on the board, the fence around Cockpit's files, and what they looked at. The limit is
+ * said plainly: an agent that can run commands on this PC could still read files another way.
+ */
+function AgentsSection({ cfg, save }: { cfg: Config; save: Save }) {
+  const board = useBoard()
+  const [log, setLog] = useState<AgentLogEntry[] | null>(null)
+  const [fence, setFence] = useState<'yes' | 'no' | undefined>()
+  const load = () => {
+    get<AgentLogEntry[]>('/api/agent/log').then(setLog, () => setLog([]))
+    get<ClaudeLink>('/api/claude-link').then(l => setFence(l.fence), () => {})
+  }
+  useEffect(load, [])
+  const access = cfg.agentAccess ?? { 'claude-code': 'shared', other: 'shared' }
+  const said: Record<AgentAccess, string> = {
+    off: "can't see or use the board.",
+    shared: 'sees only cards you share, select, or put in a shared space.',
+    all: 'sees every card except private ones.',
+  }
+  return (
+    <section className="grid gap-4">
+      <Heading hint="What Claude and other agents can see on your board. Right-click a card, or open the space menu at the top left, to share it with agents or keep it private.">
+        Agents
+      </Heading>
+      {AGENT_ROWS.map(a => (
+        <Row key={a.id} name={a.name} hint={a.id === 'other' ? 'Any other agent connected to Cockpit' : undefined}>
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            value={access[a.id]}
+            onValueChange={v => v && save({ agentAccess: { [a.id]: v } }, `${a.name} ${said[v as AgentAccess]}`)}
+          >
+            {ACCESS.map(x => (
+              <ToggleGroupItem key={x.value} value={x.value} className="px-3">
+                {x.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </Row>
+      ))}
+      <p className="rounded-md bg-ink/[0.03] px-3 py-2.5 text-[12.5px] text-muted-foreground">
+        What I share: the cards you select, cards you share (right-click: Share with agents), the cards in a shared space, and cards an agent made. A
+        private card or space is never shown, whatever is set here.
+      </p>
+      <Row name="Keep Claude Code out of Cockpit's files" hint="Rules in Claude Code's settings for your notes folder and Cockpit's data">
+        <OnOff
+          on={cfg.agentFence !== false}
+          onChange={on =>
+            save({ agentFence: on }, on ? "Claude Code is asked not to read Cockpit's files. Restart open chats." : "Claude Code's rules for Cockpit's files are gone.").then(load)
+          }
+        />
+      </Row>
+      <p className="text-[12px] text-muted-foreground">
+        {fence === 'yes' ? 'The rules are in place. ' : cfg.agentFence !== false ? "The rules aren't there yet: Connect (under Claude Code) adds them. " : ''}
+        They stop Claude Code's own file tools and the common shell commands. On Windows, Claude Code doesn't sandbox the commands it runs, so a
+        command that reads files another way still could. It's a fence, not a lock.
+      </p>
+      <div className="grid gap-2">
+        <div className="flex items-center gap-3">
+          <h4 className="min-w-0 flex-1 text-[13.5px] font-medium">What agents looked at</h4>
+          {!!log?.length && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() =>
+                post('/api/agent/log/clear').then(
+                  () => setLog([]),
+                  (e: Error) => board.toast(e.message),
+                )
+              }
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+        {log && log.length > 0 ? (
+          <ul className="grid max-h-56 overflow-y-auto">
+            {log.slice(0, 60).map((e, i) => (
+              <li key={`${e.at}-${i}`} className="border-b border-ink/[0.06] py-1.5 text-[12.5px] last:border-0">
+                <span className="text-muted-foreground">{ago(e.at)} · </span>
+                {e.agent} {e.refused ? `was refused (${e.refused})` : e.tool === 'act' ? `did: ${e.what || 'something'}` : e.tool === 'query' ? (e.what || 'looked') : 'looked at the board'}
+                {e.saw?.length ? <span className="text-muted-foreground"> · could see {e.saw.length === 1 ? e.saw[0] : `${e.saw.length} cards: ${e.saw.slice(0, 6).join(', ')}${e.saw.length > 6 ? '…' : ''}`}</span> : null}
+                {!e.refused && e.tool !== 'act' && !e.saw?.length ? <span className="text-muted-foreground"> · could see no cards</span> : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-md bg-ink/[0.03] px-3 py-2.5 text-[13px] text-muted-foreground">Nothing yet.</p>
+        )}
+      </div>
     </section>
   )
 }
