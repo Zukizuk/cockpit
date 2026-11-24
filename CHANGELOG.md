@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next (version 0.2.2)
+## 24 November 2026 (version 0.2.2)
 
 **New**
 - **Side by side.** Open two things full screen next to each other to compare them: select two cards and press Space (or right-click, Compare side by side), or press the compare button in a card's full screen and pick the other one (a card, anything kept, a note, or a pasted path or link). Each side scrolls on its own and notes stay editable, so you can read one and write in the other. Drag the line between them to make one side wider (double-click it to even them). The bar at the bottom swaps the sides, makes both scroll together, and shows the differences between the two line by line. Each side's ✕ closes just that side; Esc closes both. Claude can open two cards side by side for you too.
