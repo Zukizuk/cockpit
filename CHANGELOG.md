@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 24 November 2026 (version 0.2.3)
+
+**Improved**
+- New installs start with up-to-date welcome notes: pasting links, files and images, comments, full screen and side by side, Excel cells and columns, connecting Claude Code, spaces, and hiding cards while you share your screen. One note used to say pasted links go to Later; they become cards now. Boards you already have don't change.
+
 ## 24 November 2026 (version 0.2.2)
 
 **New**

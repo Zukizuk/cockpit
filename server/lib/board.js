@@ -54,9 +54,11 @@ export function readBoard() {
 /** The first time Cockpit opens (no board saved yet): a few sticky notes that say how it works, and Later. */
 const WELCOME = [
   ['yellow', 'Welcome to Cockpit', 'A board for the links, files and notes you want in front of you. Everything stays on this PC.', 'Delete these notes whenever you like.'],
-  ['green', 'Paste anything', 'Paste a link or a file path anywhere on the board. Links go to Later, to read when you have time.'],
-  ['pink', 'Sticky notes', 'Press N for a new one, or select one and just type. Click the top of a note to give it a title.'],
-  ['orange', 'Finding your way', 'Scroll to move around, and drag on empty board to select several cards. Ctrl+K adds or finds anything; right-click the board for more; ? lists every shortcut.'],
+  ['green', 'Paste anything', 'Paste a link, a file path or an image anywhere on the board and it becomes a card where your mouse is. Drop images from Explorer too.', 'A key or password you paste goes into Snippets instead, hidden.'],
+  ['pink', 'Sticky notes', 'Press N for a new one, or select one and just type. Click the top of a note to give it a title.', 'Hover any card for a + to leave a comment on it.'],
+  ['orange', 'Read and compare', 'Select a card and press Space to open it full screen. Select two (Shift+click) and press Space to see them side by side.', "In an Excel file, click a cell to read all of it, and drag a column's edge to widen it."],
+  ['ink', 'Claude on your board', 'Use Claude Code? Settings → Claude Code → Connect.', 'Then, in a chat, name a card or select one and say "the selected card": Claude can read it, comment on it, and add notes, tasks and tables. What a chat makes shows under Outputs (O).'],
+  ['green', 'Finding your way', 'Scroll to move around, and drag on empty board to select several cards. Ctrl+K adds or finds anything; ? lists every shortcut.', 'The name at the top left keeps more than one board (spaces). Sharing your screen? H hides what is in the selected cards.'],
 ].map(([color, title, ...paragraphs]) => ({ color, title, text: paragraphs.join('\n\n') }))
 
 export function hasBoard() {

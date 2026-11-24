@@ -242,7 +242,7 @@ test('board: the first launch gets welcome sticky notes, once', async () => {
   assert.equal(board.hasBoard(), false)
   const b = board.welcomeBoard(cfg)
   const stickies = b.cards.filter(c => c.type === 'note')
-  assert.equal(stickies.length, 4)
+  assert.equal(stickies.length, 6)
   assert.ok(stickies.every(c => c.ref.startsWith('stickies/') && notes.readNote(cfg, c.ref).text.trim()), 'each one has words, in a real file')
   assert.ok(b.cards.some(c => c.type === 'later'))
   assert.equal(board.hasBoard(), true, 'saved, so it only happens once')
