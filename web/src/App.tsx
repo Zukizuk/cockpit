@@ -203,25 +203,30 @@ function Canvas({ initial }: { initial: Board }) {
       if (typing || board.expanded || board.palette || document.querySelector('[role="menu"], [role="dialog"]')) return
       const picked = rf.getNodes().filter(n => n.selected)
       const one = picked.length === 1 ? picked[0] : null
-      const ctrl = e.ctrlKey || e.metaKey
+      // AltGr (French, German… keyboards) arrives as Ctrl+Alt: a character typed with it is a bare key, not a combination
+      const altGr = e.getModifierState('AltGraph') || (e.ctrlKey && e.altKey && e.key.length === 1 && !/[a-z0-9]/i.test(e.key))
+      const ctrl = (e.ctrlKey || e.metaKey) && !altGr
+      const alt = e.altKey && !altGr
+      // the digit row by position, so it works on AZERTY too (digits need Shift there)
+      const digit = /^(Digit|Numpad)\d$/.test(e.code) ? e.code.slice(-1) : ''
       const key = e.key.toLowerCase()
       // Undo and redo for the board's layout (inside a note, Ctrl+Z is the note's own)
-      if (ctrl && !e.altKey && (key === 'z' || key === 'y')) {
+      if (ctrl && !alt && (key === 'z' || key === 'y')) {
         e.preventDefault()
         if (key === 'y' || e.shiftKey) board.redo()
         else board.undo()
         return
       }
       // Zoom the board, not the page (as Figma): Ctrl + and Ctrl −, Ctrl 0 for 100%
-      if (ctrl && !e.altKey && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0')) {
+      if (ctrl && !alt && (e.key === '=' || e.key === '+' || e.key === '-' || e.key === '0' || digit === '0')) {
         e.preventDefault()
-        if (e.key === '0') rf.zoomTo(1, { duration: 200 })
+        if (e.key === '0' || digit === '0') rf.zoomTo(1, { duration: 200 })
         else if (e.key === '-') rf.zoomOut({ duration: 200 })
         else rf.zoomIn({ duration: 200 })
         return
       }
       // Tidy, as Figma's Tidy up: Ctrl+Alt+T
-      if (ctrl && e.altKey && key === 't') {
+      if (ctrl && alt && key === 't') {
         e.preventDefault()
         board.tidy()
         return
@@ -239,14 +244,14 @@ function Canvas({ initial }: { initial: Board }) {
       if (e.key === 'Escape' && picked.length) rf.setNodes(ns => ns.map(n => (n.selected ? { ...n, selected: false } : n)))
       // A selected note takes what's typed (Enter just puts the cursor in it), so typing meant for a note never
       // sets off the board's keys
-      if (one?.type === 'note' && !ctrl && !e.altKey && (e.key === 'Enter' || (e.key.length === 1 && e.key !== ' '))) {
+      if (one?.type === 'note' && !ctrl && !alt && (e.key === 'Enter' || (e.key.length === 1 && e.key !== ' '))) {
         if (e.key === 'Enter') e.preventDefault()
         emit('note-focus', { id: one.id })
         return
       }
       // the same for a card with a text box (Today's "Add a task", Later's "Add a link", Snippets' paste box): the
       // box takes the cursor during this keydown, so the key lands in it
-      if (one && !ctrl && !e.altKey && (e.key === 'Enter' || (e.key.length === 1 && e.key !== ' '))) {
+      if (one && !ctrl && !alt && (e.key === 'Enter' || (e.key.length === 1 && e.key !== ' '))) {
         const box = document.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(one.id)}"] [data-typeto]`)
         if (box && box.offsetParent) {
           if (e.key === 'Enter') e.preventDefault()
@@ -270,8 +275,8 @@ function Canvas({ initial }: { initial: Board }) {
         board.compareCards(picked.map(n => n.id))
       }
       // Alt+1 to 9: that space
-      if (e.altKey && !ctrl && /^[1-9]$/.test(e.key)) {
-        const to = board.spaces[Number(e.key) - 1]
+      if (alt && !ctrl && /^[1-9]$/.test(digit)) {
+        const to = board.spaces[Number(digit) - 1]
         if (to) {
           e.preventDefault()
           board.switchSpace(to.id)
@@ -280,7 +285,7 @@ function Canvas({ initial }: { initial: Board }) {
       }
       // Single keys (see KeysDialog): only bare keys, so Ctrl/Alt combinations stay the browser's and Windows'.
       // A capital letter is typing that missed its box, never a shortcut.
-      if (ctrl || e.altKey || e.repeat || (e.shiftKey && /^[a-z]$/.test(key))) return
+      if (ctrl || alt || e.repeat || (e.shiftKey && /^[a-z]$/.test(key))) return
       // single-letter shortcuts can be turned off in Settings (the list, ?, still opens)
       if (!board.prefs.singleKeys && e.key !== '?') return
       const run: Record<string, () => void> = {
@@ -332,7 +337,7 @@ function Canvas({ initial }: { initial: Board }) {
         },
         '?': () => board.setKeysOpen(true),
       }
-      const fn = run[e.key.toLowerCase()]
+      const fn = run[e.key.toLowerCase()] ?? (digit === '0' ? run['0'] : undefined)
       if (fn) {
         e.preventDefault()
         fn()
