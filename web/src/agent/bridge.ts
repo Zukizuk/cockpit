@@ -15,6 +15,22 @@ export type Ask = (text: string) => Promise<boolean>
 // what an agent may reach, and how a removal there is put to the person
 const WHERE: Record<string, string> = { 'task-list': 'from Today', board: 'from the board', card: 'from the board', 'later-list': 'from Later', 'snippet-list': 'from Snippets' }
 
+/**
+ * What an act answers: whether it worked and each step's result (a read() gives its contents there). UI SDK also adds
+ * every component's value ("values") and what appeared with its state: the whole board again after each step, which
+ * the agent didn't ask for. Those go; what appeared keeps its ref, kind and title, so a new card can be used next.
+ */
+function trimAct(out: unknown) {
+  if (!out || typeof out !== 'object') return out
+  const { values: _values, appeared, ...rest } = out as { values?: unknown; appeared?: { ref?: string; component?: string; label?: string }[]; steps?: { result?: unknown }[] }
+  const fresh = Array.isArray(appeared) ? appeared.map(a => ({ ref: a.ref, component: a.component, label: a.label })) : []
+  // a change that takes a moment (a note, a table) reports through its card's pending and error, which act waits on:
+  // a step that comes back "pending" without an error has finished, so it says so (else the agent can't tell)
+  const steps = rest.steps
+  if (Array.isArray(steps)) rest.steps = steps.map(st => (st.result === 'pending' ? { ...st, result: 'done' } : st))
+  return { ...rest, ...(fresh.length ? { appeared: fresh } : {}) }
+}
+
 let started = false
 let me = 0
 
@@ -64,7 +80,7 @@ export function startAgentBridge(ask: Ask) {
         saw = []
       }
       if (c.tool === 'snapshot') output = agent.snapshot()
-      else if (c.tool === 'act') output = await agent.act(c.input as Parameters<typeof agent.act>[0])
+      else if (c.tool === 'act') output = trimAct(await agent.act(c.input as Parameters<typeof agent.act>[0]))
       else if (c.tool === 'query') output = await agent.query((c.input || {}) as Parameters<typeof agent.query>[0])
       else output = { error: `No tool ${c.tool}` }
     } catch (e: any) {

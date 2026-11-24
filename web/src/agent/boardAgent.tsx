@@ -19,7 +19,7 @@ import { summary } from '../cards/OutputsCard'
 import { setVisible, useAgentView } from './view'
 
 const words = (s: unknown) => String(s ?? '').trim()
-const PEEK = 400
+const PEEK = 2000
 
 /** Something named by its id, or by words only it has (titles first). */
 function pick<T>(list: T[], which: unknown, id: (t: T) => string, name: (t: T) => string, what: string): T {
@@ -127,15 +127,23 @@ export type CardValue = {
   /** its contents hidden (blurred) on the board */
   hidden?: boolean
   color?: string
+  /** shared with agents by the user */
+  shared?: boolean
+  /** a table: how many rows it has under the header */
+  rowCount?: number
+  /** how many comments it has (read() gives them) */
+  comments?: number
+}
+/** What read() gives: a card's contents, asked for one card at a time. */
+export type CardContent = {
+  title: string
+  kind: string
   file?: string
   url?: string
-  /** the first lines of what it shows */
-  peek?: string
-  /** a note: all its text (up to 20,000 characters) */
+  /** a note: all its text (up to 20,000 characters); a file or link: the start of what it shows */
   text?: string
-  /** a table: its rows, the first being the header (up to 60 more); rowCount says how many there are in all */
+  /** a table: its rows, the first being the header (up to 200) */
   rows?: string[][]
-  rowCount?: number
   comments?: { by: string; text: string }[]
 }
 type CardOptions = {
@@ -153,6 +161,7 @@ type CardOptions = {
   onTable?: (change: TableChange) => Promise<void>
   onPlaceNextTo?: (other: string, side: Side) => void
   onWrite?: (change: { text: string; append: boolean }) => Promise<void>
+  onRead?: () => CardContent
   /** the other cards' titles (for placeNextTo) */
   others?: string[]
 }
@@ -163,8 +172,10 @@ const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', 
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', others: 'value' },
-  state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' } }),
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', others: 'value' },
+  // pending and error: a change that takes a moment (a note, a table) reports how it went; UI SDK's act waits on them
+  // (any error that isn't null counts as a failure, an empty one too)
+  state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' }, pending: false, error: null as string | null }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
     const v = () => context.store.get().value as CardValue
@@ -173,7 +184,17 @@ const cardPrimitive = definePrimitive({
       if (typeof fn !== 'function') throw new Error(`A ${v().kind} card can't do that.`)
       return fn as Extract<NonNullable<CardOptions[K]>, (...a: never[]) => unknown>
     }
+    const track = (p: Promise<void>) => {
+      context.store.set({ pending: true, error: null })
+      p.then(
+        () => context.store.set({ pending: false }),
+        (e: unknown) => context.store.set({ pending: false, error: e instanceof Error ? e.message : String(e) }),
+      )
+      return p
+    }
     return {
+      // its contents, for this one card (the overview has only titles and kinds)
+      read: () => call('onRead')(),
       comment: (text: string) => {
         const t = words(text)
         if (!t) throw new Error('Give the comment.')
@@ -194,13 +215,13 @@ const cardPrimitive = definePrimitive({
       bringBack: () => call('onTuck')(false),
       hideContents: () => call('onVeil')(true),
       showContents: () => call('onVeil')(false),
-      setCell: (row: unknown, column: unknown, text: string) => call('onTable')({ setCell: [row, column, String(text ?? '')] }),
-      addRows: (rows: unknown) => call('onTable')({ addRows: rowsOf(rows) }),
-      setRows: (rows: unknown) => call('onTable')({ setRows: rowsOf(rows) }),
-      removeRow: (row: unknown) => call('onTable')({ removeRow: row }),
+      setCell: (row: unknown, column: unknown, text: string) => track(call('onTable')({ setCell: [row, column, String(text ?? '')] })),
+      addRows: (rows: unknown) => track(call('onTable')({ addRows: rowsOf(rows) })),
+      setRows: (rows: unknown) => track(call('onTable')({ setRows: rowsOf(rows) })),
+      removeRow: (row: unknown) => track(call('onTable')({ removeRow: row })),
       // a note: add to its end, or write all of it anew (that waits for the user's Allow)
-      append: (text: string) => call('onWrite')({ text: String(text ?? ''), append: true }),
-      setText: (text: string) => call('onWrite')({ text: String(text ?? ''), append: false }),
+      append: (text: string) => track(call('onWrite')({ text: String(text ?? ''), append: true })),
+      setText: (text: string) => track(call('onWrite')({ text: String(text ?? ''), append: false })),
       placeNextTo: (other: string, side?: string) => {
         const s = words(side) ? SIDES[words(side).toLowerCase()] : 'right'
         if (!s) throw new Error('A side is right, left, below or above.')
@@ -209,23 +230,23 @@ const cardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'remove'] },
+  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
 // ---- Later -------------------------------------------------------------------------------------------------
 
 type LaterItem = { id: string; title: string; url?: string; state: string }
-type LaterOptions = { value?: LaterItem[]; onAdd?: (t: string) => void; onSetState?: (id: string, state: string) => void; onRemove?: (id: string) => void }
+type LaterOptions = { value?: { title: string; state: string }[]; items?: LaterItem[]; onAdd?: (t: string) => void; onSetState?: (id: string, state: string) => void; onRemove?: (id: string) => void }
 const STATES: Record<string, string> = { check: 'todo', 'to check': 'todo', todo: 'todo', reading: 'reading', done: 'done' }
 
 const laterPrimitive = definePrimitive({
   name: 'later-list',
-  options: { value: 'value', onAdd: 'action', onSetState: 'action', onRemove: 'action' },
+  options: { value: 'value', items: 'value', onAdd: 'action', onSetState: 'action', onRemove: 'action' },
   state: (options: LaterOptions) => ({ value: options.value ?? [] }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
-    const list = () => context.store.get().value as LaterItem[]
+    const list = () => context.options().items ?? []
     const item = (which: string) => pick(list(), which, x => x.id, x => x.title, 'item').id
     const call = <K extends keyof LaterOptions>(key: K) => context.options()[key] as NonNullable<LaterOptions[K]>
     return {
@@ -240,25 +261,27 @@ const laterPrimitive = definePrimitive({
         call('onSetState')(item(which), s)
       },
       remove: (which: string) => call('onRemove')(item(which)),
+      // the items with their links (the list itself shows titles and states only)
+      read: () => list().map(({ title, url, state }) => ({ title, ...(url ? { url } : {}), state })),
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['add', 'setState', 'remove'] },
+  agent: { actions: ['read', 'add', 'setState', 'remove'] },
 })
 const { Root: LaterRoot } = createParts(laterPrimitive, { root: 'div' })
 
 // ---- Snippets ----------------------------------------------------------------------------------------------
 
 type SnippetItem = { id: string; title: string; secret: boolean; text?: string }
-type SnippetOptions = { value?: SnippetItem[]; onAdd?: (text: string, title: string) => void; onRemove?: (id: string) => void }
+type SnippetOptions = { value?: { title: string; secret: boolean }[]; items?: SnippetItem[]; onAdd?: (text: string, title: string) => void; onRemove?: (id: string) => void }
 
 const snippetPrimitive = definePrimitive({
   name: 'snippet-list',
-  options: { value: 'value', onAdd: 'action', onRemove: 'action' },
+  options: { value: 'value', items: 'value', onAdd: 'action', onRemove: 'action' },
   state: (options: SnippetOptions) => ({ value: options.value ?? [] }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
-    const list = () => context.store.get().value as SnippetItem[]
+    const list = () => context.options().items ?? []
     const call = <K extends keyof SnippetOptions>(key: K) => context.options()[key] as NonNullable<SnippetOptions[K]>
     return {
       add: (text: string, title?: string) => {
@@ -267,10 +290,15 @@ const snippetPrimitive = definePrimitive({
         call('onAdd')(t, words(title))
       },
       remove: (which: string) => call('onRemove')(pick(list(), which, x => x.id, x => x.title, 'snippet').id),
+      // one snippet's text (a secret's is never given)
+      read: (which: string) => {
+        const sn = pick(list(), which, x => x.id, x => x.title, 'snippet')
+        return sn.secret ? { title: sn.title, secret: true, text: '(a secret: its text is never shown)' } : { title: sn.title, text: sn.text ?? '' }
+      },
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['add', 'remove'] },
+  agent: { actions: ['read', 'add', 'remove'] },
 })
 const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 
@@ -278,7 +306,7 @@ const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 
 const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder', table: 'table' }
 type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string]
-type Built = { id: string; type: string; ref: string; title: string; value: CardValue; mark: string; spaceId: string }
+type Built = { id: string; type: string; ref: string; title: string; value: CardValue; content: Omit<CardContent, 'text'> & { peek?: string }; mark: string; spaceId: string }
 
 export function BoardAgent() {
   const board = useBoard()
@@ -357,16 +385,25 @@ export function BoardAgent() {
         ...(tucked ? { tucked: true } : {}),
         ...(veiled ? { hidden: true } : {}),
         ...(sticky ? { color: color === 'ink' || !color ? 'charcoal' : color } : {}),
+        ...(mark === 'shared' ? { shared: true } : {}),
+        ...(thread?.length ? { comments: thread.length } : {}),
+      }
+      const content: Built['content'] = {
+        title,
+        kind: value.kind,
         ...(file ? { file } : {}),
         ...(url ? { url } : {}),
         ...(peek ? { peek: peek.length > PEEK ? `${peek.slice(0, PEEK)}…` : peek } : {}),
-        ...(thread?.length ? { comments: thread.slice(-10).map(c => ({ by: c.by, text: c.text })) } : {}),
+        ...(thread?.length ? { comments: thread.slice(-20).map(c => ({ by: c.by, text: c.text })) } : {}),
       }
       if (type === 'table') {
         const t = tables.data?.find(x => x?.path === ref)
-        if (t) Object.assign(value, { rows: t.rows.slice(0, 61), rowCount: Math.max(0, t.rows.length - 1) })
+        if (t) {
+          value.rowCount = Math.max(0, t.rows.length - 1)
+          content.rows = t.rows.slice(0, 201)
+        }
       }
-      return { id, type, ref, title, value, mark, spaceId: space }
+      return { id, type, ref, title, value, content, mark, spaceId: space }
     })
   }, [cardsKey, board.spaces, board.space, board.items, board.outputs, board.comments, notes, sep, tables.data])
 
@@ -405,6 +442,18 @@ export function BoardAgent() {
     const r = await put<{ conflict?: boolean }>('/api/notes/file', { path: ref, text: next, baseMtime: cur.mtime })
     if (r.conflict) throw new Error('The note changed while you were writing; read it again and retry.')
     said(append ? `Claude added to ${title}` : `Claude rewrote ${title}`)
+  }
+  // read(): one card's contents. A note's whole text (read ahead while it's visible, so this can answer at once); a file
+  // or link: where it is and the start of what it shows; a table: its rows; and the card's comments.
+  const readCard = (c: Built): CardContent => {
+    if (!visibleIds.has(c.id)) throw new Error("That card isn't shared with you.")
+    const { peek, ...rest } = c.content
+    if (c.type === 'note') {
+      const text = textOf(c.ref)
+      if (text === undefined) throw new Error('The note is still loading: read it again in a moment.')
+      return { ...rest, text }
+    }
+    return { ...rest, ...(peek ? { text: peek } : {}) }
   }
   // a list (Today, Later, Snippets) is readable when its card is; with "everything", unless that card is private
   const listOpen = (type: string) => {
@@ -584,7 +633,8 @@ export function BoardAgent() {
           <CardRoot
             aria-label={c.title}
             className="sr-only"
-            value={c.type === 'note' && visibleIds.has(c.id) && textOf(c.ref) !== undefined ? { ...c.value, text: textOf(c.ref) } : c.value}
+            value={c.value}
+            onRead={() => readCard(c)}
             spaces={spaceNames}
             onComment={t => {
               board.addComment(c.id, t, 'Claude').catch(() => {})
@@ -616,7 +666,8 @@ export function BoardAgent() {
       <LaterRoot
         aria-label={listOpen('later') ? 'Later' : 'Later (not shared with you: you can add to it, not read it)'}
         className="sr-only"
-        value={listOpen('later') ? later : []}
+        value={listOpen('later') ? later.map(({ title, state }) => ({ title, state })) : []}
+        items={listOpen('later') ? later : []}
         onAdd={t => board.saveLater(/^https?:\/\//i.test(t) ? { url: t } : { text: t })}
         onSetState={(id, s) => board.setLater(id, s as 'todo' | 'reading' | 'done')}
         onRemove={id => board.setLater(id, null)}
@@ -624,7 +675,8 @@ export function BoardAgent() {
       <SnippetRoot
         aria-label={listOpen('snippets') ? 'Snippets' : 'Snippets (not shared with you: you can leave one, not read them)'}
         className="sr-only"
-        value={listOpen('snippets') ? snippetList : []}
+        value={listOpen('snippets') ? snippetList.map(({ title, secret }) => ({ title, secret })) : []}
+        items={listOpen('snippets') ? snippetList : []}
         onAdd={(text, title) =>
           post('/api/snippets', { text, ...(title ? { title } : {}) }).then(() => (snippets.reload(), said('Claude left a snippet')), (e: Error) => said(e.message))
         }

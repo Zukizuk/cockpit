@@ -85,7 +85,7 @@ export function SpaceSwitcher() {
           }}
         >
           <Bot strokeWidth={1.75} />
-          {current.agents === 'shared' ? 'Stop sharing this space with agents' : 'Share this space with agents'}
+          {current.agents === 'shared' ? 'Stop sharing with agents' : 'Share with agents'}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
@@ -95,7 +95,7 @@ export function SpaceSwitcher() {
           }}
         >
           <ShieldOff strokeWidth={1.75} />
-          {current.agents === 'private' ? 'Make this space not private' : 'Keep this space private from agents'}
+          {current.agents === 'private' ? 'Not private any more' : 'Private from agents'}
         </DropdownMenuItem>
         {current.id !== 'main' && (
           <DropdownMenuItem

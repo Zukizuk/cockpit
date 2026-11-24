@@ -24,10 +24,13 @@ const BOARD_NOTE =
   "'Board' has a sharing line when that is so. If the user means a card you cannot see, ask them to select it or share " +
   "it (right-click the card: Share with agents). Never go around this: don't read Cockpit's notes folder, its data " +
   "folder (~/.cockpit) or its local web API (127.0.0.1:4790) to get at what isn't shared; use only these tools. " +
-  'How to look: when the user names a card ("my sticky note Post ideas"), call board_query with { text: "<some of its ' +
-  'words>" } and you get just that card. When they say "this card", "the selected one" or "what I am looking at", ' +
-  "call board_snapshot: those cards have selected: true or inView: true, and 'Board' lists their titles. " +
-  'Use the full snapshot for an overview. ' +
+  "A space with no cards listed may still hold cards that aren't shared with you. " +
+  'How to look: the snapshot is an overview, titles and kinds only, no contents. To know what a card says, call ' +
+  'board_act with { steps: [{ ref: "<its ref or title>", action: "read" }] }: its contents come back in that step\'s ' +
+  'result. Read only the cards the user is asking about. When the user names a card ("my sticky note Post ideas"), ' +
+  'board_query with { text: "<some of its words>" } finds it by title. When they say "this card", "the selected one" ' +
+  "or \"what I am looking at\", call board_snapshot: those cards have selected: true or inView: true, and 'Board' " +
+  'lists their titles. Every board_act takes { steps: [{ ref, action, args: [...] }] }. ' +
   "Components: 'Board' (board: the spaces with their card counts, the space shown, selected and in-view titles; " +
   "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text, space?), jot(text) into today's " +
   'journal (an extra the user turns on in Settings > Extras; if jot says it is off, use addSticky), show(pathOrUrl, space?) to put a file or link on the board; give space to put it in another space ' +
@@ -37,24 +40,25 @@ const BOARD_NOTE =
   "(the board's focus lists the cards in focus); compare(cardA, cardB) opens two files, pages or notes full screen " +
   "side by side (cardA on the left) for the user to read and compare, notes still editable. Each card is a component (card) named by its title " +
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
-  'its value has kind, space, selected, inView, folded, color (sticky notes), file or url, peek (its first lines) and ' +
-  'comments; actions comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), ' +
+  'its value has kind, space, selected, inView, folded, color (sticky notes), shared, rowCount (tables) and how many ' +
+  'comments it has; actions read() for its contents (a note: its whole text; a file or link: its path or address and ' +
+  'the start of what it shows; a table: its rows; and its comments), comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), ' +
   'placeNextTo(otherCard, side?) to put it beside another card (side: right, left, below or above; right if not ' +
   'given; it goes to that card\'s space), rename(title) ' +
   "(notes), setColor(yellow | green | pink | orange | charcoal) (sticky notes), tuck() to tuck it away as a tab at " +
   'the top edge, bringBack(), hideContents() and showContents() (blurred on the board, for sharing the screen; ' +
   "a card's tucked and hidden say which), remove(). 'Today's tasks' (task-list: " +
   "add(text), complete(task), reopen(task), rename(task, newText), remove(task)); 'Later' (later-list: " +
-  "add(linkOrNote), setState(item, 'to check' | 'reading' | 'done'), remove(item)); 'Snippets' (snippet-list: " +
-  "add(text, title?), remove(item); a secret's text is never shown). " +
-  "Notes (sticky notes, journal): a note card you can see has its whole text in its value (text); change it with the " +
-  "card's append(text), or setText(text) to write it all anew (that waits for the user's Allow), not by editing its " +
-  "file.The user's comments on a card may be for you: answer with the card's comment(). " +
+  "read() for the items with their links, add(linkOrNote), setState(item, 'to check' | 'reading' | 'done'), " +
+  "remove(item)); 'Snippets' (snippet-list: read(item) for one snippet's text, add(text, title?), remove(item); a " +
+  "secret's text is never shown). A list that isn't shared with you says so in its name: you can add to it, not read it. " +
+  "Notes (sticky notes, journal): read() gives a note's whole text; change it with the card's append(text), or " +
+  "setText(text) to write it all anew (that waits for the user's Allow), not by editing its file. The user's comments on a card may be for you: answer with the card's comment(). " +
   "Every removal waits for the user to allow it in Cockpit. If 'Today's tasks' is missing, the Today card is not on " +
   'the board (the user can press T). ' +
   "Tables (an extra the user turns on in Settings > Extras): Board's addTable(title, rows, space?) puts a new table on the " +
   'board, rows being an array of arrays of text with the header first; use it when the user wants something compared ' +
-  "or listed in a table they can edit. A table card's value has rows (header first) and rowCount; its actions are " +
+  "or listed in a table they can edit. A table card's read() gives its rows (header first); its actions are " +
   'setCell(row, column, text) (row: its number from 1 under the header, or its first cell; column: its heading or ' +
   'number from 1), addRows(rows), setRows(rows) to replace it all, removeRow(row). setRows and removeRow wait for ' +
   "the user's Allow. If addTable says tables are off, tell the user where to turn them on."
@@ -187,6 +191,20 @@ function fromLabel() {
   return process.env.CLAUDECODE ? `Claude · ${where}` : where
 }
 
+/**
+ * act takes { steps: [{ ref, action, args }] }. One step written flat ({ ref, action, args } or { ref, action, text })
+ * is taken as that one step; no steps at all is an error, not an empty "ok" (an agent then thinks it did something).
+ */
+export function actSteps(input = {}) {
+  if (Array.isArray(input.steps) && input.steps.length) return input
+  if (input.ref && input.action) {
+    const { ref, action, args, text, ...rest } = input
+    const given = Array.isArray(args) ? args : args !== undefined ? [args] : text !== undefined ? [text] : Object.values(rest)
+    return { steps: [{ ref, action, args: given }] }
+  }
+  throw new Error('board_act takes { steps: [{ ref, action, args: [...] }] }, for example { steps: [{ ref: "c14", action: "append", args: ["a new line"] }] }. Nothing was done.')
+}
+
 export async function callTool(name, args = {}) {
   try {
     if (name === 'show' || name === 'snippet') telemetry.count(`mcp.${name}`)
@@ -211,6 +229,7 @@ export async function callTool(name, args = {}) {
   if (name.startsWith('board_')) {
     try {
       if (!(await ensureServer())) throw new Error("Cockpit isn't running.")
+      if (name === 'board_act') args = actSteps(args)
       const r = await postJson('/api/agent/call', { tool: name.slice(6), input: args, agent: process.env.CLAUDECODE ? 'claude-code' : 'other', label: fromLabel() })
       if (r.status !== 200) throw new Error(r.body?.error || `Cockpit answered ${r.status}`)
       return { content: [{ type: 'text', text: JSON.stringify(r.body.output) }] }

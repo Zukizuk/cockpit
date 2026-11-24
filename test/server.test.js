@@ -1227,6 +1227,16 @@ test('board tools: a call goes to the open window, its answer comes back; with n
   }
 })
 
+test('board tools: act takes steps; one step written flat is that step; none at all is an error, not an empty ok', async () => {
+  const { actSteps } = await import('../server/mcp.js')
+  assert.deepEqual(actSteps({ ref: 'c14', action: 'append', text: 'a line' }), { steps: [{ ref: 'c14', action: 'append', args: ['a line'] }] })
+  assert.deepEqual(actSteps({ ref: 'c1', action: 'read' }), { steps: [{ ref: 'c1', action: 'read', args: [] }] })
+  const ok = { steps: [{ ref: 'c1', action: 'fold' }] }
+  assert.equal(actSteps(ok), ok)
+  assert.throws(() => actSteps({}), /Nothing was done/)
+  assert.throws(() => actSteps({ steps: [] }), /Nothing was done/)
+})
+
 test('agents: cards and spaces shared or private are kept; access is checked; the fence goes in and out', async () => {
   const { readBoard, saveBoard } = await import('../server/lib/board.js')
   saveBoard({

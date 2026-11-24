@@ -155,7 +155,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       gap: true,
     },
     {
-      label: mark === 'private' ? 'Not private any more' : 'Keep private from agents',
+      label: mark === 'private' ? 'Not private any more' : 'Private from agents',
       icon: ShieldOff,
       run: () => (mark === 'private' ? setMark(null, 'Not private any more') : setMark('private', 'Private: agents never see it')),
     },
