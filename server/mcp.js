@@ -24,7 +24,7 @@ const BOARD_NOTE =
   'Use the full snapshot for an overview. ' +
   "Components: 'Board' (board: the spaces with their card counts, the space shown, selected and in-view titles; " +
   "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text, space?), jot(text) into today's " +
-  'journal, show(pathOrUrl, space?) to put a file or link on the board; give space to put it in another space ' +
+  'journal (an extra the user turns on in Settings > Extras; if jot says it is off, use addSticky), show(pathOrUrl, space?) to put a file or link on the board; give space to put it in another space ' +
   'without moving the user there (make the space first with newSpace if it is new); tidy() lines the cards up, as the ' +
   "user's Ctrl+Alt+T does; focusOn(cards) puts one card or several (an array of titles, side by side in that order) " +
   "in focus, every other card folded into a column on the left, and bringBack() puts everything back where it was " +

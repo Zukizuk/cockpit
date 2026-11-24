@@ -3,7 +3,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { DATA_DIR, HOST, PORT, VERSION, UserError, loadConfig, publicConfig, saveConfig, within } from './lib/config.js'
+import { DATA_DIR, HOST, PORT, VERSION, UserError, loadConfig, publicConfig, saveConfig, settleJournalExtra, within } from './lib/config.js'
 import { checkApiRequest, checkHost } from './lib/security.js'
 import { mimeOf, openOutside, openUrl } from './lib/files.js'
 import * as shown from './lib/shown.js'
@@ -925,6 +925,7 @@ function isCockpitRunning() {
 
 export function start() {
   rotateLog()
+  settleJournalExtra()
   const cfg = loadConfig()
   notes.ensureNotes(cfg)
   startWatchers(cfg)

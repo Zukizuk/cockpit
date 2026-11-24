@@ -1,4 +1,5 @@
-// The + box: paste a link or path to open it, type to add a line to today's journal, or find anything kept and put it on the board.
+// The + box: paste a link or path to open it, type to jot a thought (today's journal with the Journal extra on, else a
+// sticky note), or find anything kept and put it on the board.
 import { useEffect, useMemo, useState } from 'react'
 import { BookA, BookOpenText, Bookmark, Table2, ClipboardList, FileText, FolderOpen, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
 import { get, post } from '../api'
@@ -49,7 +50,7 @@ export function Palette() {
   }
 
   return (
-    <CommandDialog open={board.palette} onOpenChange={o => board.setPalette(o)} title="Add to the board" description="Paste a link or a path, jot something for the journal, or find something kept" className="palette" showCloseButton={false}>
+    <CommandDialog open={board.palette} onOpenChange={o => board.setPalette(o)} title="Add to the board" description="Paste a link or a path, jot a thought, or find something kept" className="palette" showCloseButton={false}>
       <CommandInput value={q} onValueChange={setQ} placeholder="Paste a link or a path, jot a thought, or search…" />
       <CommandList>
         {/* with a link, a path or words typed there's always something to do with them: no "nothing matches" */}
@@ -90,6 +91,7 @@ export function Palette() {
                 value={`__thought ${value}`}
                 onSelect={async () => {
                   close()
+                  if (!board.prefs.extras.journal) return void board.newSticky(value)
                   try {
                     const r = await post<{ path: string }>('/api/notes/thought', { text: value })
                     board.addCard('note', r.path)
@@ -100,7 +102,7 @@ export function Palette() {
                 }}
               >
                 <StickyNote strokeWidth={1.5} />
-                <span className="shrink-0">Add to today's journal</span>
+                <span className="shrink-0">{board.prefs.extras.journal ? "Add to today's journal" : 'New sticky note'}</span>
                 <span className="min-w-0 truncate text-muted-foreground">“{value.split('\n')[0].slice(0, 60)}”</span>
               </CommandItem>
             )}
@@ -172,10 +174,13 @@ export function Palette() {
                 <FolderOpen strokeWidth={1.5} />
                 Choose files…
               </CommandItem>
-              <CommandItem value="journal today" onSelect={journal}>
-                <NotebookPen strokeWidth={1.5} />
-                Today's journal
-              </CommandItem>
+              {board.prefs.extras.journal && (
+                <CommandItem value="journal today" onSelect={journal}>
+                  <NotebookPen strokeWidth={1.5} />
+                  Today's journal
+                  <CommandShortcut>J</CommandShortcut>
+                </CommandItem>
+              )}
               <CommandItem value="quick access pinned open often favourites" onSelect={() => (close(), board.setPinnedOpen(true))}>
                 <Pin strokeWidth={1.5} />
                 Quick access

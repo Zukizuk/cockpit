@@ -46,12 +46,33 @@ test('config: board settings are checked, kept, and have defaults', async () => 
 
 test('extras: off until turned on, one at a time, nothing else accepted', async () => {
   const { saveConfig, loadConfig: load } = await import('../server/lib/config.js')
-  assert.deepEqual(load().extras, { dictionary: false, tables: false })
-  assert.deepEqual(saveConfig({ extras: { dictionary: true } }).extras, { dictionary: true, tables: false })
-  assert.deepEqual(saveConfig({ extras: { tables: true } }).extras, { dictionary: true, tables: true }, 'turning one on leaves the other')
+  assert.deepEqual(load().extras, { dictionary: false, tables: false, journal: false })
+  assert.deepEqual(saveConfig({ extras: { dictionary: true } }).extras, { dictionary: true, tables: false, journal: false })
+  assert.deepEqual(saveConfig({ extras: { tables: true } }).extras, { dictionary: true, tables: true, journal: false }, 'turning one on leaves the other')
   assert.throws(() => saveConfig({ extras: { calculator: true } }), /extras/)
   assert.throws(() => saveConfig({ extras: { tables: 'yes' } }), /extras/)
   saveConfig({ extras: { dictionary: false, tables: false } })
+})
+
+test('journal extra: off for a new install, kept on for someone who already writes one, decided once', async () => {
+  const { settleJournalExtra, saveConfig, loadConfig: load, readRawConfig, CONFIG_FILE } = await import('../server/lib/config.js')
+  const strip = () => {
+    const raw = readRawConfig()
+    delete raw.extras?.journal
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(raw))
+  }
+  const dir = path.join(load().notesDir, 'journal')
+  fs.rmSync(dir, { recursive: true, force: true })
+  strip()
+  assert.equal(settleJournalExtra(), false, 'nothing written yet: off')
+  fs.mkdirSync(dir, { recursive: true })
+  fs.writeFileSync(path.join(dir, '2026-11-20.md'), '# Friday\n')
+  assert.equal(settleJournalExtra(), false, 'already decided: a page written later does not turn it on by itself')
+  strip()
+  assert.equal(settleJournalExtra(), true, 'pages there before the update: kept on')
+  assert.equal(load().extras.journal, true)
+  saveConfig({ extras: { journal: false } })
+  fs.rmSync(dir, { recursive: true, force: true })
 })
 
 test('claude link: says whether the Outputs hook and the board tools point at this copy', async () => {

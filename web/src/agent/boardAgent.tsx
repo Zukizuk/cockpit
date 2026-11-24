@@ -83,7 +83,11 @@ const boardPrimitive = definePrimitive({
       newSpace: (name: string) => call('onNewSpace')(text(name, 'name')),
       renameSpace: (s: string, name: string) => call('onRenameSpace')(space(s), text(name, 'new name')),
       addSticky: (t: string, s?: string) => call('onAddSticky')(text(t, 'note'), into(s)),
-      jot: (t: string) => call('onJot')(text(t, 'thought')),
+      jot: (t: string) => {
+        const fn = context.options().onJot
+        if (typeof fn !== 'function') throw new Error('The journal is off: use addSticky instead, or ask the user to turn it on in Cockpit: Settings > Extras > Journal.')
+        fn(text(t, 'thought'))
+      },
       show: (target: string, s?: string) => call('onShow')(text(target, 'path or link'), into(s)),
       tidy: () => call('onTidy')(),
       focusOn: (...cards: unknown[]) => {
@@ -490,7 +494,7 @@ export function BoardAgent() {
         }}
         onRenameSpace={(s, name) => board.renameSpace(spaceId(s), name)}
         onAddSticky={(t, s) => void board.newSticky(t).then(id => place(id, s))}
-        onJot={t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message))}
+        onJot={board.prefs.extras.journal ? t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message)) : undefined}
         onTidy={() => board.tidy()}
         onFocusOn={titles => {
           // in the order named, side by side; a focus already on is put back first

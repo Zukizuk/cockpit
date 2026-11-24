@@ -2,7 +2,8 @@
 //  - the Dictionary itself, a dialog (D on the board, or "Dictionary" in the + box): type a word, get its meanings;
 //  - Look Up, as on a Mac: select a word anywhere (a note, a page, a card) and press Ctrl+D, and its meaning shows
 //    right there, next to the word. With nothing selected in a note, the word at the cursor.
-// Similar and opposite words are links; "Keep" puts the word and its meaning in today's journal.
+// Similar and opposite words are links; "Keep" puts the word and its meaning in today's journal (with the Journal
+// extra on) or on a new sticky note.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ArrowLeft, BookmarkPlus, Search, Volume2, X } from 'lucide-react'
@@ -53,6 +54,14 @@ function speak(word: string) {
   } catch {}
 }
 const canSpeak = typeof window !== 'undefined' && 'speechSynthesis' in window
+
+/** Keeps a word: a line in today's journal with the Journal extra on, else a sticky note of its own. */
+async function keepWord(board: ReturnType<typeof useBoard>, e: DictEntry) {
+  if (board.prefs.extras.journal) {
+    await post('/api/notes/append', { text: journalLine(e) })
+    board.toast(`Kept “${e.w}” in today's journal`)
+  } else await board.newSticky(journalLine(e))
+}
 
 /** The word and its first meaning, as one line for the journal. */
 function journalLine(e: DictEntry) {
@@ -309,8 +318,7 @@ function DictionaryDialog({ open, setOpen, start }: { open: boolean; setOpen: (o
   }
   const keep = async (e: DictEntry) => {
     try {
-      await post('/api/notes/append', { text: journalLine(e) })
-      board.toast(`Kept “${e.w}” in today's journal`)
+      await keepWord(board, e)
     } catch (x: any) {
       board.toast(x.message)
     }
@@ -384,7 +392,7 @@ function DictionaryDialog({ open, setOpen, start }: { open: boolean; setOpen: (o
                   <Entry entry={e} go={w => go(w, word)} />
                   <button type="button" className="dict-keep" onClick={() => keep(e)}>
                     <BookmarkPlus className="size-3.5" strokeWidth={1.75} />
-                    Keep in today's journal
+                    {board.prefs.extras.journal ? "Keep in today's journal" : 'Keep as a sticky note'}
                   </button>
                 </div>
               ))}
@@ -455,8 +463,7 @@ function LookUp({ at, onClose, onMore }: { at: Picked; onClose: () => void; onMo
   const keep = async () => {
     if (!entry) return
     try {
-      await post('/api/notes/append', { text: journalLine(entry) })
-      board.toast(`Kept “${entry.w}” in today's journal`)
+      await keepWord(board, entry)
       onClose()
     } catch (x: any) {
       board.toast(x.message)

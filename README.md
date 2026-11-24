@@ -1,7 +1,7 @@
 # Cockpit
 
-A calm, free-form board for the things you want in front of you: links to read later, files, sticky notes, a
-daily journal, snippets to copy, and what your AI agents make. Paste a link or a file path anywhere and it becomes
+A calm, free-form board for the things you want in front of you: links to read later, files, sticky notes,
+snippets to copy, and what your AI agents make. Paste a link or a file path anywhere and it becomes
 a card you can read, move, resize and put beside anything else.
 
 It runs on your PC only (a small local server on `127.0.0.1`) and opens in its own window. Windows 10 and 11.
@@ -47,9 +47,6 @@ Windows may warn that the installer is from an unknown publisher: the release is
   Something sent while Cockpit is closed is there when you open it.
 - **Sticky notes** (<kbd>N</kbd>): click and type. Five colours, a title if you want one. They're plain text
   files in your notes folder.
-- **Journal** (<kbd>J</kbd>): one page a day. The card always shows today; earlier days are a click back and stay
-  read-only until you unlock them. Type `[[` to refer to one of your notes (a sticky note where you gathered your
-  thoughts, say).
 - **Snippets** (<kbd>C</kbd>): things you copy often, one click each. Secrets are encrypted on disk with Windows'
   own data protection and hidden until revealed.
 - **Quick access** (<kbd>Q</kbd>): your pins, plus what you open most. Its pin keeps it open beside the board.
@@ -59,7 +56,9 @@ Windows may warn that the installer is from an unknown publisher: the release is
 - **Folders**: paste a folder's path and it's a card with its files as a tree; click a file to open it beside it.
 - **Extras** (Settings → Extras, each off until you turn it on): a **Dictionary** that works offline (press
   <kbd>D</kbd>, or select a word anywhere and press <kbd>Ctrl</kbd> <kbd>D</kbd> to see its meaning beside it), and
-  **Tables**, small grids saved as .csv files that paste to and from Excel and that Claude can fill in.
+  **Tables**, small grids saved as .csv files that paste to and from Excel and that Claude can fill in, and a
+  **Journal** (<kbd>J</kbd>), one page a day: the card always shows today, earlier days are a click back and stay
+  read-only until you unlock them, and `[[` refers to one of your notes.
 - **The board**: drag, resize, fold, lock in place (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>), tidy
   (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd>), undo (<kbd>Ctrl</kbd> <kbd>Z</kbd>). Right-click the board for
   the rest, <kbd>Ctrl</kbd> <kbd>K</kbd> to add or find anything, <kbd>?</kbd> for every shortcut.

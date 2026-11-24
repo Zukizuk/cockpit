@@ -150,7 +150,7 @@ function savedTheme(): Theme {
 }
 
 export type Prefs = { stickyColor: StickyColor; singleKeys: boolean; tidyGap: number; changelog: string; editor: Editor; theme: Theme; extras: Extras }
-const DEFAULT_PREFS: Prefs = { stickyColor: 'ink', singleKeys: true, tidyGap: 24, changelog: '', editor: 'notepad', theme: savedTheme(), extras: { dictionary: false, tables: false } }
+const DEFAULT_PREFS: Prefs = { stickyColor: 'ink', singleKeys: true, tidyGap: 24, changelog: '', editor: 'notepad', theme: savedTheme(), extras: { dictionary: false, tables: false, journal: false } }
 
 interface Ctx {
   addCard: (type: CardType, ref: string, opts?: PlaceOpts) => string
@@ -331,7 +331,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const pinned = useData(() => get<PinnedList>('/api/pinned'), [], { refreshOn: ['pinned'] })
   const config = useData(() => get<Config>('/api/config'), [])
   const prefs = useMemo<Prefs>(
-    () => (config.data ? { stickyColor: config.data.stickyColor, singleKeys: config.data.singleKeys, tidyGap: config.data.tidyGap, changelog: config.data.changelog, editor: config.data.editor || 'notepad', theme: config.data.theme || 'system', extras: { dictionary: !!config.data.extras?.dictionary, tables: !!config.data.extras?.tables } } : DEFAULT_PREFS),
+    () => (config.data ? { stickyColor: config.data.stickyColor, singleKeys: config.data.singleKeys, tidyGap: config.data.tidyGap, changelog: config.data.changelog, editor: config.data.editor || 'notepad', theme: config.data.theme || 'system', extras: { dictionary: !!config.data.extras?.dictionary, tables: !!config.data.extras?.tables, journal: !!config.data.extras?.journal } } : DEFAULT_PREFS),
     [config.data],
   )
   const prefsRef = useRef(prefs)

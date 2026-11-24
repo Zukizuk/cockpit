@@ -14,7 +14,6 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
     keys: [
       { keys: ['Ctrl', 'K'], what: 'Add, or find anything kept (also /)' },
       { keys: ['N'], what: 'New sticky note' },
-      { keys: ['J'], what: "Today's journal" },
       { keys: ['L'], what: 'Later' },
       { keys: ['C'], what: 'Snippets' },
       { keys: ['T'], what: "Today's tasks" },
@@ -63,12 +62,15 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
 export function KeysDialog() {
   const board = useBoard()
   // the extras turned on (Settings > Extras) bring their keys
-  const extra: Key[] = board.prefs.extras.dictionary
-    ? [
-        { keys: ['D'], what: 'The Dictionary' },
-        { keys: ['Ctrl', 'D'], what: 'The selected word’s meaning, right beside it (in a note too)' },
-      ]
-    : []
+  const extra: Key[] = [
+    ...(board.prefs.extras.journal ? [{ keys: ['J'], what: "Today's journal" }] : []),
+    ...(board.prefs.extras.dictionary
+      ? [
+          { keys: ['D'], what: 'The Dictionary' },
+          { keys: ['Ctrl', 'D'], what: 'The selected word’s meaning, right beside it (in a note too)' },
+        ]
+      : []),
+  ]
   const groups = extra.length ? [...KEY_GROUPS, { title: 'Extras', keys: extra }] : KEY_GROUPS
   return (
     <Dialog open={board.keysOpen} onOpenChange={board.setKeysOpen}>

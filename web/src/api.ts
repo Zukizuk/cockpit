@@ -375,7 +375,7 @@ export interface OutputGroup {
   items: OutputItem[]
 }
 
-export type Extras = { dictionary: boolean; tables: boolean }
+export type Extras = { dictionary: boolean; tables: boolean; journal: boolean }
 
 /** A table (the Table extra): a .csv in the notes folder's tables/; the first row is the header. */
 export interface TableData {

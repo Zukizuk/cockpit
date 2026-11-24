@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ago, onEvent } from '../lib'
-import { BookA, MessageSquare, Sparkles, Table2, X, type LucideIcon } from 'lucide-react'
+import { BookA, MessageSquare, NotebookPen, Sparkles, Table2, X, type LucideIcon } from 'lucide-react'
 import { EDITORS, get, post, type ClaudeLink, type Config, type TelemetryStatus, type TodoState, type Tracker, type UpdateStatus } from '../api'
 import { useBoard } from '../board'
 import { STICKY_COLORS } from '../cards/CardShell'
@@ -268,10 +268,17 @@ const EXTRAS: { id: keyof NonNullable<Config['extras']>; name: string; icon: Luc
     about: 'A small grid on the board: type in cells, paste from Excel, copy it back out. Each table is a .csv file in your notes folder, so it opens in Excel too.',
     how: 'Add one from the + box ("Table"). Claude can make one for you, fill it in and read it.',
   },
+  {
+    id: 'journal',
+    name: 'Journal',
+    icon: NotebookPen,
+    about: 'One page a day for what you did and thought. The card always shows today; earlier days are a click back. Each page is a Markdown file in your notes folder.',
+    how: "Press J. A thought typed in the + box goes into today's page, and Claude can add a line to it.",
+  },
 ]
 
 function ExtrasSection({ cfg, save }: { cfg: Config; save: Save }) {
-  const on = cfg.extras || { dictionary: false, tables: false }
+  const on = cfg.extras || { dictionary: false, tables: false, journal: false }
   return (
     <section className="grid gap-3">
       <Heading hint="Special things you can add to Cockpit. Each stays out of the way until you turn it on.">Extras</Heading>

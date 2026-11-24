@@ -32,7 +32,7 @@ export const EDITORS = ['notepad', 'vscode', 'default']
 /** Light, dark, or whatever Windows is set to. */
 export const THEMES = ['system', 'dark', 'light']
 /** The extras there are (Settings > Extras). */
-export const EXTRAS = ['dictionary', 'tables']
+export const EXTRAS = ['dictionary', 'tables', 'journal']
 
 export function defaults() {
   return {
@@ -65,7 +65,7 @@ export function defaults() {
     /** Look through Projects, Desktop and synced folders for tracker.json files (off: only the ones listed). */
     scanTrackers: false,
     /** Extras: special things the person turns on themselves (Settings > Extras); each is off until then. */
-    extras: { dictionary: false, tables: false },
+    extras: { dictionary: false, tables: false, journal: false },
   }
 }
 
@@ -99,6 +99,25 @@ export function loadConfig() {
   if (typeof raw.scanTrackers === 'boolean') cfg.scanTrackers = raw.scanTrackers
   for (const k of EXTRAS) if (typeof raw.extras?.[k] === 'boolean') cfg.extras[k] = raw.extras[k]
   return cfg
+}
+
+/**
+ * The journal became an extra in 0.2.6, off for new installs. Someone who already keeps one (pages in the journal
+ * folder, or the Kokoro sync set up) keeps it on. Decided once, the first time this version starts, and written down
+ * so it never flips by itself later.
+ */
+export function settleJournalExtra() {
+  const raw = readRawConfig()
+  if (typeof raw.extras?.journal === 'boolean') return raw.extras.journal
+  const cfg = loadConfig()
+  let used = Boolean(cfg.kokoroHost)
+  try {
+    used ||= fs.readdirSync(path.join(cfg.notesDir, 'journal')).some(n => /\.md$/i.test(n))
+  } catch {}
+  raw.extras = typeof raw.extras === 'object' && raw.extras ? raw.extras : {}
+  raw.extras.journal = used
+  writeFileAtomic(CONFIG_FILE, JSON.stringify(raw, null, 2) + '\n')
+  return used
 }
 
 /** Applies only the settings the app may change, checked; returns the new config. */

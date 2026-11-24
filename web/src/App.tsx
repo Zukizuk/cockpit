@@ -298,6 +298,7 @@ function Canvas({ initial }: { initial: Board }) {
         t: () => board.addCard('tasks', 'today'),
         // the journal card, back on today (it's moved, not doubled, if it was on an earlier day)
         j: () =>
+          board.prefs.extras.journal &&
           post<{ path: string }>('/api/notes/new', { kind: 'journal' }).then(r => {
             const card = rf.getNodes().find(n => n.type === 'note' && dayOf(n.data.ref))
             if (card && card.data.ref !== r.path) board.retarget(card.id, r.path, true)
