@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { DATA_DIR, UserError, writeFileAtomic } from './config.js'
 import { newId, validId } from './shown.js'
+import { drawingTitle, saveDrawing } from './drawings.js'
 
 const KINDS = new Set(['file', 'link', 'draft', 'command', 'prompt'])
 const MAX_ITEMS = 60
@@ -45,6 +46,16 @@ function readAll() {
 export function addOutputs(req, now = new Date()) {
   const at = now.toISOString()
   const items = (Array.isArray(req?.items) ? req.items : [])
+    // a drawing from the chat comes as its code: kept as a page (drawings.js), it's listed as that file
+    .map(i => {
+      if (i?.kind !== 'drawing' || typeof i.text !== 'string' || !i.text.trim()) return i
+      try {
+        const file = saveDrawing(i.label, i.text.slice(0, 2_000_000), now)
+        return { kind: 'file', label: drawingTitle(i.label), text: file, target: file, detail: 'Drawing from the chat' }
+      } catch {
+        return null
+      }
+    })
     .filter(i => i && KINDS.has(i.kind))
     .slice(0, MAX_ITEMS)
     .map(i => ({

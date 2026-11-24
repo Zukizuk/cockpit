@@ -403,7 +403,10 @@ function Canvas({ initial }: { initial: Board }) {
   }
 
   // right-click on empty board: what applies to the whole board
+  // where it was opened stays after it closes: the menu fades out where it was, not at the top-left corner its
+  // anchor would jump back to (it flashed there for a moment)
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; at: { x: number; y: number } } | null>(null)
+  const [paneOpen, setPaneOpen] = useState(false)
   // the cards on this space that fold (sticky notes fold one at a time, with their own button or F, not all at once;
   // cards in other spaces or tucked away are left as they are)
   const foldable = nodes.filter(n => !n.hidden && !isSticky(n.type, n.data.ref))
@@ -419,7 +422,7 @@ function Canvas({ initial }: { initial: Board }) {
 
   return (
     <div className="board" onDragOver={onDragOver} onDrop={onDrop}>
-      <DropdownMenu open={!!paneMenu} onOpenChange={open => !open && setPaneMenu(null)} modal={false}>
+      <DropdownMenu open={paneOpen} onOpenChange={open => !open && setPaneOpen(false)} modal={false}>
         <DropdownMenuTrigger asChild>
           <span aria-hidden className="pointer-events-none fixed size-px" style={{ left: paneMenu?.x ?? 0, top: paneMenu?.y ?? 0 }} />
         </DropdownMenuTrigger>
@@ -517,6 +520,7 @@ function Canvas({ initial }: { initial: Board }) {
           e.preventDefault()
           track('board.menu')
           setPaneMenu({ x: e.clientX, y: e.clientY, at: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) })
+          setPaneOpen(true)
         }}
         proOptions={{ hideAttribution: true }}
         colorMode="dark"

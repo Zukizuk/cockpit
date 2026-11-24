@@ -1227,6 +1227,20 @@ test('board tools: a call goes to the open window, its answer comes back; with n
   }
 })
 
+test('outputs: a drawing from the chat is kept as a page and listed as that file', async () => {
+  const { addOutputs } = await import('../server/lib/outputs.js')
+  const code = '<div style="color:var(--text-primary)">Card menu</div>'
+  const g = addOutputs({ from: 'Claude · cockpit', session: 'draw-1', items: [{ kind: 'drawing', label: 'card_menu_order', text: code }] })
+  const item = g.items[0]
+  assert.equal(item.kind, 'file')
+  assert.equal(item.label, 'Card menu order')
+  assert.equal(path.dirname(item.target), path.join(process.env.COCKPIT_DATA, 'drawings'))
+  const page = fs.readFileSync(item.target, 'utf8')
+  assert.ok(page.includes(code))
+  assert.match(page, /--text-primary:/, "the chat's colours")
+  assert.match(page, /tabler-icons/, 'its icon font')
+})
+
 test('board tools: act takes steps; one step written flat is that step; none at all is an error, not an empty ok', async () => {
   const { actSteps } = await import('../server/mcp.js')
   assert.deepEqual(actSteps({ ref: 'c14', action: 'append', text: 'a line' }), { steps: [{ ref: 'c14', action: 'append', args: ['a line'] }] })

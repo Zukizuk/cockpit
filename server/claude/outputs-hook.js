@@ -4,8 +4,8 @@
 //   - files the turn's Write, Edit, MultiEdit and NotebookEdit calls wrote
 //   - files the final reply names that changed while the turn ran (a report a script made, say)
 //   - drafts (a quoted or plain block the reply introduces as an email or message), commands, and links
-//   - drawings shown in the chat (the visualize tool's show_widget): each kept as a page in ~/.cockpit/drawings, so
-//     it opens in Cockpit as an artifact (a file) does
+//   - drawings shown in the chat (the visualize tool's show_widget), sent as their code: Cockpit keeps each as a
+//     page in ~/.cockpit/drawings, so it opens as an artifact (a file) does
 // It never blocks or slows Claude: everything is best-effort, nothing is printed, and it always exits 0.
 // The installer adds it to ~/.claude/settings.json (scripts/claude-setup.mjs); Uninstall takes it out.
 import fs from 'node:fs'
@@ -172,64 +172,6 @@ export function newTracker(cwd, data) {
   return file
 }
 
-// ---- drawings: a show_widget drawing is HTML or SVG made for the chat, which gives it its colours (CSS variables),
-// its icon font and two functions; this page gives them too, so it looks the same opened in Cockpit ----------------
-
-const DRAWING_STYLE = `
-:root{color-scheme:light dark;--font-sans:system-ui,-apple-system,"Segoe UI",sans-serif;--font-mono:ui-monospace,Consolas,monospace;--font-voice:Georgia,serif;--radius:8px;
---text-primary:#1f1e1d;--text-secondary:#5e5d59;--text-muted:#8a8985;--text-accent:#185fa5;--text-danger:#a32d2d;--text-success:#3b6d11;--text-warning:#854f0b;
---surface-0:#f0eee6;--surface-1:#f7f6f2;--surface-2:#ffffff;--bg-neutral:rgba(0,0,0,.05);--bg-accent:#e6f1fb;--bg-danger:#fcebeb;--bg-success:#eaf3de;--bg-warning:#faeeda;
---border:rgba(0,0,0,.12);--border-strong:rgba(0,0,0,.2);--border-stronger:rgba(0,0,0,.4);--border-accent:#378add}
-@media (prefers-color-scheme:dark){:root{--text-primary:#ecebe6;--text-secondary:#b4b2a9;--text-muted:#888780;--text-accent:#85b7eb;--text-danger:#f09595;--text-success:#97c459;--text-warning:#ef9f27;
---surface-0:#1a1a19;--surface-1:#222221;--surface-2:#2a2a29;--bg-neutral:rgba(255,255,255,.06);--bg-accent:#0c447c;--bg-danger:#791f1f;--bg-success:#27500a;--bg-warning:#633806;
---border:rgba(255,255,255,.12);--border-strong:rgba(255,255,255,.2);--border-stronger:rgba(255,255,255,.4)}}
-*{box-sizing:border-box}body{margin:0;padding:20px;font:16px/1.7 var(--font-sans);color:var(--text-primary);background:var(--surface-1)}
-h1,h2,h3{font-weight:500;color:var(--text-primary)}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-button{font:inherit;font-size:14px;padding:6px 14px;border-radius:var(--radius);border:.5px solid var(--border-strong);background:transparent;color:var(--text-primary);cursor:pointer}
-button:hover{background:var(--surface-0)}button:active{transform:scale(.98)}
-input,select,textarea{font:inherit;color:inherit;background:var(--surface-2);border:.5px solid var(--border-strong);border-radius:var(--radius);padding:6px 10px}
-svg text.t,svg .t{font:14px var(--font-sans);fill:var(--text-primary)}svg .ts{font:12px var(--font-sans);fill:var(--text-secondary)}svg .th{font:500 14px var(--font-sans);fill:var(--text-primary)}
-.c-purple{fill:#eeedfe;stroke:#534ab7}.c-teal{fill:#e1f5ee;stroke:#0f6e56}.c-coral{fill:#faece7;stroke:#993c1d}.c-pink{fill:#fbeaf0;stroke:#993556}.c-gray{fill:#f1efe8;stroke:#5f5e5a}
-.c-blue{fill:#e6f1fb;stroke:#185fa5}.c-green{fill:#eaf3de;stroke:#3b6d11}.c-amber{fill:#faeeda;stroke:#854f0b}.c-red{fill:#fcebeb;stroke:#a32d2d}
-`
-const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-/** A drawing's title ("sticky_note_fold_styles") as words ("Sticky note fold styles"). */
-export const drawingTitle = t => {
-  const w = String(t || '').replace(/[_-]+/g, ' ').trim()
-  return w ? w[0].toUpperCase() + w.slice(1) : 'Drawing'
-}
-export function drawingPage(title, code) {
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(drawingTitle(title))}</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
-<style>${DRAWING_STYLE}</style>
-<script>window.sendPrompt = function () {}; window.openLink = function (u) { window.open(u, '_blank') }</script>
-</head>
-<body>
-${code}
-</body>
-</html>
-`
-}
-
-/** Each drawing kept as a page in <data>/drawings; returned as Outputs items (files, so they open in Cockpit). */
-export function saveDrawings(data, drawings, now = new Date()) {
-  if (!drawings?.length) return []
-  const dir = path.join(data, 'drawings')
-  fs.mkdirSync(dir, { recursive: true })
-  const stamp = now.toISOString().slice(0, 19).replace(/[-:T]/g, '')
-  return drawings.slice(0, 10).map((d, i) => {
-    const slug = String(d.title || 'drawing').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'drawing'
-    const file = path.join(dir, `${stamp}-${i + 1}-${slug}.html`)
-    fs.writeFileSync(file, drawingPage(d.title, d.code))
-    return { kind: 'file', label: drawingTitle(d.title), text: file, target: file, detail: 'Drawing from the chat' }
-  })
-}
-
 function drop(data, payload) {
   const inbox = path.join(data, 'inbox')
   fs.mkdirSync(inbox, { recursive: true })
@@ -247,7 +189,9 @@ export async function run(input, { data = cockpitData() } = {}) {
   if (tracker) drop(data, { tracker })
   const turn = readLastTurn(input.transcript_path)
   if (!turn) return null
-  const items = [...saveDrawings(data, turn.drawings), ...turnItems(turn, { cwd })].slice(0, MAX_ITEMS)
+  // a drawing goes as its code; Cockpit keeps it as a page (server/lib/drawings.js)
+  const drawn = (turn.drawings || []).slice(0, 10).map(d => ({ kind: 'drawing', label: d.title, text: d.code }))
+  const items = [...drawn, ...turnItems(turn, { cwd })].slice(0, MAX_ITEMS)
   if (!items.length) return null
   const outputs = { from: `Claude · ${baseName(cwd) || 'chat'}`, session: String(input.session_id || ''), cwd, project: baseName(cwd), items }
   return drop(data, { outputs })

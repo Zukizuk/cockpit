@@ -76,7 +76,7 @@ test('Claude Code settings: Cockpit adds its own hook once and removes only that
   assert.equal(hasHook({}), false)
 })
 
-test('a drawing shown in the chat (show_widget) is kept as a page and listed under Outputs', async () => {
+test('a drawing shown in the chat (show_widget) goes to Outputs as its code', async () => {
   const file = path.join(T, 'drawing.jsonl')
   const code = '<h2 class="sr-only">Two notes</h2><div style="color:var(--text-primary)">Post ideas</div>'
   fs.writeFileSync(
@@ -92,11 +92,5 @@ test('a drawing shown in the chat (show_widget) is kept as a page and listed und
   fs.mkdirSync(data)
   const name = await run({ transcript_path: file, session_id: 's2', cwd: 'C:/work/acme' }, { data })
   const [item] = JSON.parse(fs.readFileSync(path.join(data, 'inbox', name), 'utf8')).outputs.items
-  assert.equal(item.kind, 'file')
-  assert.equal(item.label, 'Sticky note fold styles')
-  assert.equal(path.dirname(item.target), path.join(data, 'drawings'))
-  const page = fs.readFileSync(item.target, 'utf8')
-  assert.ok(page.includes(code), 'the drawing itself')
-  assert.match(page, /--text-primary:/, "with the chat's colours")
-  assert.match(page, /tabler-icons/, 'and its icon font')
+  assert.deepEqual(item, { kind: 'drawing', label: 'sticky_note_fold_styles', text: code }, 'sent as its code: Cockpit keeps it as a page')
 })
