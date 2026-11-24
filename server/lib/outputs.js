@@ -50,7 +50,7 @@ export function addOutputs(req, now = new Date()) {
     .map(i => {
       if (i?.kind !== 'drawing' || typeof i.text !== 'string' || !i.text.trim()) return i
       try {
-        const file = saveDrawing(i.label, i.text.slice(0, 2_000_000), now)
+        const file = saveDrawing(i.label, i.text.slice(0, 2_000_000))
         return { kind: 'file', label: drawingTitle(i.label), text: file, target: file, detail: 'Drawing from the chat' }
       } catch {
         return null

@@ -1,6 +1,7 @@
 // Drawings from a chat: the visualize tool's show_widget draws HTML or SVG in the chat, which gives it its colours (CSS
 // variables), its icon font and two functions. An output sent with kind "drawing" (its code as text) is kept here as a
 // page that gives them too, so it opens in Cockpit looking as it did in the chat, and is listed as a file.
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { DATA_DIR } from './config.js'
@@ -49,11 +50,13 @@ ${code}
 export const drawingsDir = () => path.join(DATA_DIR, 'drawings')
 
 /** Keeps one drawing as a page; returns its path. */
-export function saveDrawing(title, code, now = new Date()) {
+export function saveDrawing(title, code) {
   fs.mkdirSync(drawingsDir(), { recursive: true })
-  const stamp = now.toISOString().slice(0, 19).replace(/[-:T]/g, '')
+  // named by what's in it: the same drawing sent again (by a hook and a mod, or the turn sent twice) is the same file,
+  // so Outputs lists it once
   const slug = String(title || 'drawing').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'drawing'
-  const file = path.join(drawingsDir(), `${stamp}-${Math.random().toString(36).slice(2, 6)}-${slug}.html`)
-  fs.writeFileSync(file, drawingPage(title, code))
+  const hash = crypto.createHash('sha1').update(String(code)).digest('hex').slice(0, 10)
+  const file = path.join(drawingsDir(), `${slug}-${hash}.html`)
+  if (!fs.existsSync(file)) fs.writeFileSync(file, drawingPage(title, code))
   return file
 }

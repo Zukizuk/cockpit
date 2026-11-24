@@ -1239,6 +1239,9 @@ test('outputs: a drawing from the chat is kept as a page and listed as that file
   assert.ok(page.includes(code))
   assert.match(page, /--text-primary:/, "the chat's colours")
   assert.match(page, /tabler-icons/, 'its icon font')
+  // sent again (the same turn twice): the same file, so the chat's group lists it once
+  const again = addOutputs({ from: 'Claude · cockpit', session: 'draw-1', items: [{ kind: 'drawing', label: 'card_menu_order', text: code }] })
+  assert.equal(again.items.filter(i => i.label === 'Card menu order').length, 1)
 })
 
 test('board tools: act takes steps; one step written flat is that step; none at all is an error, not an empty ok', async () => {
