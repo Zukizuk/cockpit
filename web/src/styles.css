@@ -1338,6 +1338,42 @@ button.space-switch:active {
   box-shadow: none;
 }
 
+/* rolled up into its strip (its own button, F, or double-click to unroll): the note's height eases up, its writing
+   stays in sight while it rolls and goes once rolled, and the roll (the back of the paper) shows under the strip */
+.react-flow__node-note:has(.card.is-sticky) {
+  transition: height 300ms cubic-bezier(0.2, 0, 0, 1);
+}
+
+.is-resizing .react-flow__node-note {
+  transition: none;
+}
+
+.card.is-sticky .card-body.sticky-body[hidden] {
+  display: flex;
+  visibility: hidden;
+  transition: visibility 0s 300ms;
+}
+
+.card.is-sticky.is-folded {
+  background: transparent;
+}
+
+.card.is-sticky.is-folded::after {
+  left: 3px;
+  right: 3px;
+  width: auto;
+  height: 6px;
+  border-radius: 0 0 6px 6px;
+  background: var(--paper-deep);
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react-flow__node-note:has(.card.is-sticky) {
+    transition: none;
+  }
+}
+
 .card.is-sticky.is-selected {
   outline: 1.5px solid oklch(var(--contrast) / 0.55);
   outline-offset: 3px;

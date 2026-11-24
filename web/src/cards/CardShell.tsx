@@ -113,6 +113,8 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   // used to leave the card stuck at the height it had then, cutting it off as soon as it held more).
   const resizeStart = () => {
     board.remember()
+    document.documentElement.classList.add('is-resizing')
+    addEventListener('pointerup', () => document.documentElement.classList.remove('is-resizing'), { once: true })
     if (!fits) return
     resizingRef.current = true
     startH.current = (nodeId && rf.getNode(nodeId)?.measured?.height) || 0
@@ -136,7 +138,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const here = actions.filter(a => a.context && !a.hidden)
   const shown: CardAction[] = [
     ...here,
-    { label: folded ? 'Unfold' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, hidden: !!sticky, keys: 'F', gap: here.length > 0 },
+    { label: folded ? 'Unfold' : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F', gap: here.length > 0 },
     { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
     {
       label: 'Compare side by side',
@@ -302,12 +304,17 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
                 </div>
               </header>
             ) : sticky ? (
-              <header className="card-head sticky-strip card-drag" onDoubleClick={onExpand} title={onExpand ? 'Double-click to open full screen' : undefined}>
+              <header
+                className="card-head sticky-strip card-drag"
+                onDoubleClick={folded ? toggleFold : onExpand}
+                title={folded ? 'Double-click to unroll' : onExpand ? 'Double-click to open full screen' : undefined}
+              >
                 <span className="sticky-strip-text">{stripText}</span>
                 <div className="card-actions nodrag flex items-center gap-0.5">
                   <IconButton icon={veiled ? Eye : EyeOff} label={veiled ? 'Show its contents' : 'Hide its contents (H)'} onClick={toggleVeil} className={cn('veil-btn', veiled && 'veil-on')} />
-                  {quick}
+                  {!folded && quick}
                   {lockBadge}
+                  <IconButton icon={folded ? ChevronsUpDown : ChevronsDownUp} label={folded ? 'Unroll' : 'Roll up into its strip (F)'} onClick={toggleFold} />
                   {menu}
                 </div>
               </header>

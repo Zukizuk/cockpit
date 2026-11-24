@@ -113,7 +113,16 @@ export function NoteCard({ id, data, selected }: NodeProps<CardNode>) {
         icon={StickyNote}
         title={title}
         sticky={data.color || board.prefs.stickyColor}
-        stripText={note.status === 'conflict' || note.status === 'error' ? note.statusText : titleSlot}
+        stripText={
+          note.status === 'conflict' || note.status === 'error' ? (
+            note.statusText
+          ) : data.folded && !own && !naming ? (
+            // rolled up with no title of its own: its first line names it
+            <span className="note-title">{title}</span>
+          ) : (
+            titleSlot
+          )
+        }
         onExpand={expand}
         quick={<IconButton icon={Maximize2} label="Open full screen" onClick={expand} />}
         actions={actions}

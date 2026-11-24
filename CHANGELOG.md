@@ -11,6 +11,12 @@ Newest first. Each change is listed under New, Improved or Fixed.
 - **Claude gets an overview, not your contents.** Looking at the board gives Claude only each card's title, kind and space. It reads a card's contents (a note's text, a table's rows, its comments) only when it asks for that one card, and only if it's shared with it. Later and Snippets list titles only; a snippet's text is read one at a time, and a secret's never. After Claude does something, it hears back only whether that worked, not the whole board again.
 - Claude can add a line to a shared note or rewrite it (a rewrite waits for your Allow), and now hears whether that worked. Before, a change written the wrong way did nothing and Claude was told it was done.
 
+**Improved**
+- Sticky notes roll up into their strip: the new button on the strip, F, or right-click → Roll up. A rolled note shows its title (or its first line) with the roll under it; double-click it, or the same button, to unroll it. Fold all cards leaves sticky notes as they are.
+
+**Fixed**
+- Fold all cards (right-click the board) folded cards in every space. It now folds only the cards in the space you're in.
+
 ## 24 November 2026 (version 0.2.6)
 
 **Improved**

@@ -43,6 +43,10 @@ export const SNIPPETS_MIN_H = 160
 
 /** A folded card is just its header: the title line and what it's about. */
 export const FOLDED_H = 46
+/** A sticky note rolls up into its strip (30px) with the roll showing under it. */
+export const STICKY_FOLDED_H = 36
+/** How tall a card is folded: its title line; a sticky note, its strip. */
+export const foldedH = (type: string | undefined, ref: string) => (isSticky(type, ref) ? STICKY_FOLDED_H : FOLDED_H)
 
 /** openH: the height a folded card goes back to when it's unfolded. */
 export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean; agents?: AgentMark }
@@ -65,7 +69,7 @@ export const toNode = (c: BoardCard): CardNode => ({
   position: { x: c.x, y: c.y },
   data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}) },
   width: HUGS.has(c.type) ? undefined : c.w,
-  height: c.folded ? FOLDED_H : HUGS.has(c.type) || (AUTO_HEIGHT.has(c.type) && !keepsSize(c)) ? undefined : c.h,
+  height: c.folded ? foldedH(c.type, c.ref) : HUGS.has(c.type) || (AUTO_HEIGHT.has(c.type) && !keepsSize(c)) ? undefined : c.h,
   dragHandle: '.card-drag',
   ...(c.locked ? { draggable: false, deletable: false } : {}),
 })
@@ -97,7 +101,7 @@ export const spaceOf = (n: { data: CardData }) => n.data.space || 'main'
 /** The same card folded to its header, or opened back to its height. */
 export function foldNode(n: CardNode, fold: boolean): CardNode {
   if (!!n.data.folded === fold) return n
-  if (fold) return { ...n, height: FOLDED_H, data: { ...n.data, folded: true, openH: n.height ?? n.measured?.height ?? SIZES[n.type as CardType].h } }
+  if (fold) return { ...n, height: foldedH(n.type, n.data.ref), data: { ...n.data, folded: true, openH: n.height ?? n.measured?.height ?? SIZES[n.type as CardType].h } }
   const { folded, openH, ...data } = n.data
   return { ...n, height: fitsContent({ type: n.type, data }) || HUGS.has(n.type as CardType) ? undefined : (openH ?? SIZES[n.type as CardType].h), data }
 }
@@ -759,7 +763,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
             const { folded, openH, ...data } = n.data
             const moved = { ...n, position: { x: s.x, y: s.y } }
             if (focused.includes(n.id)) return moved // a focused card keeps any resizing done while focused
-            if (s.folded) return { ...moved, width: s.w, height: FOLDED_H, data: { ...data, folded: true, openH: s.openH } }
+            if (s.folded) return { ...moved, width: s.w, height: foldedH(n.type, n.data.ref), data: { ...data, folded: true, openH: s.openH } }
             // a card as tall as its content stays that way (a fixed height would cut it off)
             return { ...moved, width: s.w, height: fitsContent({ type: n.type, data }) ? undefined : s.h, data }
           }),

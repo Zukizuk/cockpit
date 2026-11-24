@@ -323,8 +323,8 @@ function Canvas({ initial }: { initial: Board }) {
           }, err => board.toast(err.message)),
         '0': () => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 }),
         f: () => {
-          // every selected card (sticky notes don't fold); all fold, unless they all are already
-          const cards = picked.filter(n => !isSticky(n.type, n.data.ref))
+          // every selected card (a sticky note rolls up into its strip); all fold, unless they all are already
+          const cards = picked
           if (!cards.length) return board.toast('Select a card first, then F folds it')
           const fold = !cards.every(n => n.data.folded)
           const ids = new Set(cards.map(n => n.id))
@@ -404,7 +404,8 @@ function Canvas({ initial }: { initial: Board }) {
 
   // right-click on empty board: what applies to the whole board
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; at: { x: number; y: number } } | null>(null)
-  // the cards on this space that fold (sticky notes don't; cards in other spaces or tucked away are left as they are)
+  // the cards on this space that fold (sticky notes fold one at a time, with their own button or F, not all at once;
+  // cards in other spaces or tucked away are left as they are)
   const foldable = nodes.filter(n => !n.hidden && !isSticky(n.type, n.data.ref))
   const foldAll = (fold: boolean) => {
     if (fold) track('board.foldall')
@@ -436,7 +437,7 @@ function Canvas({ initial }: { initial: Board }) {
           <DropdownMenuSeparator />
           <DropdownMenuItem disabled={!foldable.some(n => !n.data.folded)} onSelect={() => foldAll(true)}>
             <ChevronsDownUp strokeWidth={1.75} />
-            {onlyStickies ? "Fold all cards (sticky notes don't fold)" : 'Fold all cards'}
+            {onlyStickies ? 'Fold all cards (not sticky notes)' : 'Fold all cards'}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!foldable.some(n => n.data.folded)} onSelect={() => foldAll(false)}>
             <ChevronsUpDown strokeWidth={1.75} />
