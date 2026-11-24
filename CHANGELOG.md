@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next (version 0.2.4)
+## 24 November 2026 (version 0.2.4)
 
 **Fixed**
 - Shortcuts on French (AZERTY) and other keyboards that type [ and ] with AltGr: [ and ] now go to the space before or after, Alt with the 1 to 9 keys jumps to a space (no Shift needed), and Ctrl with the 0 key sets the zoom back to 100%.
