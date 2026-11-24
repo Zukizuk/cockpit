@@ -4,7 +4,7 @@
 //   Cockpit/
 //     Install.cmd, install.ps1        double-click to install (or update) for this user
 //     Uninstall.cmd, uninstall.ps1    copied into the install folder too
-//     app/                            the server, the built web app, the scripts, production node_modules
+//     app/                            the server (bundled: a few files, no node_modules), the built web app, the scripts
 //     runtime/node.exe                the Node this was built with
 //
 // Run it with `npm run package` (which builds the web app first). Windows only.
@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { bundleServer } from './bundle-server.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
@@ -30,27 +31,25 @@ fs.rmSync(path.join(out, 'stage'), { recursive: true, force: true })
 fs.rmSync(zip, { force: true })
 fs.mkdirSync(app, { recursive: true })
 
-// the app
-for (const p of ['server', 'web/dist', 'CHANGELOG.md', 'LICENSE', 'README.md', 'package.json', 'package-lock.json']) copy(p)
+// the app: the server bundled (see bundle-server.mjs), its data, the built web app
+await bundleServer(app)
+for (const p of ['server/data', 'web/dist', 'CHANGELOG.md', 'LICENSE', 'README.md', 'package.json']) copy(p)
 for (const p of ['open.vbs', 'send-to.vbs', 'start-hidden.vbs', 'install-startup.ps1', 'install-hotkey.ps1', 'claude-setup.mjs', 'hotkey/CockpitHotkey.cs']) copy(`scripts/${p}`)
 copy('web/public/icons/cockpit.ico', 'cockpit.ico')
 
-// only what the server needs at run time (the web app is already bundled)
-run('npm', ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'], app)
-// what's only there for developers (source maps, type definitions, readmes): smaller, and shorter deepest paths
-const prune = dir => {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, e.name)
-    if (e.isDirectory()) prune(full)
-    else if (/\.(map|d\.ts|d\.mts|d\.cts|md|markdown)$/i.test(e.name) && !/^license/i.test(e.name)) fs.rmSync(full)
-  }
-}
-prune(path.join(app, 'node_modules'))
-// npm leaves an empty folder for each scope it skipped (@codemirror, @radix-ui...)
-for (const d of fs.readdirSync(path.join(app, 'node_modules'))) {
-  const full = path.join(app, 'node_modules', d)
-  if (d.startsWith('@') && fs.readdirSync(full).length === 0) fs.rmdirSync(full)
-}
+// the bundle carries code from these packages: their licences go along in one file, as node_modules did
+const deps = execFileSync('npm', ['ls', '--omit=dev', '--all', '--parseable'], { cwd: root, encoding: 'utf8', shell: true })
+  .split(/\r?\n/)
+  .filter(d => d && path.resolve(d) !== root)
+const notices = [...new Set(deps)].map(dir => {
+  const p = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
+  const file = fs.readdirSync(dir).find(f => /^(licen[sc]e|copying)(\.|$)/i.test(f))
+  const text = file ? fs.readFileSync(path.join(dir, file), 'utf8').trim() : 'No licence file in the package.'
+  return `${p.name} ${p.version} (${p.license || 'see below'})\n\n${text}\n`
+})
+const rule = `\n${'-'.repeat(72)}\n\n`
+fs.writeFileSync(path.join(app, 'THIRD-PARTY-LICENSES.txt'), `Cockpit's server includes code from these packages.\n\n${notices.join(rule)}`)
+
 
 // its own Node
 fs.mkdirSync(path.join(stage, 'runtime'))

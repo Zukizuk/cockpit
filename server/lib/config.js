@@ -1,9 +1,9 @@
 // Where everything lives, and the settings file (~/.cockpit/config.json). Environment variables override the
 // locations so tests can point the whole app at a temporary folder.
+import { appPath } from './app-root.js'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 export const HOST = '127.0.0.1'
 export const PORT = Number(process.env.COCKPIT_PORT) || 4790
@@ -11,10 +11,10 @@ export const HOME = process.env.COCKPIT_HOME || os.homedir()
 export const DATA_DIR = process.env.COCKPIT_DATA || path.join(HOME, '.cockpit')
 export const CONFIG_FILE = path.join(DATA_DIR, 'config.json')
 /** What changed in Cockpit, newest first (read in the app from Settings or the + box). */
-export const CHANGELOG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'CHANGELOG.md')
+export const CHANGELOG = appPath('CHANGELOG.md')
 const PKG = (() => {
   try {
-    return JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8'))
+    return JSON.parse(fs.readFileSync(appPath('package.json'), 'utf8'))
   } catch {
     return {}
   }

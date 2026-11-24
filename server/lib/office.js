@@ -6,6 +6,7 @@
 //     even after a restart, reads that instead (a changed file is read again)
 //   - a workbook's sheets are kept one per file and sent one at a time: the list of sheets and the open one
 // Two requests for the same file while it's being read share the one read.
+import { appPath } from './app-root.js'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -34,7 +35,7 @@ function readJson(file) {
 
 function inWorker(format, file) {
   return new Promise((resolve, reject) => {
-    const w = new Worker(new URL('./office-worker.js', import.meta.url), { workerData: { format, file } })
+    const w = new Worker(appPath('server', 'lib', 'office-worker.js'), { workerData: { format, file } })
     w.once('message', m => (m.error ? reject(m.user ? new UserError(m.error, 413) : new Error(m.error)) : resolve(m)))
     w.once('error', reject)
     w.once('exit', code => code && reject(new Error(`the reader stopped (${code})`)))

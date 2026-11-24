@@ -7,11 +7,11 @@
 //
 // Where it goes is set in package.json ("cockpitTelemetry": { host, key }). With no key (a fork, a dev build without
 // one) nothing is counted, nothing is asked and nothing is sent.
+import { appPath } from './app-root.js'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { DATA_DIR, VERSION, UserError, writeFileAtomic } from './config.js'
 
 /** The only things ever counted. */
@@ -32,7 +32,7 @@ export const EVENTS = new Set([
 const ASK_AFTER = 24 * 3600_000
 const MAX_DAYS = 30
 
-const pkg = JSON.parse(fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json'), 'utf8'))
+const pkg = JSON.parse(fs.readFileSync(appPath('package.json'), 'utf8'))
 /** Where counts go (empty key: telemetry is off for this build). */
 export const target = () => ({ host: pkg.cockpitTelemetry?.host || '', key: process.env.COCKPIT_TELEMETRY_KEY ?? pkg.cockpitTelemetry?.key ?? '' })
 

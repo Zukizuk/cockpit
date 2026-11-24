@@ -5,6 +5,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 ## Coming next (version 0.2.6)
 
 **Improved**
+- Installing and updating are quicker. Cockpit is now about 250 files instead of 2,250, so it unzips in a few seconds.
 - The journal is now an extra, off until you turn it on in Settings → Extras. If you already write in it, it stays on. With it off, words typed in the + box become a sticky note, and Keep in the Dictionary keeps the word on a sticky note.
 
 ## 24 November 2026 (version 0.2.5)

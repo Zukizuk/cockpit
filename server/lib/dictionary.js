@@ -1,11 +1,11 @@
 // The Dictionary extra: English words, offline. data/dictionary.bin is built by scripts/build-dictionary.mjs from
 // Open English WordNet and the CMU Pronouncing Dictionary; a lookup reads and unpacks one small shard (kept for reuse).
+import { appPath } from './app-root.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
-import { fileURLToPath } from 'node:url'
 
-const FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'data', 'dictionary.bin')
+const FILE = appPath('server', 'data', 'dictionary.bin')
 const KEEP = 40
 
 let header = null

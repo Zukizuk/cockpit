@@ -6,16 +6,15 @@
 //   - Update now downloads the release zip, checks its SHA-256 against the one GitHub publishes, unzips it and runs
 //     its installer with -Update, apart from this server (which the installer stops and starts again)
 // A copy run from a clone never checks by itself (it's updated with git), only when asked (Check now).
+import { APP_ROOT } from './app-root.js'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
 import { DATA_DIR, REPOSITORY, VERSION, writeFileAtomic } from './config.js'
 
-const here = path.dirname(fileURLToPath(import.meta.url))
-/** The installed layout: <dir>\app\server\lib (here) and <dir>\runtime\node.exe. */
-export const installDir = () => path.resolve(here, '..', '..', '..')
+/** The installed layout: <dir>\app (APP_ROOT, where the server is) and <dir>\runtime\node.exe. */
+export const installDir = () => path.dirname(APP_ROOT)
 export const isInstalled = () => process.platform === 'win32' && fs.existsSync(path.join(installDir(), 'runtime', 'node.exe')) && fs.existsSync(path.join(installDir(), 'uninstall.ps1'))
 
 const CHECK_EVERY = 20 * 3600_000

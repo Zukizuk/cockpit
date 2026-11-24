@@ -2,16 +2,16 @@
 // when Claude Code's command is there then and someone says yes; this is the way to do it afterwards).
 // Two parts: the Outputs hook (a Stop hook in ~/.claude/settings.json: what each turn made) and the board tools (the
 // MCP server, registered for the user in ~/.claude.json by `claude mcp add`).
+import { appPath } from './app-root.js'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { DATA_DIR, HOME } from './config.js'
 
-const here = path.dirname(fileURLToPath(import.meta.url))
-const MCP = path.resolve(here, '..', 'mcp.js')
-const HOOK = path.resolve(here, '..', 'claude', 'outputs-hook.js')
-const SETUP = path.resolve(here, '..', '..', 'scripts', 'claude-setup.mjs')
+// these paths are what Claude Code's settings point at: the installed layout keeps them where they are in the source
+const MCP = appPath('server', 'mcp.js')
+const HOOK = appPath('server', 'claude', 'outputs-hook.js')
+const SETUP = appPath('scripts', 'claude-setup.mjs')
 const settingsFile = () => path.join(HOME, '.claude', 'settings.json')
 const userFile = () => path.join(HOME, '.claude.json')
 const same = (a, b) => path.resolve(String(a || '')).toLowerCase() === path.resolve(String(b || '')).toLowerCase()

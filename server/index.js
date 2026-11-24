@@ -3,6 +3,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { appPath } from './lib/app-root.js'
 import { DATA_DIR, HOST, PORT, VERSION, UserError, loadConfig, publicConfig, saveConfig, settleJournalExtra, within } from './lib/config.js'
 import { checkApiRequest, checkHost } from './lib/security.js'
 import { mimeOf, openOutside, openUrl } from './lib/files.js'
@@ -31,8 +32,8 @@ import * as runs from './lib/runs.js'
 import { changesFor } from './lib/changes.js'
 import { pickFiles } from './lib/pick.js'
 
-const here = path.dirname(fileURLToPath(import.meta.url))
-const DIST = path.resolve(here, '..', 'web', 'dist')
+const here = appPath('server')
+const DIST = appPath('web', 'dist')
 const LOG = path.join(DATA_DIR, 'server.log')
 const startedAt = Date.now()
 

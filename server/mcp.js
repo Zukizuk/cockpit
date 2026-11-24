@@ -4,6 +4,7 @@
 // open board through UI SDK's agent bridge (only the Today list for now).
 // It writes straight into ~/.cockpit/shown, so it works while the app is closed, and starts the app's server
 // when it is not running. Only JSON-RPC goes to stdout; anything else goes to stderr.
+import { appPath } from './lib/app-root.js'
 import readline from 'node:readline'
 import http from 'node:http'
 import path from 'node:path'
@@ -15,7 +16,7 @@ import { addSnippetSync } from './lib/snippets.js'
 import * as telemetry from './lib/telemetry.js'
 import { agentTools } from '@ui-sdk/core/agent'
 
-const here = path.dirname(fileURLToPath(import.meta.url))
+const here = appPath('server')
 
 const BOARD_NOTE =
   'How to look: when the user names a card ("my sticky note Post ideas"), call board_query with { text: "<some of its ' +
