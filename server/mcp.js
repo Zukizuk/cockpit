@@ -229,6 +229,8 @@ export async function callTool(name, args = {}) {
   if (name.startsWith('board_')) {
     try {
       if (!(await ensureServer())) throw new Error("Cockpit isn't running.")
+      // a query written as a step ({ ref, action: "read" }) is what act does: it goes there
+      if (name === 'board_query' && args?.action && args?.ref) name = 'board_act'
       if (name === 'board_act') args = actSteps(args)
       const r = await postJson('/api/agent/call', { tool: name.slice(6), input: args, agent: process.env.CLAUDECODE ? 'claude-code' : 'other', label: fromLabel() })
       if (r.status !== 200) throw new Error(r.body?.error || `Cockpit answered ${r.status}`)

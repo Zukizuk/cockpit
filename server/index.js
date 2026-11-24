@@ -219,7 +219,8 @@ function debounce(fn, ms) {
 
 const watchers = {}
 
-function watch(name, dir, recursive, onChange) {
+/** onChange runs once things settle (250 ms); onEach, if given, sees every event (each file's name) before that. */
+function watch(name, dir, recursive, onChange, onEach) {
   try {
     watchers[name]?.close()
   } catch {
@@ -227,7 +228,11 @@ function watch(name, dir, recursive, onChange) {
   }
   try {
     fs.mkdirSync(dir, { recursive: true })
-    const w = fs.watch(dir, { recursive }, debounce(onChange, 250))
+    const settled = debounce(onChange, 250)
+    const w = fs.watch(dir, { recursive }, (evt, file) => {
+      onEach?.(evt, file)
+      settled(evt, file)
+    })
     w.on('error', () => {})
     watchers[name] = w
   } catch (e) {
@@ -309,7 +314,24 @@ function startWatchers(cfg) {
   watch('inbox', inboxDir(), false, () => drainInbox())
   watch('outputs', outputs.outputsDir(), false, () => broadcast('outputs'))
   drainInbox()
-  watch('notes', notes.notesRoot(cfg), true, (_evt, name) => broadcast('notes', { path: name ? String(name).split(path.sep).join('/') : '' }))
+  // Each note that changed is announced, so its open card reads it again. A save writes a temporary file and renames it
+  // over the note, and Windows reports the folder last: only the last name, once the 250 ms settle, was announced, and
+  // a note changed by an agent (or a sync) stayed as it was on screen until a reload.
+  const changedNotes = new Set()
+  watch(
+    'notes',
+    notes.notesRoot(cfg),
+    true,
+    () => {
+      const paths = [...changedNotes]
+        .map(n => String(n).split(path.sep).join('/').replace(/\.\d+\.\d+\.tmp$/, ''))
+        .filter(p => /\.[a-z0-9]+$/i.test(p))
+      changedNotes.clear()
+      if (!paths.length) return broadcast('notes', { path: '' })
+      for (const p of new Set(paths)) broadcast('notes', { path: p })
+    },
+    (_evt, name) => name && changedNotes.add(name),
+  )
   // snippets: one left by Claude (the MCP tool) is announced, so its card comes up
   fs.mkdirSync(snippets.snippetsDir(), { recursive: true })
   let known = new Set(snippets.listSnippets().map(s => s.id))

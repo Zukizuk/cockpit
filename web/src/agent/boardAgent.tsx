@@ -192,7 +192,7 @@ const cardPrimitive = definePrimitive({
       )
       return p
     }
-    return {
+    const api = {
       // its contents, for this one card (the overview has only titles and kinds)
       read: () => call('onRead')(),
       comment: (text: string) => {
@@ -228,6 +228,17 @@ const cardPrimitive = definePrimitive({
         call('onPlaceNextTo')(pick(context.options().others || [], other, x => x, x => x, 'card'), s)
       },
     }
+    // only what this kind of card does: an agent sees a note's, a table's or a sticky note's own actions, not all of
+    // them on every card (UI SDK lists each function the api has)
+    const o = context.options()
+    const only: [boolean, (keyof typeof api)[]][] = [
+      [!!o.onTable, ['setCell', 'addRows', 'setRows', 'removeRow']],
+      [!!o.onWrite, ['append', 'setText']],
+      [!!o.onColor, ['setColor']],
+      [!!o.onRename, ['rename']],
+    ]
+    for (const [has, names] of only) if (!has) for (const n of names) delete (api as Partial<typeof api>)[n]
+    return api
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
   agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'remove'] },

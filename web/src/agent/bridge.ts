@@ -27,7 +27,12 @@ function trimAct(out: unknown) {
   // a change that takes a moment (a note, a table) reports through its card's pending and error, which act waits on:
   // a step that comes back "pending" without an error has finished, so it says so (else the agent can't tell)
   const steps = rest.steps
-  if (Array.isArray(steps)) rest.steps = steps.map(st => (st.result === 'pending' ? { ...st, result: 'done' } : st))
+  // a step's "changes" (the components it changed, with their whole value: the board's again, for a focus) go too
+  if (Array.isArray(steps))
+    rest.steps = steps.map(st => {
+      const { changes: _c, ...step } = st as { result?: unknown; changes?: unknown }
+      return step.result === 'pending' ? { ...step, result: 'done' } : step
+    })
   return { ...rest, ...(fresh.length ? { appeared: fresh } : {}) }
 }
 
