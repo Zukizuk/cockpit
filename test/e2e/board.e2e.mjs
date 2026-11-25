@@ -478,6 +478,27 @@ test("a comment can be deleted from its card's thread, Claude's too", async () =
   await page.keyboard.press('Escape')
 })
 
+test('Claude asks a question with its guess in grey and carries on; the person answers or takes the guess; Claude reads it', async () => {
+  await clearSelection()
+  const asked = await agent('act', { steps: [{ ref: 'Questions list', action: 'ask', args: ['How many are coming?', 'About 25', 'Shared plan'] }] })
+  assert.equal(asked.output.ok, true)
+  const box = page.getByRole('textbox', { name: 'Answer: How many are coming?' })
+  assert.ok(await until(async () => (await box.count()) === 1), 'the Questions card came onto the board, with the question')
+  assert.equal(await box.getAttribute('placeholder'), 'About 25', 'the guess, in grey where the answer goes')
+  await box.fill('40')
+  await box.press('Enter')
+  const read = async () => {
+    const o = (await agent('act', { steps: [{ ref: 'Questions list', action: 'read' }] })).output
+    return o.steps?.[0]?.result || []
+  }
+  assert.ok(await until(async () => (await read()).some(q => q.question === 'How many are coming?' && q.answer === '40' && q.state === 'answered')), 'Claude reads the answer')
+
+  await agent('act', { steps: [{ ref: 'Questions list', action: 'ask', args: ['Which room?', 'The big one'] }] })
+  await page.getByRole('button', { name: 'Use the guess' }).click()
+  assert.ok(await until(async () => (await read()).some(q => q.question === 'Which room?' && q.answer === 'The big one')), 'the guess taken as the answer')
+  await page.locator('.react-flow__node-questions').evaluate(el => el.scrollIntoView())
+})
+
 // last: a pasted card lands where the mouse is, on the empty spot the other tests use
 test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short password goes to Snippets', async () => {
   await clearSelection()

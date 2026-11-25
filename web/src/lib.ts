@@ -74,7 +74,7 @@ export const lastEvent = (name: string) => last.get(name)
 export function startEvents() {
   if (source) return
   source = new EventSource('/api/events')
-  for (const name of ['shown', 'notes', 'opened', 'notice', 'outputs', 'journal', 'pinned', 'snippets', 'hello', 'agent-call', 'comments', 'tables']) {
+  for (const name of ['shown', 'notes', 'opened', 'notice', 'outputs', 'journal', 'pinned', 'snippets', 'hello', 'agent-call', 'comments', 'tables', 'questions']) {
     source.addEventListener(name, e => {
       let data = {}
       try {

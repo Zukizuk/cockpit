@@ -24,6 +24,7 @@ export const SIZES: Record<CardType, { w: number; h: number }> = {
   folder: { w: 420, h: 520 },
   table: { w: 520, h: 320 },
   section: { w: 640, h: 420 },
+  questions: { w: 440, h: 460 },
 }
 
 /** A sticky note: any note that isn't a journal page or a draft (new ones live in notes/stickies). */

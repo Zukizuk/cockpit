@@ -1353,6 +1353,28 @@ test('sections: kept with the board with their title; a title on anything else i
   assert.equal(n.title, undefined)
 })
 
+test('questions: asked with a guess, answered, the answer taken back, asked again, taken away', async () => {
+  const q = await import('../server/lib/questions.js')
+  const a = q.askQuestion({ question: ' How many are coming? ', guess: 'About 25', about: 'Launch plan', by: 'Claude' })
+  assert.deepEqual([a.question, a.guess, a.about, a.by, a.answer], ['How many are coming?', 'About 25', 'Launch plan', 'Claude', undefined])
+  assert.throws(() => q.askQuestion({ question: '  ' }), /Write the question/)
+  // the same open question again: the one there stands, with the new guess
+  const again = q.askQuestion({ question: 'how many are coming?', guess: 'About 30' })
+  assert.equal(again.id, a.id)
+  assert.equal(q.listQuestions().length, 1)
+  assert.equal(q.listQuestions()[0].guess, 'About 30')
+  const answered = q.answerQuestion(a.id, ' 40 ')
+  assert.equal(answered.answer, '40')
+  assert.ok(answered.answeredAt)
+  const back = q.answerQuestion(a.id, '')
+  assert.equal(back.answer, undefined, 'an empty answer opens it again')
+  assert.equal(back.answeredAt, undefined)
+  assert.equal(q.askQuestion({ question: 'Who?', by: 'someone' }).by, 'An agent')
+  q.removeQuestion(a.id)
+  assert.deepEqual(q.listQuestions().map(x => x.question), ['Who?'])
+  assert.throws(() => q.removeQuestion(a.id), /gone/)
+})
+
 test('comments: a thread per card, yours and Claude\'s; one can be deleted', async () => {
   const c = await import('../server/lib/comments.js')
   const mine = c.addComment({ card: 'later-1', text: ' Read this first ' })

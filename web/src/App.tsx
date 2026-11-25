@@ -38,8 +38,9 @@ import { DictionaryExtra, openDictionary } from './views/Dictionary'
 import { TableCard } from './cards/TableCard'
 import { Arrow } from './cards/Arrow'
 import { SectionCard } from './cards/SectionCard'
+import { QuestionsCard } from './cards/QuestionsCard'
 
-const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard, table: TableCard, section: SectionCard }
+const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard, table: TableCard, section: SectionCard, questions: QuestionsCard }
 const edgeTypes = { arrow: Arrow }
 
 export function App() {

@@ -2,6 +2,14 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**New**
+- Questions from Claude that don't stop it. When Claude, working on your board, needs something only you know, it leaves the question on a **Questions** card with its best guess in grey where the answer goes, and carries on with that guess. Type over the grey whenever you like (Enter keeps it), or click **Use the guess**. Claude reads your answers when it next looks. Answered questions go below, and an answer can be changed.
+
+**Fixed**
+- Claude couldn't name the Later and Snippets lists on their own ("Later" also named the Later card). They're the Later list and the Snippets list now.
+
 ## 25 November 2026 (version 0.2.9)
 
 **New**

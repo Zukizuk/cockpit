@@ -7,7 +7,7 @@ import { newNote, setTitle } from './notes.js'
 
 // a section is an area on the board with a title; the cards whose middle is inside it are in it (nothing else ties
 // them together)
-const TYPES = new Set(['item', 'note', 'outputs', 'tasks', 'tracker', 'command', 'later', 'snippets', 'folder', 'table', 'section'])
+const TYPES = new Set(['item', 'note', 'outputs', 'tasks', 'tracker', 'command', 'later', 'snippets', 'folder', 'table', 'section', 'questions'])
 const MAX_CARDS = 400
 /** A sticky note's paper. */
 export const COLORS = new Set(['yellow', 'green', 'pink', 'orange', 'ink'])

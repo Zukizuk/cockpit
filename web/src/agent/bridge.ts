@@ -13,7 +13,7 @@ type Call = { id: string; client: number; tool: 'snapshot' | 'act' | 'query'; in
 export type Ask = (text: string) => Promise<boolean>
 
 // what an agent may reach, and how a removal there is put to the person
-const WHERE: Record<string, string> = { 'task-list': 'from Today', board: 'from the board', card: 'from the board', 'later-list': 'from Later', 'snippet-list': 'from Snippets' }
+const WHERE: Record<string, string> = { 'task-list': 'from Today', board: 'from the board', card: 'from the board', 'later-list': 'from Later', 'snippet-list': 'from Snippets', 'question-list': 'from Questions' }
 
 /**
  * What an act answers: whether it worked and each step's result (a read() gives its contents there). UI SDK also adds

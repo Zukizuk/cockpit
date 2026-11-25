@@ -402,6 +402,118 @@
   background: oklch(var(--contrast) / 0.35) !important;
 }
 
+/* ---- questions an agent left (cards/QuestionsCard.tsx) ------------------------------------------------------ */
+
+.questions {
+  display: grid;
+  gap: 10px;
+}
+.question {
+  padding: 10px 12px 9px;
+  border-radius: 12px;
+  background: oklch(var(--contrast) / 0.04);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.07);
+}
+.question.is-answered {
+  background: transparent;
+}
+.question-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.question-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+.question.is-answered .question-text {
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.question-x {
+  margin: -4px -6px 0 0;
+  opacity: 0;
+}
+.question:hover .question-x,
+.question-x:focus-visible {
+  opacity: 1;
+}
+.question-meta {
+  margin-top: 1px;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+.question-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.12);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  resize: none;
+  field-sizing: content;
+  min-height: 34px;
+  outline: none;
+}
+.question-input:focus {
+  box-shadow: inset 0 0 0 1.5px oklch(var(--contrast) / 0.35);
+}
+/* the agent's guess: grey where the answer goes */
+.question-input::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.75;
+}
+.question-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+}
+.question-foot > span {
+  flex: 1;
+}
+.question-take {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--foreground);
+  background: oklch(var(--contrast) / 0.07);
+  transition-property: background-color;
+  transition-duration: 150ms;
+}
+.question-take:hover {
+  background: oklch(var(--contrast) / 0.12);
+}
+.question-answer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13.5px;
+}
+.question-answer > span {
+  flex: 1;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.questions-sep {
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
 /* ---- where an agent is at work (agent/presence.tsx) --------------------------------------------------------- */
 
 :root {

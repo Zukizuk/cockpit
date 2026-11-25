@@ -12,7 +12,7 @@ import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
 import { contentsOf, foldNode, freeSpot, isSection, isSticky, sectionOf, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
-import { get, post, put, type Snippet, type StickyColor, type TableData } from '../api'
+import { get, post, put, type Question, type Snippet, type StickyColor, type TableData } from '../api'
 import { newTable, rowsFromText } from '../cards/TableCard'
 import { useData } from '../lib'
 import { summary } from '../cards/OutputsCard'
@@ -309,6 +309,37 @@ const laterPrimitive = definePrimitive({
 })
 const { Root: LaterRoot } = createParts(laterPrimitive, { root: 'div' })
 
+// ---- Questions ---------------------------------------------------------------------------------------------
+// What an agent asks instead of stopping: the question with its best guess, which it carries on with; the person
+// answers on the board when they like, and the agent reads the answers when it next looks.
+
+type QuestionItem = { id: string; question: string; guess?: string; about?: string; answer?: string; state: 'open' | 'answered' }
+type QuestionOptions = { value?: { question: string; state: string }[]; items?: QuestionItem[]; onAsk?: (question: string, guess: string, about: string) => void; onRemove?: (id: string) => void }
+
+const questionPrimitive = definePrimitive({
+  name: 'question-list',
+  options: { value: 'value', items: 'value', onAsk: 'action', onRemove: 'action' },
+  state: (options: QuestionOptions) => ({ value: options.value ?? [] }),
+  sync: options => (options.value === undefined ? {} : { value: options.value }),
+  api: context => {
+    const list = () => context.options().items ?? []
+    const call = <K extends keyof QuestionOptions>(key: K) => context.options()[key] as NonNullable<QuestionOptions[K]>
+    return {
+      ask: (question: string, guess?: string, about?: string) => {
+        const q = words(question)
+        if (!q) throw new Error('Give the question.')
+        call('onAsk')(q, words(guess), words(about))
+      },
+      // every question with your guess and the person's answer (an open one: your guess stands)
+      read: () => list().map(({ id: _id, ...q }) => q),
+      remove: (which: string) => call('onRemove')(pick(list(), which, x => x.id, x => x.question, 'question').id),
+    }
+  },
+  slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
+  agent: { actions: ['ask', 'read', 'remove'] },
+})
+const { Root: QuestionRoot } = createParts(questionPrimitive, { root: 'div' })
+
 // ---- Snippets ----------------------------------------------------------------------------------------------
 
 type SnippetItem = { id: string; title: string; secret: boolean; text?: string }
@@ -343,7 +374,7 @@ const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 
 // ---- on the page -------------------------------------------------------------------------------------------
 
-const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder', table: 'table' }
+const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder', table: 'table', questions: 'questions' }
 /** The title of the section a card is in ("Section" for one with no title), or '' for none. */
 const sectionTitle = (n: CardNode, all: CardNode[]) => {
   const s = sectionOf(n, all)
@@ -423,6 +454,7 @@ export function BoardAgent() {
       else if (type === 'tasks') title = 'Today card'
       else if (type === 'later') title = 'Later card'
       else if (type === 'snippets') title = 'Snippets card'
+      else if (type === 'questions') title = 'Questions card'
       const thread = board.comments[id]
       const sticky = isSticky(type, ref)
       const value: CardValue = {
@@ -625,6 +657,22 @@ export function BoardAgent() {
     () => board.items.filter(e => e.later).map(e => ({ id: e.id, title: e.title, ...(e.url ? { url: e.url } : {}), state: e.later === 'todo' ? 'to check' : e.later! })),
     [board.items],
   )
+  // the questions it left (and the person's answers): readable when the Questions card is shared with it, or not on
+  // the board at all
+  const questions = useData(() => get<Question[]>('/api/questions'), [], { refreshOn: ['questions'] })
+  const questionList: QuestionItem[] = useMemo(
+    () =>
+      (questions.data || []).map(q => ({
+        id: q.id,
+        question: q.question,
+        ...(q.guess ? { guess: q.guess } : {}),
+        ...(q.about ? { about: q.about } : {}),
+        ...(q.answer ? { answer: q.answer } : {}),
+        state: q.answeredAt ? 'answered' : 'open',
+      })),
+    [questions.data],
+  )
+  const questionsOpen = !cards.some(c => c.type === 'questions') || listOpen('questions')
   const snippetList: SnippetItem[] = useMemo(
     () => (snippets.data || []).map(s => ({ id: s.id, title: s.title, secret: s.secret, ...(s.secret ? {} : { text: s.preview }) })),
     [snippets.data],
@@ -823,7 +871,7 @@ export function BoardAgent() {
         </div>
       ))}
       <LaterRoot
-        aria-label={listOpen('later') ? 'Later' : 'Later (not shared with you: you can add to it, not read it)'}
+        aria-label={listOpen('later') ? 'Later list' : 'Later list (not shared with you: you can add to it, not read it)'}
         className="sr-only"
         value={listOpen('later') ? later.map(({ title, state }) => ({ title, state })) : []}
         items={listOpen('later') ? later : []}
@@ -831,8 +879,28 @@ export function BoardAgent() {
         onSetState={(id, s) => board.setLater(id, s as 'todo' | 'reading' | 'done')}
         onRemove={id => board.setLater(id, null)}
       />
+      <QuestionRoot
+        aria-label={questionsOpen ? 'Questions list' : 'Questions list (not shared with you: you can ask, not read the answers)'}
+        className="sr-only"
+        value={questionsOpen ? questionList.map(({ question, state }) => ({ question, state })) : []}
+        items={questionsOpen ? questionList : []}
+        onAsk={(question, guess, about) =>
+          void post<{ id: string }>('/api/questions', { question, guess, about, by: 'Claude' }).then(
+            () => {
+              questions.reload()
+              // the Questions card comes onto the board where the person is looking, if it isn't on it yet
+              const card = rf.getNodes().find(n => n.type === 'questions')
+              if (card) touchCard(card.id, 'writing')
+              else place(board.addCard('questions', 'questions', { at: rf.screenToFlowPosition({ x: innerWidth / 2, y: innerHeight / 3 }) }))
+              said('Claude left you a question')
+            },
+            (e: Error) => said(e.message),
+          )
+        }
+        onRemove={id => post(`/api/questions/${id}/remove`).then(() => questions.reload(), (e: Error) => said(e.message))}
+      />
       <SnippetRoot
-        aria-label={listOpen('snippets') ? 'Snippets' : 'Snippets (not shared with you: you can leave one, not read them)'}
+        aria-label={listOpen('snippets') ? 'Snippets list' : 'Snippets list (not shared with you: you can leave one, not read them)'}
         className="sr-only"
         value={listOpen('snippets') ? snippetList.map(({ title, secret }) => ({ title, secret })) : []}
         items={listOpen('snippets') ? snippetList : []}

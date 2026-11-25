@@ -19,6 +19,7 @@ import { readTrackers } from './lib/tracker.js'
 import * as todoist from './lib/todoist.js'
 import * as tasks from './lib/tasks.js'
 import * as comments from './lib/comments.js'
+import * as questions from './lib/questions.js'
 import * as tables from './lib/tables.js'
 import * as dictionary from './lib/dictionary.js'
 import { applyFence, claudeLink, connectClaude, fenceRules, fenceState, settleFence } from './lib/claude-link.js'
@@ -834,6 +835,27 @@ async function api(req, res, url) {
   }
 
   // the Today card's own list, when Todoist isn't connected
+  // questions an agent leaves on the board, each with its guess; the person answers when they like
+  if (area === 'questions') {
+    if (!a && method === 'GET') return json(res, 200, questions.listQuestions())
+    if (!a && method === 'POST') {
+      const body = await readBody(req)
+      const q = questions.askQuestion({ question: body.question, guess: body.guess, about: body.about, by: body.by })
+      broadcast('questions', { id: q.id })
+      return json(res, 200, q)
+    }
+    if (a && !b && method === 'POST') {
+      const body = await readBody(req)
+      const q = questions.answerQuestion(a, body.answer)
+      broadcast('questions', { id: a })
+      return json(res, 200, q)
+    }
+    if (a && b === 'remove' && method === 'POST') {
+      const r = questions.removeQuestion(a)
+      broadcast('questions', { id: a })
+      return json(res, 200, r)
+    }
+  }
   // comments on cards: a thread per card, the user's and Claude's
   if (area === 'comments') {
     if (!a && method === 'GET') return json(res, 200, comments.listComments())

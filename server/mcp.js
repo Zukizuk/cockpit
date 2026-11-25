@@ -44,7 +44,7 @@ const BOARD_NOTE =
   'puts a section (a titled area, which the cards in it move with) around the cards named, an array of titles in the ' +
   'space shown; fitSection(section) makes a section just big enough for what is in it. Each card is a component ' +
   '(card) named by its title ' +
-  "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
+  "(the cards of the lists are 'Today card', 'Later card', 'Snippets card' and 'Questions card'): " +
   'its value has kind, space, the section it is in, selected, inView, folded, color (sticky notes), shared, rowCount ' +
   '(tables), how many comments it has and its arrows to and from the cards you can see; actions read() for its contents (a note: its whole text; a file or link: its path or address and ' +
   'the start of what it shows; a table: its rows; and its comments), comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), ' +
@@ -56,10 +56,16 @@ const BOARD_NOTE =
   "(notes), setColor(yellow | green | pink | orange | charcoal) (sticky notes), tuck() to tuck it away as a tab at " +
   'the top edge, bringBack(), hideContents() and showContents() (blurred on the board, for sharing the screen; ' +
   "a card's tucked and hidden say which), remove(). 'Today's tasks' (task-list: " +
-  "add(text), complete(task), reopen(task), rename(task, newText), remove(task)); 'Later' (later-list: " +
+  "add(text), complete(task), reopen(task), rename(task, newText), remove(task)); 'Later list' (later-list: " +
   "read() for the items with their links, add(linkOrNote), setState(item, 'to check' | 'reading' | 'done'), " +
-  "remove(item)); 'Snippets' (snippet-list: read(item) for one snippet's text, add(text, title?), remove(item); a " +
-  "secret's text is never shown). A list that isn't shared with you says so in its name: you can add to it, not read it. " +
+  "remove(item)); 'Snippets list' (snippet-list: read(item) for one snippet's text, add(text, title?), remove(item); a " +
+  "secret's text is never shown); 'Questions list' (question-list: ask(question, guess, about?) leaves the user a question " +
+  'on the board without stopping: give your best guess as guess and carry on with it as if it were the answer; about ' +
+  "names the card it's about. read() gives every question with your guess and the user's answer when they've given " +
+  'one (no answer yet: your guess stands); look again before you rely on a guess for something that matters. ' +
+  'remove(question) waits for Allow. Ask this way, not in the chat, when you are working on the board and only the ' +
+  'user can say, but a sensible guess lets you go on). ' +
+  "A list that isn't shared with you says so in its name: you can add to it, not read it. " +
   "Notes (sticky notes, journal): read() gives a note's whole text; change it with the card's append(text), or " +
   "setText(text) to write it all anew (that waits for the user's Allow), not by editing its file. The user's comments on a card may be for you: answer with the card's comment(). " +
   "Every removal waits for the user to allow it in Cockpit. If 'Today's tasks' is missing, the Today card is not on " +

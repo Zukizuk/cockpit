@@ -404,7 +404,7 @@ export interface DictResult {
   from?: string[]
 }
 
-export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets' | 'folder' | 'table' | 'section'
+export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets' | 'folder' | 'table' | 'section' | 'questions'
 
 /** A task on the Today card's own list (when Todoist isn't connected). */
 export interface LocalTask {
@@ -495,6 +495,19 @@ export interface CardComment {
 }
 
 export type StickyColor = 'yellow' | 'green' | 'pink' | 'orange' | 'ink'
+
+/** A question an agent left on the board, with its best guess, which stands until the person answers. */
+export interface Question {
+  id: string
+  question: string
+  guess?: string
+  /** the card it's about, by title */
+  about?: string
+  by: string
+  at: string
+  answer?: string
+  answeredAt?: string
+}
 
 export type Side = 'top' | 'right' | 'bottom' | 'left'
 
