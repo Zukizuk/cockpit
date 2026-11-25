@@ -301,7 +301,7 @@ test('Claude draws an arrow between cards it can see, sees it on both, and takin
   await clearSelection()
 })
 
-test('an arrow between two cards side by side runs straight, and a card dragged near level snaps into line', async () => {
+test('an arrow leaves and reaches the middle of a side; a card dragged near level snaps into line and the arrow runs straight', async () => {
   await clearSelection()
   const card = id => page.locator(`.react-flow__node[data-id="${id}"]`)
   const ys = () =>
@@ -327,11 +327,13 @@ test('an arrow between two cards side by side runs straight, and a card dragged 
   await dragBy('private', 60)
   const down = await yOf('private')
   assert.ok(down >= 50 && down <= 62, `moved down, out of line (${down})`)
-  assert.equal((await ys()).length, 1, 'still straight: one height end to end')
-  // to a few pixels short of level: it snaps the rest of the way
+  // the ends stay at the middles of the two sides (140 and 140 + down), so the arrow steps between them
+  const bent = await ys()
+  assert.ok(bent.includes(140) && bent.includes(140 + down), `from middle to middle: ${bent}`)
+  // to a few pixels short of level: it snaps the rest of the way, and runs straight from middle to middle
   await dragBy('private', -(down - 4))
   assert.equal(await yOf('private'), 0, 'snapped level with the card it points to')
-  assert.equal((await ys()).length, 1)
+  assert.deepEqual(await ys(), [140])
 })
 
 test('with several cards selected, a card menu acts on all of them, and leaves out what is for one card', async () => {

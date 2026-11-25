@@ -7,7 +7,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 **New**
 - Arrows between cards. Hover a card and drag from the dot on any side to another card; let go on empty board and a new sticky note appears there with the arrow to it. An arrow follows its cards as they move. Double-click it to give it a label; right-click it to point it the other way, put a head at both ends or none, make it dashed, or remove it. Undo works on all of it, and an arrow goes out of view with its card (another space, tucked away).
 - Claude sees the arrows between the cards it can see, and can draw one (with a label) or take one away; taking one away waits for your Allow.
-- Two cards side by side (or one above the other) get a straight arrow between them, and a card you drag near level with a card it has an arrow to snaps into line with it.
+- An arrow leaves and reaches the middle of a card's side (several on one side spread around it). Drag a card near level with a card it has an arrow to and it snaps into line, so the arrow runs straight.
 - With several cards selected, a card's menu acts on all of them: fold, tuck, lock, hide their contents, sticky note colours, share with agents or keep private, move to another space, archive the notes, or take them all off the board with one Undo to bring them back. What's for one card (open, rename, copy, comment) is left out.
 
 **Improved**

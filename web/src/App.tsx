@@ -93,8 +93,8 @@ function Canvas({ initial }: { initial: Board }) {
     },
     [onNodesChange, board],
   )
-  // A card dragged on its own, near level with a card it has an arrow to (its middle, top or bottom within a few
-  // pixels on screen), snaps into line with it, so the arrow between them runs straight.
+  // A card dragged on its own, with its middle near level with (or in line with) the middle of a card it has an arrow
+  // to, within a few pixels on screen, snaps into line with it, so the arrow between them runs straight.
   function snapToLinked(changes: NodeChange<CardNode>[]) {
     // while dragging, and where it's let go (React Flow's last change carries the place under the pointer, unsnapped)
     const moving = changes.filter(c => c.type === 'position' && c.position && c.dragging !== undefined)
@@ -117,9 +117,12 @@ function Canvas({ initial }: { initial: Board }) {
       const o = rf.getNode(id)
       if (!o || o.hidden) continue
       const os = size(o)
-      // middles, tops or bottoms level; middles, left edges or right edges in line
-      for (const d of [o.position.y + os.h / 2 - (y + h / 2), o.position.y - y, o.position.y + os.h - (y + h)]) if (Math.abs(d) < bestY) (bestY = Math.abs(d)), (dy = d)
-      for (const d of [o.position.x + os.w / 2 - (x + w / 2), o.position.x - x, o.position.x + os.w - (x + w)]) if (Math.abs(d) < bestX) (bestX = Math.abs(d)), (dx = d)
+      // middles level (side by side) or in line (one above the other): an arrow leaves and reaches the middle of a
+      // side, so that is what makes it straight
+      const ddy = o.position.y + os.h / 2 - (y + h / 2)
+      const ddx = o.position.x + os.w / 2 - (x + w / 2)
+      if (Math.abs(ddy) < bestY) (bestY = Math.abs(ddy)), (dy = ddy)
+      if (Math.abs(ddx) < bestX) (bestX = Math.abs(ddx)), (dx = ddx)
     }
     if (!dx && !dy) return changes
     return changes.map(c => (c === ch ? { ...ch, position: { x: x + dx, y: y + dy } } : c))

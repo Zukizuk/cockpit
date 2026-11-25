@@ -89,21 +89,8 @@ export function Arrow({ id, source, target, data, selected }: EdgeProps<LinkEdge
   const [fi, fn, ti, tn] = places.split(',').map(Number)
   const s = point(A, fromSide, fi, fn)
   const t = point(B, toSide, ti, tn)
-  // Two cards that face each other and overlap enough along that side get a straight arrow: both ends at the same
-  // height (or across), as near the middle of the two as the overlap allows. Alone on their sides only: several
-  // arrows on one side keep their spread.
-  if (fn === 1 && tn === 1) {
-    const across = (fromSide === 'right' && toSide === 'left') || (fromSide === 'left' && toSide === 'right')
-    const down = (fromSide === 'bottom' && toSide === 'top') || (fromSide === 'top' && toSide === 'bottom')
-    const straight = (lo: number, hi: number, mid: number) => (hi - lo >= 40 ? Math.min(hi - 16, Math.max(lo + 16, mid)) : null)
-    if (across) {
-      const y = straight(Math.max(A.y, B.y), Math.min(A.y + A.h, B.y + B.h), (A.cy + B.cy) / 2)
-      if (y !== null) s.y = t.y = y
-    } else if (down) {
-      const x = straight(Math.max(A.x, B.x), Math.min(A.x + A.w, B.x + B.w), (A.cx + B.cx) / 2)
-      if (x !== null) s.x = t.x = x
-    }
-  }
+  // (an arrow always leaves and reaches the middle of a side, or spreads around it with others there; it runs straight
+  // when the two cards are in line, which dragging one near level with the other snaps them into: see snapToLinked)
   // the first and last legs stand 22 off each card, less when the cards are close (so it doesn't double back)
   const gap = Math.max(Math.abs(t.x - s.x), Math.abs(t.y - s.y))
   const offset = Math.max(4, Math.min(22, gap / 2 - 2))
