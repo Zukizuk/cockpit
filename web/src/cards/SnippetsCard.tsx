@@ -214,7 +214,7 @@ function SnippetRow({ s }: { s: Snippet }) {
                     <MoreVertical className="size-[14px]" strokeWidth={1.75} />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="min-w-48">
                   <MenuItems actions={actions} Item={DropdownMenuItem} Sep={DropdownMenuSeparator} />
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -227,7 +227,7 @@ function SnippetRow({ s }: { s: Snippet }) {
           )}
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-48">
+      <ContextMenuContent className="min-w-48">
         <MenuItems actions={actions} Item={ContextMenuItem} Sep={ContextMenuSeparator} />
       </ContextMenuContent>
     </ContextMenu>
@@ -317,7 +317,7 @@ function NewSnippet({ onKept }: { onKept: () => void }) {
                 {KEEPS.find(k => k.value === keepFor)?.label}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-36">
+            <DropdownMenuContent align="end" className="min-w-36">
               {KEEPS.map(k => (
                 <DropdownMenuItem key={k.value} onSelect={() => setKeep(k.value)}>
                   <Timer strokeWidth={1.75} />

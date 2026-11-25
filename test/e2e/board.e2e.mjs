@@ -69,7 +69,8 @@ before(async () => {
     env: { ...process.env, COCKPIT_HOME: home, COCKPIT_DATA: data, COCKPIT_PORT: String(port) },
     stdio: 'ignore',
   })
-  const up = await until(() => fetch(`${base}/api/health`).then(r => r.ok, () => false), 15000)
+  // (30 s: a busy PC, or one just done building, can take a while to start it)
+  const up = await until(() => fetch(`${base}/api/health`).then(r => r.ok, () => false), 30000)
   assert.ok(up, 'the server started')
   browser = await chromium.launch({ channel: 'msedge' })
   page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
@@ -84,6 +85,10 @@ after(async () => {
   server?.kill()
   fs.rmSync(T, { recursive: true, force: true })
 })
+
+/** The items of the open menu whose words run onto a second line (an item is one line, about 32px tall). */
+const wrapped = () =>
+  page.evaluate(() => [...document.querySelectorAll('[role=menu]:last-of-type [role=menuitem]')].filter(el => el.getBoundingClientRect().height > 40).map(el => el.textContent))
 
 /** A spot of empty board: right of the cards, above the dock and the zoom buttons. */
 const EMPTY = { x: 1200, y: 450 }
@@ -160,6 +165,7 @@ test("a card's menu: what it does first, then view, lock, agents, spaces, and Re
   const menu = page.locator('[role=menu]').last()
   await menu.waitFor()
   const labels = (await menu.locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
+  assert.deepEqual(await wrapped(), [], 'no item wraps onto a second line')
   await page.keyboard.press('Escape')
   const at = l => labels.findIndex(x => x.startsWith(l))
   const order = ['Open full screen', 'Comment', 'Roll up into its strip', 'Lock in place', 'Stop sharing with agents', 'Move to Work', 'Remove from board']
@@ -362,9 +368,16 @@ test('sections: one from the board menu or around selected cards, named, dragged
   const sections = async () => (await board()).cards.filter(c => c.type === 'section')
   const titleBox = page.locator('.react-flow__node-section .section-title')
   // a new section's title box has the cursor (it takes it back from the closing menu)
-  const titleReady = () => until(() => page.evaluate(() => document.activeElement?.matches('.section-title input')))
+  // (and keeps it: a closing menu hands focus back once more, a moment later, and the box takes it back again)
+  const titleReady = async () => {
+    await until(() => page.evaluate(() => document.activeElement?.matches('.section-title input')))
+    await page.waitForTimeout(400)
+    assert.ok(await page.evaluate(() => document.activeElement?.matches('.section-title input')), "the title box has the cursor")
+  }
   const removeSection = async title => {
     await page.locator('.react-flow__node-section .section-title', { hasText: title }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: /^Remove the section/ }).waitFor()
+    assert.deepEqual(await wrapped(), [], 'no item in the section menu wraps')
     await page.getByRole('menuitem', { name: /^Remove the section/ }).click()
   }
 

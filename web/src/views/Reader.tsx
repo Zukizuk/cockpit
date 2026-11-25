@@ -412,7 +412,7 @@ function MoreMenu({ actions, open, onOpenChange }: { actions: CardAction[]; open
           <MoreVertical className="size-[15px]" strokeWidth={1.75} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
+      <DropdownMenuContent align="end" className="min-w-60">
         {actions.map(a => (
           <Fragment key={a.label}>
             {a.gap && <DropdownMenuSeparator />}

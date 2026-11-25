@@ -536,7 +536,7 @@ function Canvas({ initial }: { initial: Board }) {
           <span aria-hidden data-anchor="arrow" className="pointer-events-none fixed size-px" style={{ left: arrowMenu?.x ?? 0, top: arrowMenu?.y ?? 0 }} />
         </DropdownMenuTrigger>
         {arrowMenu && (
-          <DropdownMenuContent align="start" className="w-56" aria-label="Arrow">
+          <DropdownMenuContent align="start" className="min-w-56" aria-label="Arrow">
             <DropdownMenuItem onSelect={() => setTimeout(() => emit('arrow-label', { id: arrowMenu.id }), 60)}>
               <Tag strokeWidth={1.75} />
               {arrowMenu.data.label ? 'Change the label' : 'Add a label'}
@@ -571,7 +571,7 @@ function Canvas({ initial }: { initial: Board }) {
         <DropdownMenuTrigger asChild>
           <span aria-hidden data-anchor="board" className="pointer-events-none fixed size-px" style={{ left: paneMenu?.x ?? 0, top: paneMenu?.y ?? 0 }} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-60">
+        <DropdownMenuContent align="start" className="min-w-60">
           <DropdownMenuItem onSelect={() => paneMenu && board.newSticky('', { at: paneMenu.at })}>
             <StickyNote strokeWidth={1.75} />
             Sticky note here

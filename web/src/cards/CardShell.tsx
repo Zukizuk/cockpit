@@ -345,7 +345,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
           <MoreHorizontal className="size-4" strokeWidth={1.75} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
+      <DropdownMenuContent align="end" className="min-w-60">
         {items(DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut)}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -455,7 +455,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
             )}
           </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="w-60">{items(ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, true)}</ContextMenuContent>
+        <ContextMenuContent className="min-w-60">{items(ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, true)}</ContextMenuContent>
       </ContextMenu>
     </>
   )

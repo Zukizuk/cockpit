@@ -235,7 +235,7 @@ function LaterRow({ e }: { e: ShownEntry }) {
                       <MoreHorizontal className="size-[14px]" strokeWidth={1.75} />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuContent align="end" className="min-w-56">
                     {actions.map(a => (
                       <div key={a.label}>
                         {a.gap && <DropdownMenuSeparator />}
@@ -252,7 +252,7 @@ function LaterRow({ e }: { e: ShownEntry }) {
           )}
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-56">
+      <ContextMenuContent className="min-w-56">
         {actions.map(a => (
           <div key={a.label}>
             {a.gap && <ContextMenuSeparator />}

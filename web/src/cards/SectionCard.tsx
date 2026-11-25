@@ -96,7 +96,7 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
               )}
             </div>
           </ContextMenuTrigger>
-          <ContextMenuContent className="w-64" aria-label="Section">
+          <ContextMenuContent className="min-w-64" aria-label="Section">
             <div className="sticky-swatches" role="group" aria-label="Colour">
               <ContextMenuItem aria-label="No colour" title="No colour" className={cn('sticky-swatch section-swatch-none', !data.color && 'is-on')} onSelect={() => setColor(null)} />
               {STICKY_COLORS.map(c => (

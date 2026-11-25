@@ -123,14 +123,14 @@ function QuickRow({ thing, icon: Icon, title, detail, faded, n, onOpen, actions 
                   <MoreVertical className="size-[14px]" strokeWidth={1.75} />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="min-w-52">
                 {menu(DropdownMenuItem, DropdownMenuSeparator)}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent className="w-52">{menu(ContextMenuItem, ContextMenuSeparator)}</ContextMenuContent>
+      <ContextMenuContent className="min-w-52">{menu(ContextMenuItem, ContextMenuSeparator)}</ContextMenuContent>
     </ContextMenu>
   )
 }

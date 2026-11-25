@@ -57,7 +57,7 @@ export function SpaceSwitcher() {
           <ChevronDown className="size-[14px] shrink-0 opacity-60" strokeWidth={1.75} />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-60">
+      <DropdownMenuContent align="start" className="min-w-60">
         {board.spaces.map((s, i) => (
           <DropdownMenuItem key={s.id} onSelect={() => board.switchSpace(s.id)}>
             <Check className={s.id === board.space ? '' : 'invisible'} strokeWidth={1.75} />
