@@ -8,11 +8,13 @@ import { get, post, type Question } from '../api'
 import { useBoard, type CardNode } from '../board'
 import { ago, useData } from '../lib'
 import { CardShell, IconButton, type CardAction } from './CardShell'
+import { TellClaude, useListening } from '../agent/presence'
 import { cn } from '@/lib/utils'
 
 export function QuestionsCard({ id, data, selected }: NodeProps<CardNode>) {
   const board = useBoard()
   const qs = useData(() => get<Question[]>('/api/questions'), [], { refreshOn: ['questions'] })
+  const listening = useListening()
   const list = qs.data || []
   const open = list.filter(q => !q.answeredAt)
   const answered = list.filter(q => q.answeredAt).reverse()
@@ -42,6 +44,12 @@ export function QuestionsCard({ id, data, selected }: NodeProps<CardNode>) {
           {answered.map(q => (
             <QuestionRow key={q.id} q={q} onAnswer={t => answer(q, t)} onRemove={() => remove(q)} />
           ))}
+          {/* a chat listening for the user: one click wakes it to read the answers */}
+          {listening.length > 0 && answered.length > 0 && (
+            <div className="questions-tell">
+              <TellClaude who={listening} text="I've answered your questions on the board's Questions card." label="Tell Claude I've answered" />
+            </div>
+          )}
         </div>
       )}
     </CardShell>

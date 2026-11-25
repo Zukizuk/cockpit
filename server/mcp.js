@@ -67,6 +67,10 @@ const BOARD_NOTE =
   'remove(question) waits for Allow. Ask this way, not in the chat, when you are working on the board and only the ' +
   'user can say, but a sensible guess lets you go on). ' +
   "A list that isn't shared with you says so in its name: you can add to it, not read it. " +
+  'The user can get your attention from the board (its Tell Claude button) while you listen: when you leave them ' +
+  `questions, or they say they will tell you from the board, start "${process.execPath}" "${appPath('scripts', 'wait-ping.mjs')}" ` +
+  '"Claude · <a few words for this chat>" as a background command; it ends with what they said when they click it (then ' +
+  'act on it, and start it again to go on listening), and the board shows Tell Claude only while you listen. ' +
   "Notes (sticky notes, journal): read() gives a note's whole text; change it with the card's append(text), or " +
   "setText(text) to write it all anew (that waits for the user's Allow), not by editing its file. The user's comments on a card may be for you: answer with the card's comment(). " +
   "Every removal waits for the user to allow it in Cockpit. If 'Today's tasks' is missing, the Today card is not on " +

@@ -7,6 +7,8 @@
 // say which card each action touched.
 import { useEffect, useRef, useState } from 'react'
 import { ViewportPortal, useReactFlow, useStore } from '@xyflow/react'
+import { ArrowUp } from 'lucide-react'
+import { get, post } from '../api'
 import { emit, onEvent } from '../lib'
 import { cn } from '@/lib/utils'
 
@@ -149,6 +151,7 @@ export function AgentPill() {
     }, 1000)
     return () => clearInterval(t)
   }, [s.phase, s.at])
+  const listening = useListening()
   const ago = Math.round((Date.now() - s.at) / 1000)
   const when = ago < 5 ? 'just now' : `${ago} s ago`
   const text =
@@ -156,11 +159,78 @@ export function AgentPill() {
       ? s.tool === 'act'
         ? `${s.name} is working on the board`
         : `${s.name} is looking at the board`
-      : `${s.name} ${s.acted ? 'worked on' : 'looked at'} the board · ${when}`
+      : s.phase === 'after'
+        ? `${s.name} ${s.acted ? 'worked on' : 'looked at'} the board · ${when}`
+        : listening.length
+          ? `${nameOf(listening[0])} is listening`
+          : ''
+  const shown = s.phase !== 'idle' || listening.length > 0
   return (
-    <div className={cn('agent-pill glass', s.phase !== 'idle' && 'is-shown', s.phase === 'after' && 'is-after')} role="status" aria-live="polite">
+    <div className={cn('agent-pill glass', shown && 'is-shown', s.phase === 'after' && 'is-after', s.phase === 'idle' && 'is-listening')} role="status" aria-live="polite">
       <span className="agent-pill-dot" aria-hidden />
-      {s.phase === 'idle' && !s.at ? '' : text}
+      <span>{text}</span>
+      {listening.length > 0 && s.phase !== 'busy' && <TellClaude who={listening} />}
     </div>
+  )
+}
+
+/** The chats listening for the user right now (each running scripts/wait-ping.mjs), by name. */
+export function useListening() {
+  const [labels, setLabels] = useState<string[]>([])
+  useEffect(() => {
+    get<{ listening: string[] }>('/api/agent/listening').then(r => setLabels(r.listening), () => {})
+    return onEvent('agent-listening', (d: { listening?: string[] }) => setLabels(d.listening || []))
+  }, [])
+  return labels
+}
+
+/** Tells the listening chat something: a few words, or just that the user wants it to look. Enter sends, Esc closes. */
+export function TellClaude({ who, about, text: preset, label = 'Tell Claude' }: { who: string[]; about?: string; text?: string; label?: string }) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [sent, setSent] = useState('')
+  const name = who.length === 1 ? who[0] : `${who.length} chats`
+  const send = async (words: string) => {
+    try {
+      const r = await post<{ told: string[] }>('/api/agent/ping', { text: words, ...(about ? { about } : {}) })
+      setSent(r.told.length ? 'Sent' : 'No one is listening now')
+    } catch {
+      setSent("Couldn't send it")
+    }
+    setOpen(false)
+    setText('')
+    setTimeout(() => setSent(''), 2500)
+  }
+  if (sent) return <span className="tell-sent">{sent}</span>
+  // a set message (the Questions card's "I've answered"): one click
+  if (preset) return <button type="button" className="tell-btn" title={`Wakes ${name} with: ${preset}`} onClick={() => send(preset)}>{label}</button>
+  return open ? (
+    <form
+      className="tell-form"
+      onSubmit={e => {
+        e.preventDefault()
+        send(text)
+      }}
+    >
+      <input
+        autoFocus
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => {
+          e.stopPropagation()
+          if (e.key === 'Escape') setOpen(false)
+        }}
+        placeholder="Look at the board, or say what…"
+        aria-label={`Tell ${name}`}
+        maxLength={2000}
+      />
+      <button type="submit" className="tell-send" aria-label="Send">
+        <ArrowUp className="size-3.5" strokeWidth={2.25} />
+      </button>
+    </form>
+  ) : (
+    <button type="button" className="tell-btn" title={`Wakes ${name}, so it looks at the board`} onClick={() => setOpen(true)}>
+      {label}
+    </button>
   )
 }

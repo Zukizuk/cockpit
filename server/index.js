@@ -161,6 +161,18 @@ function windowForAgent() {
   return [...clients].at(-1) || null
 }
 const agentCallInfo = new Map() // id -> { agent, tool } (for the log, when the window answers)
+// agents listening for the user's Tell Claude (GET /api/agent/wait): each an open response, answered when the user pings
+const pingWaiters = new Set()
+const listeningLabels = () => [...new Set([...pingWaiters].map(w => w.label))]
+const sayListening = () => broadcast('agent-listening', { listening: listeningLabels() })
+function answerWaiter(w, payload) {
+  if (!pingWaiters.delete(w)) return
+  clearTimeout(w.timer)
+  try {
+    json(w.res, 200, payload)
+  } catch {}
+  sayListening()
+}
 function callBoard(tool, input, { agent = 'other', label = '' } = {}) {
   if (!AGENT_TOOLS.has(tool)) throw new UserError(`No board tool ${tool}`)
   const who = AGENTS.includes(agent) ? agent : 'other'
@@ -476,6 +488,24 @@ async function api(req, res, url) {
   // what agents did on the board (Settings > Agents)
   if (area === 'agent' && a === 'log' && method === 'GET') return json(res, 200, readAgentLog().reverse())
 
+  // An agent listening for the user (scripts/wait-ping.mjs, which a Claude Code chat runs in the background): this
+  // stays open until the user clicks Tell Claude on the board, then answers with what they said, and the agent is woken
+  // as its background command ends. Every 4 minutes it answers "again" and the script asks once more (a fetch gives
+  // up on an answer after 5).
+  if (area === 'agent' && a === 'wait' && method === 'GET') {
+    const w = { res, label: String(url.searchParams.get('label') || 'Claude').slice(0, 120), since: Date.now() }
+    w.timer = setTimeout(() => answerWaiter(w, { again: true }), 4 * 60_000)
+    pingWaiters.add(w)
+    sayListening()
+    req.on('close', () => {
+      if (!pingWaiters.delete(w)) return
+      clearTimeout(w.timer)
+      sayListening()
+    })
+    return
+  }
+  if (area === 'agent' && a === 'listening' && method === 'GET') return json(res, 200, { listening: listeningLabels() })
+
   // board tools (experimental): the MCP server's call, a window's answer, and which window was used last
   if (area === 'agent' && method === 'POST') {
     const body = await readBody(req)
@@ -505,6 +535,15 @@ async function api(req, res, url) {
       const w = [...clients].find(c => c.cockpitClient === Number(body.client))
       if (w) agentWindow = w
       return json(res, 200, { ok: true })
+    }
+    // the user's Tell Claude: to every agent listening (the board shows who that is)
+    if (a === 'ping') {
+      const text = String(body.text ?? '').trim().slice(0, 2000)
+      const ping = { text: text || 'The user pinged you from the Cockpit board.', at: new Date().toISOString(), ...(body.about ? { about: String(body.about).slice(0, 200) } : {}) }
+      const sent = [...pingWaiters].map(w => w.label)
+      for (const w of [...pingWaiters]) answerWaiter(w, { ping })
+      logAgentCall({ agent: 'You', tool: 'ping', what: `told ${sent.join(', ') || 'no one'}: ${ping.text.slice(0, 80)}` })
+      return json(res, 200, { told: sent })
     }
   }
 

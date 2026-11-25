@@ -571,6 +571,10 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.questions-tell {
+  display: flex;
+  justify-content: flex-end;
+}
 .questions-sep {
   margin-top: 4px;
   font-size: 11.5px;
@@ -648,6 +652,61 @@
   border-radius: 50%;
   background: var(--agent);
   animation: agent-dot 1.2s ease-in-out infinite;
+}
+/* a chat is listening for the user: the dot steady, and a Tell Claude button (the pill itself lets clicks through) */
+.agent-pill.is-listening .agent-pill-dot {
+  animation: none;
+}
+.tell-btn,
+.tell-form,
+.tell-sent {
+  pointer-events: all;
+}
+.tell-btn {
+  margin-left: 4px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--agent-ink);
+  background: var(--agent);
+  transition-property: filter, scale;
+  transition-duration: 150ms;
+}
+.tell-btn:hover {
+  filter: brightness(1.08);
+}
+.tell-btn:active {
+  scale: 0.96;
+}
+.tell-sent {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.tell-form {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+}
+.tell-form input {
+  width: 220px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  background: var(--background);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.18);
+  outline: none;
+}
+.tell-send {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--agent-ink);
+  background: var(--agent);
 }
 /* done: the dot stops and dims, the words go quieter */
 .agent-pill.is-after {

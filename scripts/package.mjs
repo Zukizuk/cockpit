@@ -34,7 +34,7 @@ fs.mkdirSync(app, { recursive: true })
 // the app: the server bundled (see bundle-server.mjs), its data, the built web app
 await bundleServer(app)
 for (const p of ['server/data', 'web/dist', 'CHANGELOG.md', 'LICENSE', 'README.md', 'package.json']) copy(p)
-for (const p of ['open.vbs', 'send-to.vbs', 'start-hidden.vbs', 'install-startup.ps1', 'install-hotkey.ps1', 'claude-setup.mjs', 'hotkey/CockpitHotkey.cs']) copy(`scripts/${p}`)
+for (const p of ['open.vbs', 'send-to.vbs', 'start-hidden.vbs', 'install-startup.ps1', 'install-hotkey.ps1', 'claude-setup.mjs', 'wait-ping.mjs', 'hotkey/CockpitHotkey.cs']) copy(`scripts/${p}`)
 copy('web/public/icons/cockpit.ico', 'cockpit.ico')
 
 // the bundle carries code from these packages: their licences go along in one file, as node_modules did

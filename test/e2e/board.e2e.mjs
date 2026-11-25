@@ -514,6 +514,21 @@ test('Claude asks a question with its guess in grey and carries on; the person a
   await page.locator('.react-flow__node-questions').evaluate(el => el.scrollIntoView())
 })
 
+test('a chat listening for the board shows on the pill; Tell Claude wakes it with what was typed', async () => {
+  await clearSelection()
+  // what scripts/wait-ping.mjs does: an open request, answered when the user pings
+  const waiting = fetch(`${base}/api/agent/wait?label=${encodeURIComponent('Claude · e2e')}`, { headers: H }).then(r => r.json())
+  // (the pill says "Claude is listening", or, in the half minute after Claude worked, that it did; the button either way)
+  const tell = page.locator('.agent-pill.is-shown').getByRole('button', { name: 'Tell Claude' })
+  assert.ok(await until(async () => (await tell.count()) === 1), 'the pill has a Tell Claude button')
+  await tell.click()
+  await page.getByRole('textbox', { name: /Tell Claude/ }).fill('Have a look at my plan')
+  await page.keyboard.press('Enter')
+  const got = await waiting
+  assert.equal(got.ping?.text, 'Have a look at my plan')
+  assert.ok(await until(async () => (await page.getByRole('button', { name: 'Tell Claude' }).count()) === 0), 'no one listening now: no button')
+})
+
 // last: a pasted card lands where the mouse is, on the empty spot the other tests use
 test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short password goes to Snippets', async () => {
   await clearSelection()
