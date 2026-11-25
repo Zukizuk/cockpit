@@ -57,6 +57,14 @@ function needsAllow(component: string, action: string, args: unknown[] | undefin
   return null
 }
 
+/**
+ * What is on the board now. UI SDK keeps listing a component that left the page ("offPage", with the state it had):
+ * on a board, that's a card taken off, which is gone, so it's left out (else an agent sees cards that aren't there).
+ */
+function onPage<T>(out: T): T {
+  return (Array.isArray(out) ? out.filter(c => !(c && typeof c === 'object' && (c as { offPage?: unknown }).offPage)) : out) as T
+}
+
 let started = false
 let me = 0
 /** The steps of the call running now that the person has already allowed, all at once: how many of each action. */
@@ -137,14 +145,14 @@ export function startAgentBridge(ask: Ask) {
         what = steps.map(s => `${String(s.action ?? '')} on ${String(s.ref ?? '')}`).join(', ')
         saw = []
       }
-      if (c.tool === 'snapshot') output = agent.snapshot()
+      if (c.tool === 'snapshot') output = onPage(agent.snapshot())
       else if (c.tool === 'act') {
         const steps = (c.input as { steps?: { ref?: unknown; action?: unknown; args?: unknown[] }[] })?.steps
         if (Array.isArray(steps) && !(await askAllAtOnce(steps))) output = { ok: false, error: { message: 'The user did not allow these changes, so none of the steps ran.' }, steps: [] }
         else output = trimAct(await agent.act(c.input as Parameters<typeof agent.act>[0]))
         allowed = new Map()
       }
-      else if (c.tool === 'query') output = await agent.query((c.input || {}) as Parameters<typeof agent.query>[0])
+      else if (c.tool === 'query') output = onPage(await agent.query((c.input || {}) as Parameters<typeof agent.query>[0]))
       else output = { error: `No tool ${c.tool}` }
     } catch (e: any) {
       output = { error: e?.message || String(e) }

@@ -307,6 +307,7 @@ test('Claude draws an arrow between cards it can see, sees it on both, and takin
   await clearSelection()
 })
 
+
 test('an arrow leaves and reaches the middle of a side; a card dragged near level snaps into line and the arrow runs straight', async () => {
   await clearSelection()
   const card = id => page.locator(`.react-flow__node[data-id="${id}"]`)
@@ -384,8 +385,10 @@ test('sections: one from the board menu or around selected cards, named, dragged
   // from the board's menu: a new one where it was right-clicked, its title ready to type
   await page.mouse.click(EMPTY.x, EMPTY.y, { button: 'right' })
   await page.getByRole('menuitem', { name: /Section here/ }).click()
-  await page.keyboard.type('Ideas')
-  await page.keyboard.press('Enter')
+  await titleReady()
+  // into the title box itself (typing at the keyboard can lose a letter while focus settles)
+  await page.locator('.section-title input').fill('Ideas')
+  await page.locator('.section-title input').press('Enter')
   assert.ok(await until(async () => (await sections()).some(s => s.title === 'Ideas')), 'made and named')
   await removeSection('Ideas')
   assert.ok(await until(async () => (await sections()).length === 0), 'taken off')
@@ -399,8 +402,8 @@ test('sections: one from the board menu or around selected cards, named, dragged
   await note('Shared plan').click({ position: { x: 150, y: 200 }, modifiers: ['Shift'] })
   await page.keyboard.press('Control+Alt+g')
   await titleReady()
-  await page.keyboard.type('Plan')
-  await page.keyboard.press('Enter')
+  await page.locator('.section-title input').fill('Plan')
+  await page.locator('.section-title input').press('Enter')
   assert.ok(await until(async () => (await sections()).some(s => s.title === 'Plan')), 'around the two')
   const snap = await agent('snapshot')
   assert.equal(snap.output.find(c => c.label === 'Shared plan').value.section, 'Plan', 'Claude sees which section a card is in')
@@ -586,4 +589,20 @@ test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short p
   await paste('nkC6Hsyvm8UnRe')
   const secret = await until(async () => (await api('/api/snippets')).find(s => s.secret))
   assert.ok(secret, 'kept in Snippets as a secret')
+})
+
+// after the last: a card made and taken off (making one moves the view)
+test("a card taken off isn't in what Claude sees any more", async () => {
+  await clearSelection()
+  const made = await agent('act', { steps: [{ ref: 'Board', action: 'addSticky', args: ['Gone soon'] }] })
+  assert.equal(made.output.ok, true)
+  const titles = async () => (await agent('snapshot')).output.filter(c => c.component === 'card').map(c => c.label)
+  assert.ok(await until(async () => (await titles()).includes('Gone soon')), 'there')
+  const off = agent('act', { steps: [{ ref: 'Gone soon', action: 'remove' }] })
+  const allow = page.getByRole('button', { name: 'Allow', exact: true })
+  assert.ok(await until(async () => (await allow.count()) === 1))
+  await allow.click()
+  assert.equal((await off).output.ok, true)
+  assert.ok(await until(async () => !(await titles()).includes('Gone soon')), 'not listed, not even as off the page')
+  assert.deepEqual((await agent('query', { text: 'Gone soon' })).output, [], 'not found either')
 })
