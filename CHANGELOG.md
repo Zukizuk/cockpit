@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Fixed**
+- An update (Settings → Updates) rewrote the Start menu entry and Explorer's Send to → Cockpit even when they pointed somewhere else, like another copy of Cockpit. It now refreshes them only when they point at the copy being updated. A new install can skip Send to with -NoSendTo. The installer also ends with a success code instead of 1.
+
 ## 24 November 2026 (version 0.2.7)
 
 **New**

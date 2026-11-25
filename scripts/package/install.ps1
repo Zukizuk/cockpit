@@ -1,7 +1,8 @@
 # Installs Cockpit from this folder (an unzipped release) for the current Windows user. No admin rights needed.
 #
 #   - copies the app and its own Node to %LOCALAPPDATA%\Programs\Cockpit (or -InstallDir)
-#   - adds "Cockpit" to the Start menu and to Explorer's Send to, and starts the server at login (-NoStartup to skip)
+#   - adds "Cockpit" to the Start menu and to Explorer's Send to, and starts the server at login (-NoStartMenu,
+#     -NoSendTo and -NoStartup skip them)
 #   - builds and starts the Cockpit helper: Ctrl+Alt+K brings Cockpit up and keeps its server running (-NoHotkey to skip)
 #   - offers to connect Cockpit to Claude Code, if Claude Code is installed (-Claude yes|no to answer up front):
 #     the show and snippet tools, and the Outputs list (a hook that lists what each turn made)
@@ -16,20 +17,26 @@ param(
   [switch]$NoStartMenu,
   [switch]$NoHotkey,
   [switch]$NoOpen,
+  [switch]$NoSendTo,
   [ValidateSet('ask', 'yes', 'no')][string]$Claude = 'ask',
   [switch]$Update
 )
 $ErrorActionPreference = 'Stop'
 $from = $PSScriptRoot
 $startupDir = [Environment]::GetFolderPath('Startup')
+$menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'Cockpit.lnk'
+$sendTo = Join-Path ([Environment]::GetFolderPath('SendTo')) 'Cockpit.lnk'
 if ($Update) {
-  # keep what was chosen at install: the login start and the helper only if they're there now; Claude as it is
+  # keep what was chosen at install: the login start, the helper, the Start menu and Send to only if they're there now
+  # and point at this copy (not another install, or a clone's); Claude as it is
   $NoOpen = $true
   $Claude = 'no'
   $sh0 = New-Object -ComObject WScript.Shell
-  $pointsHere = { param($name) $l = Join-Path $startupDir $name; (Test-Path $l) -and ("$($sh0.CreateShortcut($l).TargetPath) $($sh0.CreateShortcut($l).Arguments)".Contains($InstallDir)) }
-  if (-not (& $pointsHere 'Cockpit server.lnk')) { $NoStartup = $true }
-  if (-not (& $pointsHere 'Cockpit hotkey.lnk')) { $NoHotkey = $true }
+  $pointsHere = { param($l) (Test-Path $l) -and ("$($sh0.CreateShortcut($l).TargetPath) $($sh0.CreateShortcut($l).Arguments)".Contains($InstallDir)) }
+  if (-not (& $pointsHere (Join-Path $startupDir 'Cockpit server.lnk'))) { $NoStartup = $true }
+  if (-not (& $pointsHere (Join-Path $startupDir 'Cockpit hotkey.lnk'))) { $NoHotkey = $true }
+  if (-not (& $pointsHere $menu)) { $NoStartMenu = $true }
+  if (-not (& $pointsHere $sendTo)) { $NoSendTo = $true }
 }
 if (-not (Test-Path (Join-Path $from 'app\server\index.js'))) { throw "Run this from the unzipped Cockpit folder (app\ and runtime\ should be beside it)." }
 
@@ -59,7 +66,6 @@ $sh = New-Object -ComObject WScript.Shell
 
 # Start menu: Cockpit (starts the server if needed, then opens the window). If Cockpit was installed as an app
 # from Edge, that shortcut is kept: it opens the same thing.
-$menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'Cockpit.lnk'
 $edgeApp = (Test-Path $menu) -and ($sh.CreateShortcut($menu).Arguments -match '--app-id=')
 if (-not $NoStartMenu -and -not $edgeApp) {
   $l = $sh.CreateShortcut($menu)
@@ -72,16 +78,17 @@ if (-not $NoStartMenu -and -not $edgeApp) {
   Step 'Added Cockpit to the Start menu'
 }
 
-# Explorer's Send to > Cockpit: the files and folders sent come onto the board
-$sendTo = Join-Path ([Environment]::GetFolderPath('SendTo')) 'Cockpit.lnk'
-$l = $sh.CreateShortcut($sendTo)
-$l.TargetPath = Join-Path $env:WINDIR 'System32\wscript.exe'
-$l.Arguments = "`"$(Join-Path $scripts 'send-to.vbs')`""
-$l.WorkingDirectory = $app
-$l.IconLocation = Join-Path $app 'cockpit.ico'
-$l.Description = 'Put it on your Cockpit board'
-$l.Save()
-Step 'Added Cockpit to Send to (right-click a file in Explorer)'
+# Explorer's Send to > Cockpit: the files and folders sent come onto the board (-NoSendTo to skip)
+if (-not $NoSendTo) {
+  $l = $sh.CreateShortcut($sendTo)
+  $l.TargetPath = Join-Path $env:WINDIR 'System32\wscript.exe'
+  $l.Arguments = "`"$(Join-Path $scripts 'send-to.vbs')`""
+  $l.WorkingDirectory = $app
+  $l.IconLocation = Join-Path $app 'cockpit.ico'
+  $l.Description = 'Put it on your Cockpit board'
+  $l.Save()
+  Step 'Added Cockpit to Send to (right-click a file in Explorer)'
+}
 
 if (-not $NoStartup) {
   & (Join-Path $scripts 'install-startup.ps1') | Out-Null
@@ -135,3 +142,6 @@ if ($Update) {
 elseif ($hotkey) { Write-Host 'Cockpit is installed. Open it from the Start menu, or press Ctrl+Alt+K.' }
 else { Write-Host 'Cockpit is installed. Open it from the Start menu.' }
 if (-not $NoOpen) { Start-Process (Join-Path $env:WINDIR 'System32\wscript.exe') "`"$(Join-Path $scripts 'open.vbs')`"" }
+
+# robocopy says 1 for "files copied": a successful install ends with 0
+exit 0
