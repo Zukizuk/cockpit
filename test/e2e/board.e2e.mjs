@@ -455,6 +455,84 @@ test('sections: one from the board menu or around selected cards, named, dragged
   await clearSelection()
 })
 
+test('a section folds to its bar and opens, tucks away with its cards, and goes with its last cards; Claude does both too', async () => {
+  await clearSelection()
+  const board = () => api('/api/board')
+  const plan = async () => (await board()).cards.find(c => c.type === 'section' && c.title === 'Plan')
+  // the section from the test before (put back by its undo), or a new one round the shared note
+  if (!(await until(plan, 3000))) {
+    await agent('act', { steps: [{ ref: 'Board', action: 'addSection', args: ['Plan', ['Shared plan']] }] })
+    assert.ok(await until(plan), 'a section to work with')
+  }
+  const s = await plan()
+  const all = async () => (await board()).cards
+  const heldIds = async () => (await all()).filter(c => c.inside === s.id).map(c => c.id).sort()
+  const inIt = (await all()).filter(c => c.type !== 'section' && !c.space && !c.tucked && c.x + c.w / 2 > s.x && c.x + c.w / 2 < s.x + s.w && c.y + c.h / 2 > s.y && c.y + c.h / 2 < s.y + s.h).map(c => c.id).sort()
+  assert.ok(inIt.includes('shared'), 'the shared note is in it')
+  const title = page.locator(`.react-flow__node-section[data-id="${s.id}"] .section-title`)
+  const visible = id => page.locator(`.react-flow__node[data-id="${id}"]`).isVisible()
+
+  // folded by the chevron in its title: a bar, the cards out of sight where they were
+  await title.locator('.section-fold').click()
+  assert.ok(await until(async () => (await plan()).folded && (await heldIds()).join() === inIt.join()), 'folded, holding what was in it')
+  assert.equal(await visible('shared'), false, 'its cards are out of sight')
+  assert.match(await page.locator('.section-bar').innerText(), new RegExp(`${inIt.length} cards? in it`), 'the bar says how many')
+  const snap = await agent('snapshot')
+  assert.equal(snap.output.find(c => c.label === 'Shared plan').value.inFoldedSection, true, 'Claude sees the card is in a folded section')
+  assert.deepEqual(snap.output.find(c => c.component === 'board').value.foldedSections, ['Plan'])
+
+  // dragged folded: what it holds comes along, out of sight
+  const before = Object.fromEntries((await all()).map(c => [c.id, { x: c.x, y: c.y }]))
+  const t = await title.boundingBox()
+  await page.mouse.move(t.x + 40, t.y + t.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(t.x + 43, t.y + t.height / 2 + 3)
+  await page.mouse.move(t.x + 44, t.y + t.height / 2 + 4)
+  await page.mouse.move(t.x + 100, t.y + t.height / 2 + 34, { steps: 5 })
+  await page.mouse.move(t.x + 140, t.y + t.height / 2 + 54, { steps: 5 })
+  await page.mouse.up()
+  await page.waitForTimeout(900)
+  const after = Object.fromEntries((await all()).map(c => [c.id, { x: c.x, y: c.y }]))
+  const dx = after[s.id].x - before[s.id].x
+  const dy = after[s.id].y - before[s.id].y
+  assert.ok(dx > 50, `the section moved (${dx}, ${dy})`)
+  for (const id of inIt) assert.deepEqual([after[id].x - before[id].x, after[id].y - before[id].y], [dx, dy], `${id} came along`)
+
+  // opened from its bar: all back, in it
+  await page.locator('.section-bar').click()
+  assert.ok(await until(async () => !(await plan()).folded && (await heldIds()).length === 0), 'open again')
+  assert.ok(await until(() => visible('shared')), 'its cards are back')
+
+  // tucked from its menu: one tab, the cards with it
+  await title.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /^Tuck it away at the top, with what/ }).click()
+  assert.ok(await until(async () => (await plan()).tucked && (await heldIds()).join() === inIt.join()), 'tucked with what was in it')
+  const tabs = page.locator('.tuck-tab')
+  assert.deepEqual(await tabs.allInnerTexts(), ['Plan'], 'one tab, the section')
+  assert.deepEqual((await agent('snapshot')).output.find(c => c.component === 'board').value.tuckedSections, ['Plan'], 'Claude sees it tucked')
+  await tabs.first().click()
+  assert.ok(await until(async () => !(await plan()).tucked && (await heldIds()).length === 0), 'back')
+  assert.ok(await until(() => visible('shared')), 'with its cards')
+
+  // its cards tucked: it goes with them, no empty box left
+  await title.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /^Select what/ }).click()
+  await page.locator(`.react-flow__node[data-id="${inIt[0]}"]`).click({ button: 'right', position: { x: 60, y: 12 } })
+  await page.getByRole('menuitem', { name: /^Tuck (these \d+ )?away/ }).click()
+  assert.ok(await until(async () => (await plan()).tucked && (await heldIds()).join() === inIt.join()), 'the section went with its last cards')
+  assert.deepEqual(await tabs.allInnerTexts(), ['Plan'], 'one tab, the section')
+
+  // Claude brings it back, folds it and opens it
+  const act = (action, args) => agent('act', { steps: [{ ref: 'Board', action, args }] })
+  assert.equal((await act('tuckSection', ['Plan', false])).output.ok, true)
+  assert.ok(await until(async () => !(await plan()).tucked && (await heldIds()).length === 0), 'Claude brought it back')
+  assert.equal((await act('foldSection', ['Plan'])).output.ok, true)
+  assert.ok(await until(async () => (await plan()).folded), 'Claude folded it')
+  assert.equal((await act('foldSection', ['Plan', false])).output.ok, true)
+  assert.ok(await until(async () => !(await plan()).folded && (await heldIds()).length === 0), 'Claude opened it')
+  await clearSelection()
+})
+
 test('while Claude reads a card a frame round it says so, the pill says Claude is at work, and both go a moment later', async () => {
   await clearSelection()
   const out = await agent('act', { steps: [{ ref: 'Shared plan', action: 'read' }] })

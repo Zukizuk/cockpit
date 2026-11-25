@@ -42,7 +42,10 @@ const BOARD_NOTE =
   "(the board's focus lists the cards in focus); compare(cardA, cardB) opens two files, pages or notes full screen " +
   "side by side (cardA on the left) for the user to read and compare, notes still editable; addSection(title, cards) " +
   'puts a section (a titled area, which the cards in it move with) around the cards named, an array of titles in the ' +
-  'space shown; fitSection(section) makes a section just big enough for what is in it; removeSection(section, ' +
+  'space shown; fitSection(section) makes a section just big enough for what is in it; foldSection(section, fold?) ' +
+  "folds it to a bar, what is in it out of sight where it was (fold false opens it; the board's foldedSections lists " +
+  'them; a card in one says inFoldedSection); tuckSection(section, tuck?) tucks it away at the top with what is in it ' +
+  "(tuck false brings it back; the board's tuckedSections lists them); removeSection(section, " +
   'withCards?) takes a section off (its cards stay, unless withCards is true; it waits for Allow). Each card is a component ' +
   '(card) named by its title ' +
   "(the cards of the lists are 'Today card', 'Later card', 'Snippets card' and 'Questions card'): " +

@@ -5,7 +5,7 @@
 // card added or taken off) can be undone with Ctrl+Z.
 import { startAgentBridge } from './agent/bridge'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useReactFlow, type Edge, type Node } from '@xyflow/react'
+import { useReactFlow, useStore, type Edge, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
 import { get, post, put, track, type Board, type BoardCard, type BoardLink, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
 import { pack } from './layout'
@@ -49,10 +49,12 @@ export const FOLDED_H = 46
 /** A sticky note rolls up into its strip (30px) with the roll showing under it. */
 export const STICKY_FOLDED_H = 36
 /** How tall a card is folded: its title line; a sticky note, its strip. */
-export const foldedH = (type: string | undefined, ref: string) => (isSticky(type, ref) ? STICKY_FOLDED_H : FOLDED_H)
+/** A folded section is a bar under its title. */
+export const SECTION_FOLDED_H = 44
+export const foldedH = (type: string | undefined, ref: string) => (type === 'section' ? SECTION_FOLDED_H : isSticky(type, ref) ? STICKY_FOLDED_H : FOLDED_H)
 
 /** openH: the height a folded card goes back to when it's unfolded. */
-export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean; agents?: AgentMark; title?: string }
+export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean; agents?: AgentMark; title?: string; inside?: string }
 export type CardNode = Node<CardData, CardType>
 
 /** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
@@ -70,7 +72,7 @@ export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}), ...(c.title ? { title: c.title } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}), ...(c.title ? { title: c.title } : {}), ...(c.inside ? { inside: c.inside } : {}) },
   width: HUGS.has(c.type) ? undefined : c.w,
   height: c.folded ? foldedH(c.type, c.ref) : HUGS.has(c.type) || (AUTO_HEIGHT.has(c.type) && !keepsSize(c)) ? undefined : c.h,
   dragHandle: '.card-drag',
@@ -95,6 +97,7 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.veiled ? { veiled: true } : {}),
   ...(n.data.agents ? { agents: n.data.agents } : {}),
   ...(n.type === 'section' && n.data.title ? { title: n.data.title } : {}),
+  ...(n.data.inside ? { inside: n.data.inside } : {}),
 })
 
 // ---- arrows ---------------------------------------------------------------------------------------------------
@@ -152,8 +155,50 @@ export function sectionOf(n: CardNode, nodes: CardNode[]) {
   return holding.sort((a, b) => boxOf(a).w * boxOf(a).h - boxOf(b).w * boxOf(b).h)[0]
 }
 
-/** Off the board right now: in another space, or tucked away at the top edge. */
-export const offBoard = (c: { space?: string; tucked?: boolean }, space: string) => (c.space || 'main') !== space || !!c.tucked
+/** Off the board right now: in another space, tucked away at the top edge, or inside a folded or tucked section. */
+export const offBoard = (c: { space?: string; tucked?: boolean; inside?: string }, space: string) => (c.space || 'main') !== space || !!c.tucked || !!c.inside
+
+// A section folded (just its bar) or tucked away holds what was in it: each of those cards says which section
+// ("inside"), hidden, where it was. They come back when the section opens or comes back. A section in a section that
+// goes is held the same way, and its own cards stay with it.
+/** The cards a section holds while it's folded or tucked, and the ones they hold in turn. */
+export function heldBy(id: string, nodes: CardNode[]): CardNode[] {
+  const out: CardNode[] = []
+  let ids = new Set([id])
+  for (let i = 0; i < 6 && ids.size; i++) {
+    const next = nodes.filter(n => n.data.inside && ids.has(n.data.inside))
+    out.push(...next)
+    ids = new Set(next.map(n => n.id))
+  }
+  return out
+}
+/** Lets go of cards whose section is gone, open again or back: they're on the board again (if in this space). */
+export function settle(ns: CardNode[], space: string): CardNode[] {
+  let out = ns
+  for (let i = 0; i < 6; i++) {
+    const byId = new Map(out.map(n => [n.id, n]))
+    let changed = false
+    out = out.map(n => {
+      if (!n.data.inside) return n
+      const s = byId.get(n.data.inside)
+      if (s && (s.data.folded || s.data.tucked || s.data.inside)) return n
+      changed = true
+      const { inside: _i, ...data } = n.data
+      return { ...n, data, hidden: offBoard({ space: data.space, tucked: data.tucked }, space) }
+    })
+    if (!changed) break
+  }
+  return out
+}
+/** Whether some card is held by a section that no longer holds it (settle would change something). */
+export const unsettled = (ns: CardNode[]) => {
+  const byId = new Map(ns.map(n => [n.id, n]))
+  return ns.some(n => {
+    if (!n.data.inside) return false
+    const s = byId.get(n.data.inside)
+    return !s || !(s.data.folded || s.data.tucked || s.data.inside)
+  })
+}
 
 /** The space a card is in. */
 export const spaceOf = (n: { data: CardData }) => n.data.space || 'main'
@@ -339,6 +384,10 @@ interface Ctx {
   setSectionTitle: (id: string, title: string) => void
   /** Makes a section just big enough for what's in it; false when it holds nothing. */
   fitSection: (id: string) => boolean
+  /** Folds a section to its bar (what's in it hidden, where it was) or opens it again. */
+  foldSection: (id: string, fold: boolean) => void
+  /** What's in a section: the cards on the board in it, and the ones it holds while folded. */
+  sectionCards: (id: string) => CardNode[]
 }
 
 const BoardCtx = createContext<Ctx | null>(null)
@@ -549,10 +598,50 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     (ids: string[]) => {
       const set = new Set(ids)
       if (!set.size) return
+      const here = rf.getNodes().filter(n => !n.hidden)
+      // a section tucked takes what's in it along: one tab, and they come back with it
+      const held = new Map<string, string>()
+      const bySize = here.filter(isSection).sort((a, b) => boxOf(a).w * boxOf(a).h - boxOf(b).w * boxOf(b).h)
+      for (const s of bySize.filter(s => set.has(s.id)))
+        for (const n of contentsOf(s, here))
+          if (!held.has(n.id)) {
+            held.set(n.id, s.id)
+            set.delete(n.id)
+          }
+      // the last cards out of a section take it with them (no empty box left behind)
+      let along = 0
+      for (const s of bySize.filter(s => !set.has(s.id) && !held.has(s.id))) {
+        const inS = contentsOf(s, here)
+        if (!inS.length || !inS.every(n => set.has(n.id) || held.has(n.id))) continue
+        set.add(s.id)
+        along++
+        for (const n of inS)
+          if (set.has(n.id)) {
+            set.delete(n.id)
+            held.set(n.id, s.id)
+          }
+      }
       remember()
-      rf.setNodes(ns => ns.map(n => (set.has(n.id) ? { ...n, hidden: true, selected: false, data: { ...n.data, tucked: true } } : n)))
+      rf.setNodes(ns =>
+        ns.map(n =>
+          set.has(n.id)
+            ? { ...n, hidden: true, selected: false, data: { ...n.data, tucked: true } }
+            : held.has(n.id)
+            ? { ...n, hidden: true, selected: false, data: { ...n.data, inside: held.get(n.id) } }
+            : n,
+        ),
+      )
       persist()
-      toast(set.size === 1 ? 'Tucked away at the top' : `${set.size} cards tucked away at the top`, { label: 'Undo', run: () => undoRef.current() })
+      const sections = [...set].filter(id => isSection(rf.getNode(id) ?? {}))
+      const words =
+        set.size === 1 && sections.length === 1
+          ? along
+            ? 'Tucked away at the top, with its section'
+            : 'Section tucked away at the top, with what was in it'
+          : set.size === 1
+          ? 'Tucked away at the top'
+          : `${set.size} tucked away at the top`
+      toast(words, { label: 'Undo', run: () => undoRef.current() })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rf, remember, persist, toast],
@@ -562,8 +651,24 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const n = rf.getNode(id)
       if (!n) return
       remember()
+      // a card held by a section (folded or tucked) comes out with the section, opened
+      const out = new Set<string>()
+      for (let x: CardNode | undefined = n; x?.data.inside; ) {
+        x = rf.getNode(x.data.inside)
+        if (x) out.add(x.id)
+      }
       const { tucked: _t, ...data } = n.data
-      rf.setNodes(ns => ns.map(x => (x.id === id ? { ...x, hidden: false, selected: true, data: { ...data, pulse: Date.now() } } : { ...x, selected: false })))
+      rf.setNodes(ns =>
+        settle(
+          ns.map(x => {
+            if (x.id === id) return { ...x, hidden: false, selected: true, data: { ...data, pulse: Date.now() } }
+            if (!out.has(x.id)) return { ...x, selected: false }
+            const { tucked: _xt, ...d } = foldNode(x, false).data
+            return { ...foldNode(x, false), hidden: offBoard({ ...d }, spaceRef.current), selected: false, data: d }
+          }),
+          spaceRef.current,
+        ),
+      )
       persist()
       // back where it was; the view goes to it only if that's out of sight
       requestAnimationFrame(() => {
@@ -631,7 +736,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const moving = existing && spaceOf(existing) !== spaceRef.current ? existing : null
       if (existing && !moving) {
         // tucked away: it comes back out
-        if (existing.data.tucked) untuck(existing.id)
+        if (existing.data.tucked || existing.data.inside) untuck(existing.id)
         else focus(existing.id)
         return existing.id
       }
@@ -751,6 +856,41 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     },
     [rf, remember, persist],
   )
+
+  const sectionCards = useCallback(
+    (id: string) => {
+      const s = rf.getNode(id)
+      if (!s) return []
+      const all = rf.getNodes()
+      return [...contentsOf(s, all), ...heldBy(id, all)]
+    },
+    [rf],
+  )
+
+  /** A section folded to its bar: what's in it is held, hidden where it was, until it opens again. */
+  const foldSection = useCallback(
+    (id: string, fold: boolean) => {
+      const s = rf.getNode(id)
+      if (!s || !isSection(s) || !!s.data.folded === fold) return
+      track(fold ? 'section.fold' : 'section.unfold')
+      remember()
+      const inS = fold ? new Set(contentsOf(s, rf.getNodes()).map(n => n.id)) : new Set<string>()
+      rf.setNodes(ns =>
+        settle(
+          ns.map(n => (n.id === id ? foldNode(n, fold) : inS.has(n.id) ? { ...n, hidden: true, selected: false, data: { ...n.data, inside: id } } : n)),
+          spaceRef.current,
+        ),
+      )
+      persist()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf, remember, persist],
+  )
+  // a section taken off (Delete, Undo, a removal) lets go of what it held
+  const isUnsettled = useStore(st => unsettled(st.nodes as CardNode[]))
+  useEffect(() => {
+    if (isUnsettled) rf.setNodes(ns => settle(ns, spaceRef.current))
+  }, [isUnsettled, rf])
 
   const setSectionTitle = useCallback(
     (id: string, title: string) => {
@@ -1109,7 +1249,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const viewport = rf.getViewport()
       setSpaces(spacesRef.current.map(x => (x.id === spaceRef.current ? { ...x, viewport } : x)))
       setSpace(id)
-      rf.setNodes(ns => ns.map(n => ({ ...n, hidden: offBoard({ space: spaceOf(n), tucked: n.data.tucked }, id), selected: false })))
+      rf.setNodes(ns => ns.map(n => ({ ...n, hidden: offBoard({ space: spaceOf(n), tucked: n.data.tucked, inside: n.data.inside }, id), selected: false })))
       requestAnimationFrame(() => {
         if (target.viewport) rf.setViewport(target.viewport)
         else if (rf.getNodes().some(n => spaceOf(n) === id)) rf.fitView({ padding: 0.15, maxZoom: 1 })
@@ -1165,7 +1305,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
           if (spaceOf(n) !== id) return n
           moved++
           const { space: _gone, ...data } = n.data
-          return { ...n, data, hidden: offBoard({ tucked: data.tucked }, spaceRef.current) }
+          return { ...n, data, hidden: offBoard({ tucked: data.tucked, inside: data.inside }, spaceRef.current) }
         }),
       )
       persist()
@@ -1192,12 +1332,29 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
         spots.set(n.id, pos)
         there.push({ ...n, position: pos })
       }
+      // what a folded or tucked section holds goes with it, as it was in it
+      const all = rf.getNodes()
+      const shift = new Map<string, { dx: number; dy: number }>()
+      for (const id of set) {
+        const n = all.find(x => x.id === id)
+        const at = spots.get(id)
+        if (!n || !at || !isSection(n)) continue
+        for (const h of heldBy(id, all)) if (!set.has(h.id)) shift.set(h.id, { dx: at.x - n.position.x, dy: at.y - n.position.y })
+      }
       rf.setNodes(ns =>
-        ns.map(n => {
-          if (!set.has(n.id)) return n
-          const { space: _from, tucked: _t, ...data } = n.data
-          return { ...n, position: spots.get(n.id) ?? n.position, data: to === 'main' ? data : { ...data, space: to }, hidden: to !== spaceRef.current, selected: false }
-        }),
+        settle(
+          ns.map(n => {
+            const by = shift.get(n.id)
+            if (by) {
+              const { space: _from, ...data } = n.data
+              return { ...n, position: { x: n.position.x + by.dx, y: n.position.y + by.dy }, data: to === 'main' ? data : { ...data, space: to } }
+            }
+            if (!set.has(n.id)) return n
+            const { space: _from, tucked: _t, ...data } = n.data
+            return { ...n, position: spots.get(n.id) ?? n.position, data: to === 'main' ? data : { ...data, space: to }, hidden: to !== spaceRef.current || !!data.inside, selected: false }
+          }),
+          spaceRef.current,
+        ),
       )
       persist()
       toast(ids.length === 1 ? `Moved to ${target.name}` : `${ids.length} cards moved to ${target.name}`, { label: 'Undo', run: () => undoRef.current() })
@@ -1391,7 +1548,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
 
   const value = useMemo<Ctx>(
     () => ({
-      addCard, removeCard, removeCards, addSection, fitSection, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
+      addCard, removeCard, removeCards, addSection, fitSection, foldSection, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
       keysOpen, setKeysOpen, focusing, toggleFocus, compareCards, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
@@ -1400,7 +1557,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removeCards, addSection, fitSection, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, addSection, fitSection, foldSection, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

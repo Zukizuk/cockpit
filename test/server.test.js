@@ -1353,6 +1353,26 @@ test('sections: kept with the board with their title; a title on anything else i
   assert.equal(n.title, undefined)
 })
 
+test('a folded or tucked section holds its cards; a card held by one gone or open is let go', async () => {
+  const { readBoard, saveBoard } = await import('../server/lib/board.js')
+  saveBoard({
+    cards: [
+      { id: 'f', type: 'section', ref: 'f', x: 0, y: 0, w: 700, h: 400, folded: true },
+      { id: 't', type: 'section', ref: 't', x: 0, y: 900, w: 700, h: 400, tucked: true },
+      { id: 'o', type: 'section', ref: 'o', x: 0, y: 1800, w: 700, h: 400 },
+      { id: 'a', type: 'note', ref: 'a.md', inside: 'f' },
+      { id: 'b', type: 'note', ref: 'b.md', inside: 't' },
+      { id: 'c', type: 'note', ref: 'c.md', inside: 'o' },
+      { id: 'd', type: 'note', ref: 'd.md', inside: 'gone' },
+      { id: 'e', type: 'note', ref: 'e.md', inside: 'a' },
+      { id: 'g', type: 'note', ref: 'g.md', inside: 'g' },
+    ],
+    viewport: null,
+  })
+  const by = Object.fromEntries(readBoard().cards.map(c => [c.id, c.inside]))
+  assert.deepEqual(by, { f: undefined, t: undefined, o: undefined, a: 'f', b: 't', c: undefined, d: undefined, e: undefined, g: undefined })
+})
+
 test('questions: asked with a guess, answered, the answer taken back, asked again, taken away', async () => {
   const q = await import('../server/lib/questions.js')
   const a = q.askQuestion({ question: ' How many are coming? ', guess: 'About 25', about: 'Launch plan', by: 'Claude' })

@@ -12,13 +12,15 @@ export function TuckedTray() {
     JSON.stringify(
       s.nodes
         .filter(n => (n.data as CardNode['data']).tucked && spaceOf(n as CardNode) === board.space)
-        .map(n => [n.id, n.type, (n.data as CardNode['data']).ref, (n.data as CardNode['data']).color || '']),
+        // a section by its title (what's in it went with it)
+        .map(n => [n.id, n.type, n.type === 'section' ? (n.data as CardNode['data']).title || 'Section' : (n.data as CardNode['data']).ref, (n.data as CardNode['data']).color || '']),
     ),
   )
   const tucked = JSON.parse(key) as [string, string, string, string][]
   if (!tucked.length) return null
 
   const titleOf = (type: string, ref: string) => {
+    if (type === 'section') return ref
     if (type === 'item') return board.items.find(x => x.id === ref)?.title || 'File'
     if (type === 'note') {
       if (/^journal\//.test(ref)) return `Journal ${ref.slice(8, 18)}`

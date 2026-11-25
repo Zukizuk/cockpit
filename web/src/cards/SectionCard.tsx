@@ -6,9 +6,9 @@
 import { useEffect, useState } from 'react'
 import { onEvent } from '../lib'
 import { NodeResizer, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
-import { BoxSelect, Heading, Layers, Lock, LockOpen, Shrink, Trash2, X } from 'lucide-react'
+import { ArrowUpToLine, BoxSelect, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Heading, Layers, Lock, LockOpen, Shrink, Trash2, X } from 'lucide-react'
 import { track, type StickyColor } from '../api'
-import { contentsOf, useBoard, type CardNode } from '../board'
+import { contentsOf, heldBy, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { STICKY_COLORS } from './CardShell'
 import { TitleInput } from './NoteCard'
@@ -22,15 +22,16 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
   // F2 on the board, with it selected
   useEffect(() => onEvent('note-rename', (d: { id?: string }) => d.id === id && setNaming(true)), [id])
   const locked = !!data.locked
-  // how many cards are in it (for the menu's words)
+  // folded: just a bar under its title, what's in it held out of sight where it was
+  const folded = !!data.folded
+  // how many cards are in it, held ones too (for the menu's words and the bar)
   const count = useStore(s => {
     const me = s.nodeLookup.get(id) as unknown as CardNode | undefined
-    return me ? contentsOf(me, [...s.nodeLookup.values()] as unknown as CardNode[]).length : 0
+    const all = [...s.nodeLookup.values()] as unknown as CardNode[]
+    return me ? contentsOf(me, all).length + heldBy(id, all).filter(n => n.data.inside === id).length : 0
   })
-  const inside = () => {
-    const me = rf.getNode(id)
-    return me ? contentsOf(me, rf.getNodes()) : []
-  }
+  const inside = () => board.sectionCards(id)
+  const fold = (f: boolean) => board.foldSection(id, f)
   const fit = () => void (board.fitSection(id) || board.toast('Nothing in it yet: drop cards in it'))
   const setColor = (color: StickyColor | null) => {
     rf.setNodes(ns =>
@@ -49,7 +50,7 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
 
   return (
     <>
-      {!locked && (
+      {!locked && !folded && (
         <NodeResizer
           minWidth={240}
           minHeight={160}
@@ -60,7 +61,7 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
           onResizeEnd={() => board.persist()}
         />
       )}
-      <div className={cn('section', data.color && `section-tint paper-${data.color}`, selected && 'is-selected', locked && 'is-locked')}>
+      <div className={cn('section', data.color && `section-tint paper-${data.color}`, selected && 'is-selected', locked && 'is-locked', folded && 'is-folded')}>
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div
@@ -80,6 +81,20 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
                 />
               ) : (
                 <span className="truncate">{name}</span>
+              )}
+              {/* at the end, out of the way of a grab at the title */}
+              {!naming && (
+                <button
+                  type="button"
+                  className="section-fold nodrag"
+                  aria-label={folded ? 'Open the section' : 'Fold the section to its bar'}
+                  title={folded ? 'Open it' : 'Fold it to its bar'}
+                  onPointerDown={e => e.stopPropagation()}
+                  onDoubleClick={e => e.stopPropagation()}
+                  onClick={() => fold(!folded)}
+                >
+                  {folded ? <ChevronRight className="size-3.5" strokeWidth={2} /> : <ChevronDown className="size-3.5" strokeWidth={2} />}
+                </button>
               )}
             </div>
           </ContextMenuTrigger>
@@ -101,16 +116,26 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
               <Heading strokeWidth={1.75} />
               {data.title ? 'Rename' : 'Give it a title'}
             </ContextMenuItem>
-            <ContextMenuItem onSelect={fit} disabled={!count}>
+            <ContextMenuItem onSelect={() => fold(!folded)}>
+              {folded ? <ChevronsUpDown strokeWidth={1.75} /> : <ChevronsDownUp strokeWidth={1.75} />}
+              {folded ? 'Open it' : 'Fold it to its bar'}
+            </ContextMenuItem>
+            <ContextMenuItem onSelect={() => board.tuck([id])}>
+              <ArrowUpToLine strokeWidth={1.75} />
+              {count ? "Tuck it away at the top, with what's in it" : 'Tuck it away at the top'}
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem onSelect={fit} disabled={!count || folded}>
               <Shrink strokeWidth={1.75} />
               Fit it to what's in it
             </ContextMenuItem>
             <ContextMenuItem
               onSelect={() => {
                 const ids = new Set(inside().map(n => n.id))
-                rf.setNodes(ns => ns.map(n => ({ ...n, selected: ids.has(n.id) })))
+                // once the menu has closed (closing, it hands the title the focus, which picked the section again)
+                setTimeout(() => rf.setNodes(ns => ns.map(n => ({ ...n, selected: ids.has(n.id) }))), 120)
               }}
-              disabled={!count}
+              disabled={!count || folded}
             >
               <BoxSelect strokeWidth={1.75} />
               Select what's in it
@@ -124,7 +149,7 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
               .filter(x => x.id !== board.space)
               .slice(0, 8)
               .map(x => (
-                <ContextMenuItem key={x.id} onSelect={() => board.moveToSpace([id, ...inside().map(n => n.id)], x.id)}>
+                <ContextMenuItem key={x.id} onSelect={() => board.moveToSpace([id, ...inside().filter(n => !n.data.inside).map(n => n.id)], x.id)}>
                   <Layers strokeWidth={1.75} />
                   Move to {x.name}, with what's in it
                 </ContextMenuItem>
@@ -148,6 +173,12 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
             )}
           </ContextMenuContent>
         </ContextMenu>
+        {folded && (
+          <button type="button" className="section-bar nodrag" onClick={() => fold(false)} title="Open it">
+            <span className="truncate">{count === 0 ? 'Nothing in it' : count === 1 ? '1 card in it' : `${count} cards in it`}</span>
+            <span className="section-bar-open">Open</span>
+          </button>
+        )}
       </div>
     </>
   )

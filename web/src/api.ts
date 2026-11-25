@@ -453,6 +453,8 @@ export interface BoardCard {
   space?: string
   /** Tucked away: a tab at the top edge of the screen until brought back to where it was. */
   tucked?: boolean
+  /** Held by a section that's folded or tucked away (its id): hidden where it was until the section opens again. */
+  inside?: string
   /** Its contents hidden (blurred), as when sharing the screen. */
   veiled?: boolean
   /** Shared with agents, or private (agents never see it); left out: as its space and Settings say. */

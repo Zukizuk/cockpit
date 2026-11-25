@@ -137,7 +137,17 @@ export function saveBoard(body) {
       ...(AGENT_MARKS.has(c.agents) ? { agents: c.agents } : {}),
       // a section's title
       ...(c.type === 'section' && typeof c.title === 'string' && c.title.trim() ? { title: c.title.trim().slice(0, 80) } : {}),
+      // held by a section that's folded or tucked away (hidden where it was, until the section opens or comes back)
+      ...(typeof c.inside === 'string' && c.inside && c.inside !== c.id ? { inside: c.inside.slice(0, 80) } : {}),
     }))
+  // a card held by a section that's gone, or open and on the board, is let go (never stuck out of sight)
+  const byId = new Map(cards.map(c => [c.id, c]))
+  for (let i = 0; i < 6; i++)
+    for (const c of cards) {
+      if (!c.inside) continue
+      const s = byId.get(c.inside)
+      if (!s || s.type !== 'section' || !(s.folded || s.tucked || s.inside)) delete c.inside
+    }
   const viewport = viewportOf(body.viewport)
   const spaces = spacesOf(body.spaces)
   // a card whose space is gone goes back to Main

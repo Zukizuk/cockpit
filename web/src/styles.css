@@ -818,6 +818,65 @@
 .react-flow__node-section.dragging .section-title {
   cursor: grabbing;
 }
+/* the fold toggle at the end of its title */
+.section-fold {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-right: -4px;
+  border-radius: 5px;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  transition-property: opacity, background-color;
+  transition-duration: 150ms;
+}
+.section-fold:hover {
+  opacity: 1;
+  background: oklch(var(--contrast) / 0.1);
+}
+.section-fold:active {
+  scale: 0.96;
+}
+/* folded: a bar under its title saying how much it holds; a click opens it */
+.section.is-folded {
+  border-radius: 12px;
+}
+.section-bar {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 14px;
+  border-radius: inherit;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  pointer-events: all;
+  cursor: pointer;
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+}
+.section-bar:hover {
+  background: oklch(var(--contrast) / 0.05);
+  color: var(--foreground);
+}
+.section-tint .section-bar {
+  color: color-mix(in oklab, var(--foreground) 75%, transparent);
+}
+.section-bar-open {
+  flex-shrink: 0;
+  font-weight: 500;
+  opacity: 0;
+  transition-property: opacity;
+  transition-duration: 150ms;
+}
+.section-bar:hover .section-bar-open {
+  opacity: 1;
+}
 .section-swatch-none {
   background: transparent !important;
   box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.3);

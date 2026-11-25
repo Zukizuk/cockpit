@@ -37,7 +37,7 @@ function pick<T>(list: T[], which: unknown, id: (t: T) => string, name: (t: T) =
 
 // ---- the board -----------------------------------------------------------------------------------------------
 
-type BoardValue = { space: string; spaces: { name: string; cards: number }[]; sections?: string[]; selected: string[]; inView: string[]; focus?: string[]; sharing?: string }
+type BoardValue = { space: string; spaces: { name: string; cards: number }[]; sections?: string[]; foldedSections?: string[]; tuckedSections?: string[]; selected: string[]; inView: string[]; focus?: string[]; sharing?: string }
 type BoardOptions = {
   value?: BoardValue
   onSwitchSpace?: (space: string) => void
@@ -54,6 +54,8 @@ type BoardOptions = {
   onAddSection?: (title: string, cards: string[]) => void
   onFitSection?: (section: string) => void
   onRemoveSection?: (section: string, withCards: boolean) => void
+  onFoldSection?: (section: string, fold: boolean) => void
+  onTuckSection?: (section: string, tuck: boolean) => void
   /** the sections in the space shown (for fitSection) */
   sectionNames?: string[]
 }
@@ -67,7 +69,7 @@ function rowsOf(rows: unknown): string[][] {
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action', onFitSection: 'action', onRemoveSection: 'action', sectionNames: 'value' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action', onFitSection: 'action', onRemoveSection: 'action', onFoldSection: 'action', onTuckSection: 'action', sectionNames: 'value' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -118,6 +120,10 @@ const boardPrimitive = definePrimitive({
       fitSection: (section: string) => call('onFitSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section')),
       // a section taken off the board: its cards stay, unless withCards is true (it waits for the user's Allow)
       removeSection: (section: string, withCards?: unknown) => call('onRemoveSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section'), withCards === true || words(withCards).toLowerCase() === 'true'),
+      // a section folded to its bar (what's in it out of sight, where it was), or opened again (fold false)
+      foldSection: (section: string, fold?: unknown) => call('onFoldSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section'), !(fold === false || words(fold).toLowerCase() === 'false')),
+      // a section tucked away at the top with what's in it, or brought back (tuck false)
+      tuckSection: (section: string, tuck?: unknown) => call('onTuckSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section'), !(tuck === false || words(tuck).toLowerCase() === 'false')),
       addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
@@ -126,7 +132,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection', 'removeSection'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection', 'foldSection', 'tuckSection', 'removeSection'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -151,6 +157,8 @@ export type CardValue = {
   comments?: number
   /** the section it's in (an area on the board with a title) */
   section?: string
+  /** out of sight in a folded section (the section's foldSection(name, false) opens it; its bringBack does too) */
+  inFoldedSection?: boolean
   /** arrows to and from the other cards you can see: "→ Title" points to it, "← Title" from it, a label after a colon */
   arrows?: string[]
 }
@@ -383,10 +391,20 @@ const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder', table: 'table', questions: 'questions' }
 /** The title of the section a card is in ("Section" for one with no title), or '' for none. */
 const sectionTitle = (n: CardNode, all: CardNode[]) => {
-  const s = sectionOf(n, all)
+  // held by a folded or tucked section: that one
+  const s = n.data.inside ? all.find(x => x.id === n.data.inside) : sectionOf(n, all)
   return s ? s.data.title || 'Section' : ''
 }
-type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string, section: string]
+/** Held out of sight by a section: tucked away with it (if it, or one holding it, is tucked), or folded in it. */
+const heldState = (n: CardNode, all: CardNode[]): '' | 'folded' | 'tucked' => {
+  if (!n.data.inside) return ''
+  for (let x: CardNode | undefined = n, i = 0; x?.data.inside && i < 6; i++) {
+    x = all.find(y => y.id === x!.data.inside)
+    if (x?.data.tucked) return 'tucked'
+  }
+  return 'folded'
+}
+type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string, section: string, held: '' | 'folded' | 'tucked']
 type Built = { id: string; type: string; ref: string; title: string; value: CardValue; content: Omit<CardContent, 'text'> & { peek?: string }; mark: string; spaceId: string }
 
 export function BoardAgent() {
@@ -405,7 +423,7 @@ export function BoardAgent() {
         const w = n.measured?.width ?? n.width ?? 0
         const h = n.measured?.height ?? n.height ?? 0
         const seen = !n.hidden && n.position.x < view.x1 && n.position.x + w > view.x0 && n.position.y < view.y1 && n.position.y + h > view.y0
-        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || '', sectionTitle(n, all)] as Row
+        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || '', sectionTitle(n, all), heldState(n, all)] as Row
       }),
     )
   })
@@ -425,7 +443,7 @@ export function BoardAgent() {
 
   const cards: Built[] = useMemo(() => {
     const spaceOfId = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
-    const built = (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section]) => {
+    const built = (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section, held]) => {
       let title = KIND[type] ?? type
       let file: string | undefined
       let url: string | undefined
@@ -469,7 +487,8 @@ export function BoardAgent() {
         ...(selected ? { selected: true } : {}),
         ...(inView ? { inView: true } : {}),
         ...(folded ? { folded: true } : {}),
-        ...(tucked ? { tucked: true } : {}),
+        ...(tucked || held === 'tucked' ? { tucked: true } : {}),
+        ...(held === 'folded' ? { inFoldedSection: true } : {}),
         ...(veiled ? { hidden: true } : {}),
         ...(sticky ? { color: color === 'ink' || !color ? 'charcoal' : color } : {}),
         ...(mark === 'shared' ? { shared: true } : {}),
@@ -562,16 +581,16 @@ export function BoardAgent() {
   }
 
   // the sections in the spaces it may see, by title ("Section" for one with none; a second of one name "… (2)")
-  const sectionsKey = useStore(s => JSON.stringify((s.nodes as CardNode[]).filter(isSection).map(n => [n.id, n.data.title || 'Section', spaceOf(n)])))
+  const sectionsKey = useStore(s => JSON.stringify((s.nodes as CardNode[]).filter(isSection).map(n => [n.id, n.data.title || 'Section', spaceOf(n), n.data.folded ? 'folded' : n.data.tucked || n.data.inside ? 'tucked' : ''])))
   const sectionList = useMemo(() => {
     const open = new Set(openSpaces.map(s => s.id))
     const seen = new Map<string, number>()
-    return (JSON.parse(sectionsKey) as [string, string, string][])
+    return (JSON.parse(sectionsKey) as [string, string, string, string][])
       .filter(([, , sp]) => open.has(sp))
-      .map(([id, t, sp]) => {
+      .map(([id, t, sp, state]) => {
         const k = (seen.get(t) ?? 0) + 1
         seen.set(t, k)
-        return { id, name: k === 1 ? t : `${t} (${k})`, spaceId: sp }
+        return { id, name: k === 1 ? t : `${t} (${k})`, spaceId: sp, state }
       })
   }, [sectionsKey, openSpaces])
   const sectionNames = useMemo(() => sectionList.map(s => s.name), [sectionList])
@@ -583,6 +602,9 @@ export function BoardAgent() {
       spaces: openSpaces.map(s => ({ name: s.name, cards: visible.filter(c => c.spaceId === s.id).length })),
       // the sections in the space shown (a card's moveToSection puts it in one)
       ...(sectionList.some(s => s.spaceId === board.space) ? { sections: sectionList.filter(s => s.spaceId === board.space).map(s => s.name) } : {}),
+      // folded to a bar, or tucked away at the top with what's in them
+      ...(sectionList.some(s => s.spaceId === board.space && s.state === 'folded') ? { foldedSections: sectionList.filter(s => s.spaceId === board.space && s.state === 'folded').map(s => s.name) } : {}),
+      ...(sectionList.some(s => s.spaceId === board.space && s.state === 'tucked') ? { tuckedSections: sectionList.filter(s => s.spaceId === board.space && s.state === 'tucked').map(s => s.name) } : {}),
       selected: visible.filter(c => c.value.selected).map(c => c.title),
       inView: visible.filter(c => c.value.inView).map(c => c.title),
       ...(board.focusing ? { focus: visible.filter(c => c.value.selected).map(c => c.title) } : {}),
@@ -636,6 +658,8 @@ export function BoardAgent() {
     const s = sec && rf.getNode(sec.id)
     const n = rf.getNode(c.id)
     if (!s || !n) throw new Error(`No section "${name}".`)
+    if (s.data.tucked || s.data.inside) throw new Error(`The section "${name}" is tucked away: tuckSection("${name}", false) brings it back first.`)
+    if (s.data.folded) throw new Error(`The section "${name}" is folded: foldSection("${name}", false) opens it first.`)
     const size = (x: CardNode) => ({ w: x.measured?.width ?? x.width ?? 300, h: x.measured?.height ?? x.height ?? 280 })
     const sb = { x: s.position.x, y: s.position.y, ...size(s) }
     const inside = contentsOf(s, rf.getNodes()).filter(x => x.id !== c.id && !isSection(x))
@@ -648,7 +672,7 @@ export function BoardAgent() {
     rf.setNodes(ns =>
       ns.map(x => {
         if (x.id === c.id) {
-          const { space: _s, tucked: _t, ...data } = x.data
+          const { space: _s, tucked: _t, inside: _i, ...data } = x.data
           return { ...x, position: pos, hidden: there !== board.space, data: there === 'main' ? data : { ...data, space: there } }
         }
         if (x.id === s.id) return { ...x, width: Math.round(Math.max(sb.x + sb.w, pos.x + me.w + PAD) - sb.x), height: Math.round(Math.max(sb.y + sb.h, pos.y + me.h + PAD) - sb.y) }
@@ -787,7 +811,7 @@ export function BoardAgent() {
     rf.setNodes(ns =>
       ns.map(n => {
         if (n.id !== id) return n
-        const { space: _s, tucked: _t, ...data } = n.data
+        const { space: _s, tucked: _t, inside: _i, ...data } = n.data
         return { ...n, position: pos, hidden: there !== board.space, data: there === 'main' ? data : { ...data, space: there } }
       }),
     )
@@ -847,9 +871,26 @@ export function BoardAgent() {
           const id = sectionList.find(s => s.name === name)?.id
           const s = id && rf.getNode(id)
           if (!s) throw new Error(`No section "${name}".`)
-          const inside = withCards ? contentsOf(s, rf.getNodes()).map(n => n.id) : []
+          const inside = withCards ? board.sectionCards(s.id).map(n => n.id) : []
           board.removeCards([s.id, ...inside])
           said(withCards ? `Claude took the section "${name}" off, with what was in it` : `Claude took the section "${name}" off (its cards stay)`)
+        }}
+        onFoldSection={(name, fold) => {
+          const id = sectionList.find(s => s.name === name)?.id
+          const s = id && rf.getNode(id)
+          if (!s) throw new Error(`No section "${name}".`)
+          if (s.data.tucked || s.data.inside) throw new Error(`The section "${name}" is tucked away: tuckSection("${name}", false) brings it back first.`)
+          board.foldSection(s.id, fold)
+          touchCard(s.id, 'arranging')
+          said(fold ? `Claude folded the section "${name}"` : `Claude opened the section "${name}"`)
+        }}
+        onTuckSection={(name, tuck) => {
+          const id = sectionList.find(s => s.name === name)?.id
+          const s = id && rf.getNode(id)
+          if (!s) throw new Error(`No section "${name}".`)
+          if (tuck) board.tuck([s.id])
+          else board.untuck(s.id)
+          said(tuck ? `Claude tucked the section "${name}" away, with what's in it` : `Claude brought the section "${name}" back`)
         }}
         onFitSection={name => {
           const id = sectionList.find(s => s.name === name)?.id

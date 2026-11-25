@@ -5,7 +5,7 @@ import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProv
 import '@xyflow/react/dist/base.css'
 import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
-import { BoardProvider, contentsOf, offBoard, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
+import { BoardProvider, contentsOf, heldBy, offBoard, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
@@ -111,7 +111,7 @@ function Canvas({ initial }: { initial: Board }) {
     const items = new Map<string, { x: number; y: number; leader: string }>()
     for (const s of dragged.filter(isSection)) {
       leaders.set(s.id, { ...s.position })
-      for (const n of contentsOf(s, all)) if (!draggedIds.has(n.id) && !n.data.locked && !items.has(n.id)) items.set(n.id, { x: n.position.x, y: n.position.y, leader: s.id })
+      for (const n of [...contentsOf(s, all), ...heldBy(s.id, all)]) if (!draggedIds.has(n.id) && !n.data.locked && !items.has(n.id)) items.set(n.id, { x: n.position.x, y: n.position.y, leader: s.id })
     }
     carrying.current = items.size ? { leaders, items } : null
   }
@@ -437,6 +437,13 @@ function Canvas({ initial }: { initial: Board }) {
         f: () => {
           // every selected card (a sticky note rolls up into its strip); all fold, unless they all are already
           const cards = picked.filter(n => !isSection(n))
+          // only sections picked: they fold to their bars (or open), all of them unless they all are
+          const sections = picked.filter(isSection)
+          if (!cards.length && sections.length) {
+            const f = !sections.every(n => n.data.folded)
+            for (const s of sections) board.foldSection(s.id, f)
+            return
+          }
           if (!cards.length) return board.toast('Select a card first, then F folds it')
           const fold = !cards.every(n => n.data.folded)
           const ids = new Set(cards.map(n => n.id))
