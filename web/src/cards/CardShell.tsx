@@ -15,6 +15,56 @@ import { cn } from '@/lib/utils'
 
 export type CardAction = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean; hidden?: boolean; keys?: string; /** only in the right-click menu (about what was right-clicked) */ context?: boolean }
 
+/** A menu's groups as one list: a line between groups; inside one, a card's own items keep the lines they draw
+ * between theirs (its copy items, say). */
+export function inGroups(groups: CardAction[][]): CardAction[] {
+  return groups
+    .map(g => g.filter(a => !a.hidden))
+    .filter(g => g.length)
+    .flatMap((g, i) => g.map((a, j) => ({ ...a, gap: j === 0 ? i > 0 : !!a.gap })))
+}
+
+/** Sharing with agents, and moving to another space: the same in a card's menu and full screen. `ids` are the cards
+ * a mark goes on (several, when several are picked); a move takes the one card. */
+export function agentAndSpaceActions(board: ReturnType<typeof useBoard>, ids: () => string[], nodeId: string | null | undefined, mark: CardNode['data']['agents']): CardAction[][] {
+  const setMark = (m: 'shared' | 'private' | null, said: string) => {
+    board.setCardAgents(ids(), m)
+    board.toast(said)
+  }
+  return [
+    [
+      {
+        label: mark === 'shared' ? 'Stop sharing with agents' : 'Share with agents',
+        icon: Bot,
+        run: () => (mark === 'shared' ? setMark(null, 'Not shared with agents') : setMark('shared', 'Shared with agents: Claude can read it')),
+      },
+      {
+        label: mark === 'private' ? 'Not private any more' : 'Private from agents',
+        icon: ShieldOff,
+        run: () => (mark === 'private' ? setMark(null, 'Not private any more') : setMark('private', 'Private: agents never see it')),
+      },
+    ],
+    // other spaces: out of view here, there when you go to that space
+    [
+      ...board.spaces
+        .filter(x => x.id !== board.space)
+        .slice(0, 8)
+        .map((x): CardAction => ({ label: `Move to ${x.name}`, icon: Layers, run: () => void (nodeId && board.moveToSpace([nodeId], x.id)) })),
+      {
+        label: 'Move to a new space',
+        icon: Layers,
+        run: () => {
+          if (!nodeId) return
+          const was = board.space
+          const to = board.newSpace()
+          board.moveToSpace([nodeId], to)
+          board.toast('Moved to a new space', { label: 'Go back', run: () => board.switchSpace(was) })
+        },
+      },
+    ],
+  ]
+}
+
 export function IconButton({ icon: Icon, label, onClick, active, className }: { icon: LucideIcon; label: string; onClick: () => void; active?: boolean; className?: string }) {
   return (
     <Tooltip>
@@ -178,43 +228,10 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
       { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },
     ],
-    [
-      {
-        label: mark === 'shared' ? 'Stop sharing with agents' : 'Share with agents',
-        icon: Bot,
-        run: () => (mark === 'shared' ? setMark(null, 'Not shared with agents') : setMark('shared', 'Shared with agents: Claude can read it')),
-      },
-      {
-        label: mark === 'private' ? 'Not private any more' : 'Private from agents',
-        icon: ShieldOff,
-        run: () => (mark === 'private' ? setMark(null, 'Not private any more') : setMark('private', 'Private: agents never see it')),
-      },
-    ],
-    // other spaces: out of view here, there when you go to that space
-    [
-      ...board.spaces
-        .filter(x => x.id !== board.space)
-        .slice(0, 8)
-        .map((x): CardAction => ({ label: `Move to ${x.name}`, icon: Layers, run: () => void (nodeId && board.moveToSpace([nodeId], x.id)) })),
-      {
-        label: 'Move to a new space',
-        icon: Layers,
-        run: () => {
-          if (!nodeId) return
-          const was = board.space
-          const to = board.newSpace()
-          board.moveToSpace([nodeId], to)
-          board.toast('Moved to a new space', { label: 'Go back', run: () => board.switchSpace(was) })
-        },
-      },
-    ],
+    ...agentAndSpaceActions(board, markIds, nodeId, mark),
     end,
   ]
-  // a line between groups; inside one, a card's own items keep the lines they draw between theirs (its copy items, say)
-  const shown: CardAction[] = groups
-    .map(g => g.filter(a => !a.hidden))
-    .filter(g => g.length)
-    .flatMap((g, i) => g.map((a, j) => ({ ...a, gap: j === 0 ? i > 0 : !!a.gap })))
+  const shown = inGroups(groups)
   const [flash, setFlash] = useState(false)
   const [isNew] = useState(() => !!born && Date.now() - born < 1500)
   useEffect(() => {

@@ -4,6 +4,9 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 ## Coming next
 
+**New**
+- Full screen has the card's menu too: ⋮ on its bar, or right-click the bar. It holds what makes sense there (open elsewhere, copy, pin, Comment, sharing with agents, moving to another space, archive, Remove from board) and leaves out what's about the board, like folding, focus, tuck and lock. Archiving a note full screen now takes its card off the board too.
+
 **Fixed**
 - An update (Settings → Updates) rewrote the Start menu entry and Explorer's Send to → Cockpit even when they pointed somewhere else, like another copy of Cockpit. It now refreshes them only when they point at the copy being updated. A new install can skip Send to with -NoSendTo. The installer also ends with a success code instead of 1.
 

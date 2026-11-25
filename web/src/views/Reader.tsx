@@ -1,14 +1,15 @@
 // Full screen for one card, or two side by side to compare: the board stays behind, blurred, and Esc brings it back.
 // Side by side, each half is the same page as one card full screen (its own bar, its own scrolling, notes still
 // editable), with a divider to drag, scrolling together on request, and the differences between the two as text.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@xyflow/react'
-import { Archive, ArrowLeftRight, BookOpen, BookOpenText, Columns2, Diff, Link2, NotebookPen, Pencil, RefreshCw, SquareSplitHorizontal, X } from 'lucide-react'
-import { get, post, type ShownRead } from '../api'
-import { ago, useEvent } from '../lib'
+import { Archive, ArrowLeftRight, BookOpen, BookOpenText, Code2, Columns2, Copy, Diff, ExternalLink, Link2, MessageSquare, MoreVertical, NotebookPen, Pencil, Pin, RefreshCw, SquareSplitHorizontal, X } from 'lucide-react'
+import { editorLabel, get, openOutside, post, type ShownRead } from '../api'
+import { ago, emit, useEvent } from '../lib'
 import { spaceOf, useBoard, type CardNode, type Shown } from '../board'
 import { useItemActions } from '../cards/ItemCard'
-import { IconButton } from '../cards/CardShell'
+import { agentAndSpaceActions, IconButton, inGroups, type CardAction } from '../cards/CardShell'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { NotePane, noteKind, noteTitle, useNote, type NoteMode } from '../components/NotePane'
 import { dayOf, todayPage, useJournalSync } from '../journal'
 import { Viewer, iconFor, kindLabel, placeOf } from '../components/Viewer'
@@ -365,12 +366,82 @@ function ComparePicker({ open, onClose, exclude, onPick, replacing }: { open: bo
   )
 }
 
-function Bar({ kicker, title, children }: { kicker: string; title: string; children: React.ReactNode }) {
+/** Full screen, the card's ⋮ menu: what this page does; then, when it's a card on this board, Comment, agents and
+ * spaces; and last, taking it off the board. Fold, focus, tuck and lock are about the board, so they stay there. */
+function useMenu(t: Shown, own: CardAction[], end: CardAction[] = []): CardAction[] {
+  const board = useBoard()
+  const id = useCardId(t)
+  const mark = useStore(s => (id ? (s.nodes.find(n => n.id === id)?.data as CardNode['data'] | undefined)?.agents : undefined))
+  const card: CardAction[][] = id
+    ? [
+        [
+          {
+            label: 'Comment',
+            icon: MessageSquare,
+            // its comments open beside the card, on the board
+            run: () => {
+              board.expand(null)
+              setTimeout(() => emit('comments-open', { id }), 300)
+            },
+          },
+        ],
+        ...agentAndSpaceActions(board, () => [id], id, mark),
+      ]
+    : []
+  return inGroups([own, ...card, [...end, { label: 'Remove from board', icon: X, run: () => board.removeCard(id!), hidden: !id }]])
+}
+
+/** The card on this space's board that shows what's full screen, if there is one. */
+function useCardId(t: Shown) {
+  const board = useBoard()
+  return useStore(s => s.nodes.find(n => n.type === t.type && (n.data as CardNode['data']).ref === t.ref && spaceOf(n as CardNode) === board.space)?.id)
+}
+
+/** ⋮ on the bar; a right-click on the bar opens the same menu. */
+function MoreMenu({ actions, open, onOpenChange }: { actions: CardAction[]; open: boolean; onOpenChange: (o: boolean) => void }) {
+  if (!actions.length) return null
+  return (
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="More"
+          title="More"
+          className="icon-btn grid size-7 place-items-center rounded-md text-muted-foreground outline-none transition-[background-color,color,scale] duration-150 ease-(--ease-out) hover:bg-ink/[0.07] hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 active:scale-[0.96] data-[state=open]:bg-ink/10 data-[state=open]:text-foreground"
+        >
+          <MoreVertical className="size-[15px]" strokeWidth={1.75} />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        {actions.map(a => (
+          <Fragment key={a.label}>
+            {a.gap && <DropdownMenuSeparator />}
+            <DropdownMenuItem variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
+              <a.icon strokeWidth={1.75} />
+              {a.label}
+              {a.keys && <DropdownMenuShortcut>{a.keys}</DropdownMenuShortcut>}
+            </DropdownMenuItem>
+          </Fragment>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function Bar({ kicker, title, menu, children }: { kicker: string; title: string; menu?: CardAction[]; children: React.ReactNode }) {
   const board = useBoard()
   const side = useContext(SideContext)
   const split = !!board.expanded?.beside
+  const [menuOpen, setMenuOpen] = useState(false)
   return (
-    <header className="reader-bar glass">
+    <header
+      className="reader-bar glass"
+      onContextMenu={e => {
+        if (!menu?.length) return
+        e.preventDefault()
+        setMenuOpen(true)
+      }}
+    >
       <div className="min-w-0 flex-1">
         <div className="truncate text-[11.5px] text-muted-foreground">{kicker}</div>
         <div className="truncate text-[14px] font-medium">{title}</div>
@@ -383,6 +454,7 @@ function Bar({ kicker, title, children }: { kicker: string; title: string; child
             <IconButton icon={SquareSplitHorizontal} label={split ? 'Put something else on this side' : 'Compare with… (side by side)'} onClick={side.compare} />
           </>
         )}
+        {menu && <MoreMenu actions={menu} open={menuOpen} onOpenChange={setMenuOpen} />}
         <IconButton icon={X} label={split ? 'Close this side' : 'Close (Esc)'} onClick={() => (side ? side.close() : board.expand(null))} />
       </div>
     </header>
@@ -403,12 +475,13 @@ function ItemPage({ id }: { id: string }) {
     if (read?.entry.format === 'link' && read.entry.readingAt) load()
   })
   const { native, readAgain, actions } = useItemActions(read, load)
+  const menu = useMenu({ type: 'item', ref: id }, actions)
   if (!read) return null
   const e = read.entry
   const wide = ['compare', 'csv', 'code', 'text', 'json', 'pdf', 'html', 'image', 'diff', 'video', 'sheet'].includes(e.format)
   return (
     <div className={cn('reader-page', wide && 'wide')}>
-      <Bar kicker={[kindLabel(e), e.kind === 'link' ? e.siteName : e.kind === 'file' ? placeOf(e.path) : e.from, ago(e.shownAt || e.createdAt)].filter(Boolean).join(' · ')} title={e.title}>
+      <Bar kicker={[kindLabel(e), e.kind === 'link' ? e.siteName : e.kind === 'file' ? placeOf(e.path) : e.from, ago(e.shownAt || e.createdAt)].filter(Boolean).join(' · ')} title={e.title} menu={menu}>
         {actions
           .filter(a => !a.hidden)
           // side by side there's room for fewer buttons: the ones that open it elsewhere stay
@@ -439,26 +512,40 @@ function NotePage({ path }: { path: string }) {
   const journal = useJournalSync(path.startsWith('journal/'))
   // an earlier journal day opens to read; Write is one click away
   const [mode, setMode] = useState<NoteMode>(() => (dayOf(path) && dayOf(path) < dayOf(todayPage()) ? 'read' : 'write'))
+  const title = board.notes?.notes.find(n => n.path === path)?.given || noteTitle(note.text, path)
+  const cardId = useCardId({ type: 'note', ref: path })
+  const archive = async () => {
+    await note.save()
+    await post('/api/notes/archive', { path })
+    // its card goes too, as when it's archived from the card
+    if (cardId) board.removeCard(cardId, { quiet: true })
+    if (side) side.close()
+    else board.expand(null)
+    board.toast('Archived (kept in .archive)')
+  }
+  const menu = useMenu(
+    { type: 'note', ref: path },
+    [
+      { label: 'Copy the text', icon: Copy, run: () => board.copy(note.text.trim(), 'Copied'), hidden: !note.text.trim() },
+      { label: 'Pin to Quick access', icon: Pin, run: () => board.pin({ note: path, title }) },
+      {
+        label: editorLabel(board.prefs.editor),
+        icon: board.prefs.editor === 'vscode' ? Code2 : ExternalLink,
+        run: () => note.save().then(() => openOutside({ kind: 'note', path, how: 'editor' })).catch(e => board.toast(e.message)),
+      },
+    ],
+    [{ label: 'Archive note', icon: Archive, danger: true, run: archive }],
+  )
   return (
     <div className={cn('reader-page', mode === 'split' && 'wide')}>
-      <Bar kicker={[noteKind(path), note.statusText, journal.text].filter(Boolean).join(' · ')} title={board.notes?.notes.find(n => n.path === path)?.given || noteTitle(note.text, path)}>
+      <Bar kicker={[noteKind(path), note.statusText, journal.text].filter(Boolean).join(' · ')} title={title} menu={menu}>
         {journal.enabled && (
           <IconButton icon={RefreshCw} label="Sync with Kokoro now" onClick={() => note.save().then(journal.syncNow).then(board.toast)} active={journal.sync?.syncing} />
         )}
         <IconButton icon={Pencil} label="Write" onClick={() => setMode('write')} active={mode === 'write'} />
         <IconButton icon={Columns2} label="Write and read side by side" onClick={() => setMode('split')} active={mode === 'split'} />
         <IconButton icon={BookOpen} label="Read" onClick={() => setMode('read')} active={mode === 'read'} />
-        <IconButton
-          icon={Archive}
-          label="Archive note"
-          onClick={async () => {
-            await note.save()
-            await post('/api/notes/archive', { path })
-            if (side) side.close()
-            else board.expand(null)
-            board.toast('Archived (kept in .archive)')
-          }}
-        />
+        <IconButton icon={Archive} label="Archive note" onClick={archive} />
       </Bar>
       <div className="reader-body">
         <NotePane path={path} mode={mode} note={note} autoFocus={!board.expanded?.beside} />

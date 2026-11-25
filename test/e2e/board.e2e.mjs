@@ -177,6 +177,32 @@ test('the board menu closes where it was opened, not at the top-left corner', as
   assert.deepEqual(anchor, { left: `${EMPTY.x}px`, top: `${EMPTY.y}px` })
 })
 
+test('full screen has the menu too (⋮ and a right-click on its bar), with only what makes sense there', async () => {
+  await clearSelection()
+  await note('Plain list').hover()
+  await note('Plain list').getByRole('button', { name: 'Open full screen' }).click()
+  const bar = page.locator('.reader .reader-bar')
+  await bar.waitFor()
+  const labels = async () => {
+    const menu = page.locator('[role=menu]').last()
+    await menu.waitFor()
+    const l = (await menu.locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
+    await page.keyboard.press('Escape')
+    await menu.waitFor({ state: 'hidden' })
+    return l
+  }
+  await bar.getByRole('button', { name: 'More' }).click()
+  const viaButton = await labels()
+  await bar.click({ button: 'right', position: { x: 60, y: 20 } })
+  assert.deepEqual(await labels(), viaButton, 'right-click on the bar: the same menu')
+  for (const l of ['Copy the text', 'Comment', 'Share with agents', 'Move to Work', 'Archive note', 'Remove from board']) assert.ok(viaButton.includes(l), `${l} is in it`)
+  for (const l of ['Open full screen', 'Roll up into its strip', 'Focus on this card', 'Tuck away at the top', 'Lock in place', 'Hide its contents']) assert.ok(!viaButton.includes(l), `${l} is not`)
+  assert.equal(viaButton.at(-1), 'Remove from board')
+  assert.ok(await bar.isVisible(), 'Esc on the menu left full screen open')
+  await page.keyboard.press('Escape')
+  await bar.waitFor({ state: 'hidden' })
+})
+
 // last: a pasted card lands where the mouse is, on the empty spot the other tests use
 test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short password goes to Snippets', async () => {
   await clearSelection()
