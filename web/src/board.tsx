@@ -433,10 +433,10 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   // Cockpit's board tools (experimental): an agent's call is run here; a removal waits for the person's Allow
   useEffect(() => {
     startAgentBridge(
-      text =>
+      (text, button = 'Allow') =>
         new Promise<boolean>(resolve => {
           let answered = false
-          toast(text, { label: 'Allow', ms: 20_000, run: () => ((answered = true), resolve(true)) })
+          toast(text, { label: button, ms: 20_000, run: () => ((answered = true), resolve(true)) })
           setTimeout(() => !answered && resolve(false), 20_000)
         }),
     )

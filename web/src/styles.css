@@ -708,6 +708,20 @@
   color: var(--agent-ink);
   background: var(--agent);
 }
+.tell-close {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--muted-foreground);
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+}
+.tell-close:hover {
+  background: oklch(var(--contrast) / 0.08);
+  color: var(--foreground);
+}
 /* done: the dot stops and dims, the words go quieter */
 .agent-pill.is-after {
   color: var(--muted-foreground);

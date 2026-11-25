@@ -7,7 +7,7 @@
 // say which card each action touched.
 import { useEffect, useRef, useState } from 'react'
 import { ViewportPortal, useReactFlow, useStore } from '@xyflow/react'
-import { ArrowUp } from 'lucide-react'
+import { ArrowUp, X } from 'lucide-react'
 import { get, post } from '../api'
 import { emit, onEvent } from '../lib'
 import { cn } from '@/lib/utils'
@@ -218,7 +218,10 @@ export function TellClaude({ who, about, text: preset, label = 'Tell Claude' }: 
         onChange={e => setText(e.target.value)}
         onKeyDown={e => {
           e.stopPropagation()
-          if (e.key === 'Escape') setOpen(false)
+          if (e.key === 'Escape') {
+            setOpen(false)
+            setText('')
+          }
         }}
         placeholder="Look at the board, or say what…"
         aria-label={`Tell ${name}`}
@@ -226,6 +229,19 @@ export function TellClaude({ who, about, text: preset, label = 'Tell Claude' }: 
       />
       <button type="submit" className="tell-send" aria-label="Send">
         <ArrowUp className="size-3.5" strokeWidth={2.25} />
+      </button>
+      {/* changed your mind: nothing is sent, and Tell Claude is there again for later */}
+      <button
+        type="button"
+        className="tell-close"
+        aria-label="Close without telling Claude"
+        title="Close without telling Claude (Esc)"
+        onClick={() => {
+          setOpen(false)
+          setText('')
+        }}
+      >
+        <X className="size-3.5" strokeWidth={2} />
       </button>
     </form>
   ) : (

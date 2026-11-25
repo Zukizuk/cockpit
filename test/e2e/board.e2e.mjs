@@ -509,8 +509,22 @@ test('Claude asks a question with its guess in grey and carries on; the person a
   // taking a question away waits for Allow, the Questions card framed meanwhile
   const gone = agent('act', { steps: [{ ref: 'Questions list', action: 'remove', args: ['Which day?'] }] })
   assert.ok(await until(async () => (await page.locator('.agent-frame', { hasText: 'Claude · wants to remove' }).count()) === 1), 'framed while it waits')
-  await page.getByRole('button', { name: 'Allow' }).click()
+  await page.getByRole('button', { name: 'Allow', exact: true }).click()
   assert.equal((await gone).output.ok, true)
+
+  // several in one call: one question for all of them, before any runs; not allowed, none run
+  const two = [{ ref: 'Questions list', action: 'remove', args: ['How many are coming?'] }, { ref: 'Questions list', action: 'remove', args: ['Which room?'] }]
+  const left = async () => (await api('/api/questions')).map(q => q.question)
+  const refused = agent('act', { steps: two })
+  assert.ok(await until(async () => /Claude wants to do 2 things/.test(await page.locator('body').innerText())), 'one question for both')
+  assert.equal((await refused).output.ok, false, 'not allowed (it timed out): nothing ran')
+  assert.ok((await left()).includes('How many are coming?') && (await left()).includes('Which room?'))
+  const both = agent('act', { steps: two })
+  const all = page.getByRole('button', { name: 'Allow all' })
+  assert.ok(await until(async () => (await all.count()) === 1), 'Allow all')
+  await all.click()
+  assert.equal((await both).output.ok, true)
+  assert.ok(await until(async () => !(await left()).some(q => q === 'How many are coming?' || q === 'Which room?')), 'both gone, one Allow')
   await page.locator('.react-flow__node-questions').evaluate(el => el.scrollIntoView())
 })
 
@@ -521,6 +535,15 @@ test('a chat listening for the board shows on the pill; Tell Claude wakes it wit
   // (the pill says "Claude is listening", or, in the half minute after Claude worked, that it did; the button either way)
   const tell = page.locator('.agent-pill.is-shown').getByRole('button', { name: 'Tell Claude' })
   assert.ok(await until(async () => (await tell.count()) === 1), 'the pill has a Tell Claude button')
+  // changed your mind: the close button sends nothing and leaves Tell Claude there
+  let woke = false
+  waiting.then(() => (woke = true))
+  await tell.click()
+  await page.getByRole('textbox', { name: /Tell Claude/ }).fill('never mind')
+  await page.getByRole('button', { name: 'Close without telling Claude' }).click()
+  assert.equal(await tell.count(), 1, 'Tell Claude is back')
+  await page.waitForTimeout(400)
+  assert.equal(woke, false, 'nothing was sent')
   await tell.click()
   await page.getByRole('textbox', { name: /Tell Claude/ }).fill('Have a look at my plan')
   await page.keyboard.press('Enter')

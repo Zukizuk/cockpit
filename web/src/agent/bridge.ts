@@ -10,7 +10,8 @@ import { agentView, setAgentAccess } from './view'
 import { emit, lastEvent, onEvent } from '../lib'
 
 type Call = { id: string; client: number; tool: 'snapshot' | 'act' | 'query'; input?: unknown; access?: AgentAccess; agent?: string }
-export type Ask = (text: string) => Promise<boolean>
+/** Puts a question to the person (a toast with a button); true when they press it. */
+export type Ask = (text: string, button?: string) => Promise<boolean>
 
 // what an agent may reach, and how a removal there is put to the person
 const WHERE: Record<string, string> = { 'task-list': 'from Today', board: 'from the board', card: 'from the board', 'later-list': 'from Later', 'snippet-list': 'from Snippets', 'question-list': 'from Questions' }
@@ -36,33 +37,73 @@ function trimAct(out: unknown) {
   return { ...rest, ...(fresh.length ? { appeared: fresh } : {}) }
 }
 
-// the actions that wait for the person's Allow (below): anywhere, and on a card
-const ASKS = new Set(['remove'])
-const CARD_ASKS = new Set(['setRows', 'setText', 'removeRow', 'disconnect'])
+/**
+ * What a step that waits for the person would do, in words ("remove "Ideas" from the board"), or null when it doesn't
+ * wait. Taking something away is the person's call; so is writing over a whole note or table, taking a row out of a
+ * table, or an arrow away. A card is named by its own label; a list item by the step's argument.
+ */
+function needsAllow(component: string, action: string, args: unknown[] | undefined, label: unknown): string | null {
+  const where = WHERE[component]
+  if (!where) return null
+  const arg = String(args?.[0] ?? '')
+  if (action === 'remove') return `remove "${component === 'card' ? String(label) : arg}" ${where}`
+  if (component !== 'card') return null
+  if (action === 'setRows') return `replace everything in the table "${String(label)}"`
+  if (action === 'setText') return `rewrite the note "${String(label)}"`
+  if (action === 'removeRow') return `take row "${arg}" out of the table "${String(label)}"`
+  if (action === 'disconnect') return `take away the arrow between "${String(label)}" and "${arg}"`
+  return null
+}
 
 let started = false
 let me = 0
+/** The steps of the call running now that the person has already allowed, all at once: how many of each action. */
+let allowed = new Map<string, number>()
 
 export function startAgentBridge(ask: Ask) {
   if (started) return
   started = true
   const agent = createAgent({
     allow: ({ component, action, args, label }) => {
-      const where = WHERE[component]
-      if (!where) return false
+      if (!WHERE[component]) return false
+      const what = needsAllow(component, action, args, label)
+      if (!what) return true
       // a change that waits for the person: the card it's on is framed while they decide (agent/presence.tsx)
-      if (ASKS.has(action) || (component === 'card' && CARD_ASKS.has(action))) emit('agent-asking', { component, action, label: String(label ?? '') })
-      // taking something away is the person's call
-      // a card is named by its own label; a list item by the step's argument
-      if (action === 'remove') return ask(`Claude wants to remove "${String(component === 'card' ? label : (args?.[0] ?? ''))}" ${where}`)
-      // a table: writing over all of it, or taking a row out, is the person's call too
-      if (component === 'card' && action === 'setRows') return ask(`Claude wants to replace everything in the table "${String(label)}"`)
-      if (component === 'card' && action === 'setText') return ask(`Claude wants to rewrite the note "${String(label)}"`)
-      if (component === 'card' && action === 'removeRow') return ask(`Claude wants to take row "${String(args?.[0] ?? '')}" out of the table "${String(label)}"`)
-      if (component === 'card' && action === 'disconnect') return ask(`Claude wants to take away the arrow between "${String(label)}" and "${String(args?.[0] ?? '')}"`)
-      return true
+      emit('agent-asking', { component, action, label: String(label ?? '') })
+      // allowed with the rest of its call
+      const left = allowed.get(action) ?? 0
+      if (left > 0) {
+        allowed.set(action, left - 1)
+        return true
+      }
+      return ask(`Claude wants to ${what}`)
     },
   })
+
+  /**
+   * Several steps of one call that would each wait for the person: one question for all of them, before any runs
+   * ("Claude wants to do 4 things: …", Allow all). Allowed, they go through; not, the call doesn't run at all. A step
+   * named by a ref or title the page doesn't know is left to ask on its own.
+   */
+  const askAllAtOnce = async (steps: { ref?: unknown; action?: unknown; args?: unknown[] }[]) => {
+    allowed = new Map()
+    const page = agent.snapshot() as { ref?: string; component?: string; label?: string }[]
+    const find = (ref: unknown) => {
+      const r = String(ref ?? '')
+      return page.find(c => c.ref === r) ?? page.find(c => c.label === r) ?? page.find(c => c.label?.toLowerCase() === r.toLowerCase())
+    }
+    const asks = steps.flatMap(s => {
+      const c = find(s.ref)
+      const what = c && needsAllow(String(c.component), String(s.action ?? ''), s.args, c.label)
+      return what ? [{ what, action: String(s.action), component: String(c!.component), label: String(c!.label ?? '') }] : []
+    })
+    if (asks.length < 2) return true
+    for (const a of asks) emit('agent-asking', { component: a.component, action: a.action, label: a.label })
+    const list = asks.map((a, i) => `${i + 1}. ${a.what}`).join('; ')
+    const ok = await ask(`Claude wants to do ${asks.length} things: ${list}`, 'Allow all')
+    if (ok) for (const a of asks) allowed.set(a.action, (allowed.get(a.action) ?? 0) + 1)
+    return ok
+  }
   // the server says which window this is; the one used last answers the board tools
   const here = () => me && document.visibilityState === 'visible' && post('/api/agent/here', { client: me }).catch(() => {})
   onEvent('hello', (d: { client?: number }) => {
@@ -94,7 +135,12 @@ export function startAgentBridge(ask: Ask) {
         saw = []
       }
       if (c.tool === 'snapshot') output = agent.snapshot()
-      else if (c.tool === 'act') output = trimAct(await agent.act(c.input as Parameters<typeof agent.act>[0]))
+      else if (c.tool === 'act') {
+        const steps = (c.input as { steps?: { ref?: unknown; action?: unknown; args?: unknown[] }[] })?.steps
+        if (Array.isArray(steps) && !(await askAllAtOnce(steps))) output = { ok: false, error: { message: 'The user did not allow these changes, so none of the steps ran.' }, steps: [] }
+        else output = trimAct(await agent.act(c.input as Parameters<typeof agent.act>[0]))
+        allowed = new Map()
+      }
       else if (c.tool === 'query') output = await agent.query((c.input || {}) as Parameters<typeof agent.query>[0])
       else output = { error: `No tool ${c.tool}` }
     } catch (e: any) {
