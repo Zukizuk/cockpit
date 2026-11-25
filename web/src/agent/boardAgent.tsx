@@ -790,13 +790,14 @@ export function BoardAgent() {
   }
 
   // a card beside another (a gap between them), in that card's space; if something is already there, the nearest free
-  // spot. It can be undone (Ctrl+Z) like any move.
-  const GAP = 28
+  // spot. Two cards with an arrow between them get a wider gap, so the arrow (and its label) shows. It can be undone
+  // (Ctrl+Z) like any move.
   const placeNextTo = (id: string, title: string, otherTitle: string, side: Side) => {
     const other = visible.find(c => c.title === otherTitle && c.id !== id)
     const a = rf.getNode(id)
     const b = other && rf.getNode(other.id)
     if (!a || !b) throw new Error(`No card "${otherTitle}" on the board.`)
+    const GAP = between(id, b.id).length ? 96 : 28
     const size = (n: CardNode) => ({ w: n.measured?.width ?? n.width ?? 400, h: n.measured?.height ?? n.height ?? 300 })
     const sa = size(a)
     const sb = size(b)

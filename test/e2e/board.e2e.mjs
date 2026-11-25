@@ -298,6 +298,27 @@ test('Claude draws an arrow between cards it can see, sees it on both, and takin
   assert.ok(arrowsOf('Plain list').includes('← "Shared plan": next'))
   assert.ok(!arrowsOf('Shared plan').some(a => /Private/.test(a)), 'no arrow to a card it cannot see')
 
+  // lined up beside a card it has an arrow to, a card leaves room for the arrow: 96 apart, not 28
+  const cards = async () => (await api('/api/board')).cards
+  const was = (await cards()).find(c => c.id === 'shared')
+  // (to the right of Plain list: in view, so the view stays where it is)
+  const placed = await agent('act', { steps: [{ ref: 'Shared plan', action: 'placeNextTo', args: ['Plain list', 'right'] }] })
+  assert.equal(placed.output.ok, true)
+  assert.ok(
+    await until(async () => {
+      const all = await cards()
+      const s = all.find(c => c.id === 'shared')
+      const p = all.find(c => c.id === 'plain')
+      return s.x === p.x + p.w + 96 && s.y === p.y
+    }),
+    'beside it, with room for the arrow',
+  )
+  // (Ctrl+Z goes to the board with nothing focused)
+  await page.keyboard.press('Escape')
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur())
+  await page.keyboard.press('Control+z')
+  assert.ok(await until(async () => (await cards()).find(c => c.id === 'shared').x === was.x), 'Undo puts it back')
+
   const gone = agent('act', { steps: [{ ref: 'Shared plan', action: 'disconnect', args: ['Plain list'] }] })
   const allow = page.getByRole('button', { name: 'Allow' })
   assert.ok(await until(async () => (await allow.count()) > 0), 'the Allow toast')
