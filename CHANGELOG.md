@@ -2,6 +2,14 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 25 November 2026 (version 0.2.11)
+
+**Improved**
+- What you send with **Tell Claude** is read as a message from you on the board: Claude looks and answers freely, but before changing anything it asked for, it writes its plan in the chat in one line and waits for your yes there.
+
+**Fixed**
+- Claude no longer sees cards you've taken off the board.
+
 ## 25 November 2026 (version 0.2.10)
 
 **New**
