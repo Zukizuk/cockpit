@@ -1,5 +1,5 @@
 // The Claude Code side of Cockpit: the Outputs hook (what a turn made) and adding or removing it in settings.json.
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -8,6 +8,7 @@ import { lastTurn, run, turnItems } from '../server/claude/outputs-hook.js'
 import { hasHook, withHook, withoutHook } from '../scripts/claude-setup.mjs'
 
 const T = fs.mkdtempSync(path.join(os.tmpdir(), 'cockpit-claude-'))
+after(() => fs.rmSync(T, { recursive: true, force: true }))
 const line = o => JSON.stringify(o)
 const at = s => new Date(Date.now() - s * 1000).toISOString()
 
