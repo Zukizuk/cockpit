@@ -16,3 +16,5 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # the board in Edge (on every Windows runner): pasting, agents, sticky notes, menus
+      - run: npm run test:e2e

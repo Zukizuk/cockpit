@@ -179,6 +179,7 @@ login, <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>K</kbd>, and optionally the Claude Co
 | `npm run dev` | the web app with hot reload (talks to the running server) |
 | `npm run build` | builds the web app into `web/dist`, which the server serves |
 | `npm test` | server tests, against a temporary home folder |
+| `npm run test:e2e` | browser tests: the board in Edge against a throwaway Cockpit (after `npm run build`) |
 | `npm run typecheck` | type-checks the web app |
 | `npm run package` | builds the release zip in `release/` |
 
