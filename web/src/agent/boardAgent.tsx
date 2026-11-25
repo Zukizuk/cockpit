@@ -11,7 +11,7 @@ import { useEffect, useMemo } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
-import { foldNode, freeSpot, isSection, isSticky, sectionOf, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
+import { contentsOf, foldNode, freeSpot, isSection, isSticky, sectionOf, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
 import { get, post, put, type Snippet, type StickyColor, type TableData } from '../api'
 import { newTable, rowsFromText } from '../cards/TableCard'
 import { useData } from '../lib'
@@ -37,7 +37,7 @@ function pick<T>(list: T[], which: unknown, id: (t: T) => string, name: (t: T) =
 
 // ---- the board -----------------------------------------------------------------------------------------------
 
-type BoardValue = { space: string; spaces: { name: string; cards: number }[]; selected: string[]; inView: string[]; focus?: string[]; sharing?: string }
+type BoardValue = { space: string; spaces: { name: string; cards: number }[]; sections?: string[]; selected: string[]; inView: string[]; focus?: string[]; sharing?: string }
 type BoardOptions = {
   value?: BoardValue
   onSwitchSpace?: (space: string) => void
@@ -175,6 +175,9 @@ type CardOptions = {
   onWrite?: (change: { text: string; append: boolean }) => Promise<void>
   onRead?: () => CardContent
   onConnect?: (other: string, label: string) => void
+  onMoveToSection?: (section: string) => void
+  /** the sections it can go into (for moveToSection) */
+  sections?: string[]
   onDisconnect?: (other: string) => void
   /** the other cards' titles (for placeNextTo) */
   others?: string[]
@@ -186,7 +189,7 @@ const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', 
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', onConnect: 'action', onDisconnect: 'action', others: 'value' },
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', onConnect: 'action', onDisconnect: 'action', onMoveToSection: 'action', sections: 'value', others: 'value' },
   // pending and error: a change that takes a moment (a note, a table) reports how it went; UI SDK's act waits on them
   // (any error that isn't null counts as a failure, an empty one too)
   state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' }, pending: false, error: null as string | null }),
@@ -244,6 +247,8 @@ const cardPrimitive = definePrimitive({
       // an arrow from this card to another (with a label, or a new label on the one already there); disconnect takes
       // the arrows between the two away (that waits for the user's Allow)
       connectTo: (other: string, label?: string) => call('onConnect')(pick(context.options().others || [], other, x => x, x => x, 'card'), words(label)),
+      // into a section (a titled area): beside what's in it, the section growing to hold it
+      moveToSection: (section: string) => call('onMoveToSection')(pick(context.options().sections || [], section, x => x, x => x, 'section')),
       disconnect: (other: string) => call('onDisconnect')(pick(context.options().others || [], other, x => x, x => x, 'card')),
     }
     // only what this kind of card does: an agent sees a note's, a table's or a sticky note's own actions, not all of
@@ -259,7 +264,7 @@ const cardPrimitive = definePrimitive({
     return api
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'remove'] },
+  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'moveToSection', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -378,7 +383,7 @@ export function BoardAgent() {
 
   const cards: Built[] = useMemo(() => {
     const spaceOfId = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
-    return (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section]) => {
+    const built = (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section]) => {
       let title = KIND[type] ?? type
       let file: string | undefined
       let url: string | undefined
@@ -391,7 +396,10 @@ export function BoardAgent() {
         peek = e?.excerpt
       } else if (type === 'note') {
         const n = notes?.notes.find(x => x.path === ref)
-        title = /^journal\//.test(ref) ? `Journal ${ref.slice(8, 18)}` : n?.title || n?.excerpt?.split('\n')[0] || 'Sticky note'
+        // a note with nothing in it and no title is named by its file (a time stamp): it's "Untitled" to an agent
+        const stem = (ref.split('/').pop() || '').replace(/\.(md|markdown|txt)$/i, '')
+        const own = n?.title && n.title !== stem ? n.title : n?.excerpt?.split('\n').find(l => l.trim())?.trim()
+        title = /^journal\//.test(ref) ? `Journal ${ref.slice(8, 18)}` : own || (isSticky(type, ref) ? 'Untitled sticky note' : 'Untitled note')
         if (notes) file = notes.root + sep + ref.split('/').join(sep)
         peek = n?.excerpt
       } else if (type === 'folder') {
@@ -441,6 +449,13 @@ export function BoardAgent() {
         }
       }
       return { id, type, ref, title, value, content, mark, spaceId: space }
+    })
+    // two cards with one name (two untitled notes, two copies of a file): the second is "… (2)", so each can be named
+    const seen = new Map<string, number>()
+    return built.map(c => {
+      const k = (seen.get(c.title) ?? 0) + 1
+      seen.set(c.title, k)
+      return k === 1 ? c : { ...c, title: `${c.title} (${k})`, content: { ...c.content, title: `${c.title} (${k})` } }
     })
   }, [cardsKey, board.spaces, board.space, board.items, board.outputs, board.comments, notes, sep, tables.data])
 
@@ -499,10 +514,26 @@ export function BoardAgent() {
     return of.some(c => visibleIds.has(c.id))
   }
 
+  // the sections in the spaces it may see, by title ("Section" for one with none; a second of one name "… (2)")
+  const sectionsKey = useStore(s => JSON.stringify((s.nodes as CardNode[]).filter(isSection).map(n => [n.id, n.data.title || 'Section', spaceOf(n)])))
+  const sectionList = useMemo(() => {
+    const open = new Set(openSpaces.map(s => s.id))
+    const seen = new Map<string, number>()
+    return (JSON.parse(sectionsKey) as [string, string, string][])
+      .filter(([, , sp]) => open.has(sp))
+      .map(([id, t, sp]) => {
+        const k = (seen.get(t) ?? 0) + 1
+        seen.set(t, k)
+        return { id, name: k === 1 ? t : `${t} (${k})`, spaceId: sp }
+      })
+  }, [sectionsKey, openSpaces])
+  const sectionNames = useMemo(() => sectionList.map(s => s.name), [sectionList])
   const boardValue: BoardValue = useMemo(
     () => ({
       space: openSpaces.some(s => s.id === board.space) ? spaceName(board.space) : '(not shared with you)',
       spaces: openSpaces.map(s => ({ name: s.name, cards: visible.filter(c => c.spaceId === s.id).length })),
+      // the sections in the space shown (a card's moveToSection puts it in one)
+      ...(sectionList.some(s => s.spaceId === board.space) ? { sections: sectionList.filter(s => s.spaceId === board.space).map(s => s.name) } : {}),
       selected: visible.filter(c => c.value.selected).map(c => c.title),
       inView: visible.filter(c => c.value.inView).map(c => c.title),
       ...(board.focusing ? { focus: visible.filter(c => c.value.selected).map(c => c.title) } : {}),
@@ -511,7 +542,7 @@ export function BoardAgent() {
         : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visible, openSpaces, board.space, board.focusing, access],
+    [visible, openSpaces, sectionList, board.space, board.focusing, access],
   )
   // the arrows between the cards it can see, on each card's value: "→ Title" it points to, "← Title" from
   const edgesKey = useStore(s => s.edges.map(e => [e.id, e.source, e.target, (e.data as LinkData | undefined)?.label || ''].join('|')).join(';'))
@@ -548,6 +579,35 @@ export function BoardAgent() {
     const there = other ? between(c.id, other.id) : []
     if (!other || !there.length) throw new Error(`No arrow between "${c.title}" and "${otherTitle}".`)
     for (const e of there) board.removeLink(e.id)
+  }
+  // a card into a section: beside what's in it (to the right of the rightmost, level with the top one), or at its
+  // top-left when it's empty; the section grows to hold it. In the section's space. Undo puts it back.
+  const moveToSection = (c: Built, name: string) => {
+    const sec = sectionList.find(s => s.name === name)
+    const s = sec && rf.getNode(sec.id)
+    const n = rf.getNode(c.id)
+    if (!s || !n) throw new Error(`No section "${name}".`)
+    const size = (x: CardNode) => ({ w: x.measured?.width ?? x.width ?? 300, h: x.measured?.height ?? x.height ?? 280 })
+    const sb = { x: s.position.x, y: s.position.y, ...size(s) }
+    const inside = contentsOf(s, rf.getNodes()).filter(x => x.id !== c.id && !isSection(x))
+    const PAD = 40
+    const GAP = 28
+    const pos = inside.length ? { x: Math.max(...inside.map(x => x.position.x + size(x).w)) + GAP, y: Math.min(...inside.map(x => x.position.y)) } : { x: sb.x + PAD, y: sb.y + PAD }
+    const me = size(n)
+    const there = spaceOf(s)
+    board.remember()
+    rf.setNodes(ns =>
+      ns.map(x => {
+        if (x.id === c.id) {
+          const { space: _s, tucked: _t, ...data } = x.data
+          return { ...x, position: pos, hidden: there !== board.space, data: there === 'main' ? data : { ...data, space: there } }
+        }
+        if (x.id === s.id) return { ...x, width: Math.round(Math.max(sb.x + sb.w, pos.x + me.w + PAD) - sb.x), height: Math.round(Math.max(sb.y + sb.h, pos.y + me.h + PAD) - sb.y) }
+        return x
+      }),
+    )
+    board.persist()
+    said(`Claude put ${c.title} in the section "${name}"`)
   }
   const spaceNames = useMemo(() => openSpaces.map(s => s.name), [openSpaces])
   // every visible card's title, for "next to which card" (the same array while the cards stay the same)
@@ -718,6 +778,8 @@ export function BoardAgent() {
             onRead={() => (touchCard(c.id, 'reading'), readCard(c))}
             onConnect={(other, label) => (touchCard(c.id, 'arranging'), connect(c, other, label))}
             onDisconnect={other => (touchCard(c.id, 'arranging'), disconnect(c, other))}
+            sections={sectionNames}
+            onMoveToSection={name => (touchCard(c.id, 'arranging'), moveToSection(c, name))}
             spaces={spaceNames}
             onComment={t => {
               touchCard(c.id, 'commenting')

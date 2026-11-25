@@ -473,6 +473,14 @@
   background: var(--agent);
   animation: agent-dot 1.2s ease-in-out infinite;
 }
+/* done: the dot stops and dims, the words go quieter */
+.agent-pill.is-after {
+  color: var(--muted-foreground);
+}
+.agent-pill.is-after .agent-pill-dot {
+  animation: none;
+  opacity: 0.5;
+}
 @keyframes agent-dot {
   50% {
     opacity: 0.35;

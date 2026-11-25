@@ -90,25 +90,49 @@ export function AgentFrames() {
   )
 }
 
-/** The pill at the top while a call runs: at least a moment, so a quick look is seen too. */
+/** How long the pill stays once the agent is done, saying when it last was at work. */
+const AFTER = 30_000
+
+/**
+ * The pill at the top right: while a call runs, what the agent is doing ("Claude is working on the board"); once it's
+ * done, for half a minute, when it last was ("Claude worked on the board · 12 s ago"), then it goes. Calls close
+ * together count as one stretch of work: "worked" if any of them changed something, "looked" if they only looked.
+ */
 export function AgentPill() {
-  const [state, setState] = useState<{ text: string; shown: boolean }>({ text: '', shown: false })
+  const [s, setS] = useState<{ phase: 'idle' | 'busy' | 'after'; name: string; acted: boolean; tool: string; at: number }>({ phase: 'idle', name: 'Claude', acted: false, tool: '', at: 0 })
+  const [, tick] = useState(0)
+  useEffect(
+    () =>
+      onEvent('agent-busy', (d: Busy) =>
+        setS(prev => {
+          const fresh = prev.phase === 'idle'
+          if (d.on) return { phase: 'busy', name: nameOf(d.agent || ''), acted: (fresh ? false : prev.acted) || d.tool === 'act', tool: d.tool || '', at: Date.now() }
+          return { ...prev, phase: 'after', at: Date.now() }
+        }),
+      ),
+    [],
+  )
+  // after: the time ago, a second at a time, and gone after half a minute
   useEffect(() => {
-    let since = 0
-    let timer: ReturnType<typeof setTimeout> | undefined
-    return onEvent('agent-busy', (d: Busy) => {
-      if (timer) clearTimeout(timer)
-      if (d.on) {
-        since = Date.now()
-        const name = nameOf(d.agent || '')
-        setState({ text: d.tool === 'act' ? `${name} is working on the board` : `${name} is looking at the board`, shown: true })
-      } else timer = setTimeout(() => setState(s => ({ ...s, shown: false })), Math.max(700, 1400 - (Date.now() - since)))
-    })
-  }, [])
+    if (s.phase !== 'after') return
+    const t = setInterval(() => {
+      if (Date.now() - s.at >= AFTER) setS(prev => (prev.phase === 'after' ? { ...prev, phase: 'idle' } : prev))
+      else tick(x => x + 1)
+    }, 1000)
+    return () => clearInterval(t)
+  }, [s.phase, s.at])
+  const ago = Math.round((Date.now() - s.at) / 1000)
+  const when = ago < 5 ? 'just now' : `${ago} s ago`
+  const text =
+    s.phase === 'busy'
+      ? s.tool === 'act'
+        ? `${s.name} is working on the board`
+        : `${s.name} is looking at the board`
+      : `${s.name} ${s.acted ? 'worked on' : 'looked at'} the board · ${when}`
   return (
-    <div className={cn('agent-pill glass', state.shown && 'is-shown')} role="status" aria-live="polite">
+    <div className={cn('agent-pill glass', s.phase !== 'idle' && 'is-shown', s.phase === 'after' && 'is-after')} role="status" aria-live="polite">
       <span className="agent-pill-dot" aria-hidden />
-      {state.text}
+      {s.phase === 'idle' && !s.at ? '' : text}
     </div>
   )
 }

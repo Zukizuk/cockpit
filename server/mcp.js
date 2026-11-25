@@ -31,7 +31,9 @@ const BOARD_NOTE =
   'board_query with { text: "<some of its words>" } finds it by title. When they say "this card", "the selected one" ' +
   "or \"what I am looking at\", call board_snapshot: those cards have selected: true or inView: true, and 'Board' " +
   'lists their titles. Every board_act takes { steps: [{ ref, action, args: [...] }] }. ' +
-  "Components: 'Board' (board: the spaces with their card counts, the space shown, selected and in-view titles; " +
+  "Components: 'Board' (board: the spaces with their card counts, the space shown, the sections in it, selected and " +
+  'in-view titles (a note with no title and nothing in it is "Untitled sticky note"; two cards of one name: the second ' +
+  'is "… (2)"); ' +
   "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text, space?), jot(text) into today's " +
   'journal (an extra the user turns on in Settings > Extras; if jot says it is off, use addSticky), show(pathOrUrl, space?) to put a file or link on the board; give space to put it in another space ' +
   'without moving the user there (make the space first with newSpace if it is new); tidy() lines the cards up, as the ' +
@@ -48,7 +50,8 @@ const BOARD_NOTE =
   'placeNextTo(otherCard, side?) to put it beside another card (side: right, left, below or above; right if not ' +
   'given; it goes to that card\'s space), connectTo(otherCard, label?) to draw an arrow from it to another card (or ' +
   "label the one already there; a card's arrows list them, \"→ Title\" it points to and \"← Title\" from), " +
-  'disconnect(otherCard) to take that arrow away (it waits for Allow), rename(title) ' +
+  'disconnect(otherCard) to take that arrow away (it waits for Allow), moveToSection(section) to put it in one of ' +
+  "the sections 'Board' lists (beside what is in it; the section grows to hold it), rename(title) " +
   "(notes), setColor(yellow | green | pink | orange | charcoal) (sticky notes), tuck() to tuck it away as a tab at " +
   'the top edge, bringBack(), hideContents() and showContents() (blurred on the board, for sharing the screen; ' +
   "a card's tucked and hidden say which), remove(). 'Today's tasks' (task-list: " +
