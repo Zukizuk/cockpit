@@ -65,6 +65,21 @@ export function NoteCard({ id, data, selected }: NodeProps<CardNode>) {
   }, [today, !!day])
   // F2 on the board, with this card selected
   useEffect(() => onEvent('note-rename', (d: { id?: string }) => d.id === id && setNaming(true)), [id])
+  // archived: saved first (what was just typed), then the file goes to .archive and the card off the board
+  const archive = async (quiet = false) => {
+    try {
+      await note.save()
+      await note.archive()
+      board.removeCard(id, { quiet: true })
+      if (!quiet) board.toast('Archived (kept in .archive)')
+    } catch (e: any) {
+      board.toast(e.message)
+    }
+  }
+  const archiveRef = useRef(archive)
+  archiveRef.current = archive
+  // several notes archived at once from one card's menu (the toast says how many)
+  useEffect(() => onEvent('note-archive', (d: { ids?: string[] }) => void (d.ids?.includes(id) && archiveRef.current(true))), [id])
   const keepTitle = (v: string | null) => {
     setNaming(false)
     if (v === null || v.trim() === own) return
@@ -89,18 +104,7 @@ export function NoteCard({ id, data, selected }: NodeProps<CardNode>) {
       icon: board.prefs.editor === 'vscode' ? Code2 : ExternalLink,
       run: () => note.save().then(() => openOutside({ kind: 'note', path: data.ref, how: 'editor' })).catch(e => board.toast(e.message)),
     },
-    {
-      label: 'Archive note',
-      icon: Archive,
-      danger: true,
-      gap: true,
-      run: async () => {
-        await note.save()
-        await note.archive()
-        board.removeCard(id, { quiet: true })
-        board.toast('Archived (kept in .archive)')
-      },
-    },
+    { label: 'Archive note', icon: Archive, danger: true, gap: true, run: () => archive() },
     { label: 'Remove from board', icon: X, run: () => board.removeCard(id), keys: 'Del' },
   ]
 

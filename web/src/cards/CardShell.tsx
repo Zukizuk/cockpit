@@ -3,9 +3,9 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Handle, NodeResizer, Position, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff } from 'lucide-react'
+import { Archive, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, X } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
-import { foldNode, minSize, resizingRef, useBoard, type CardNode } from '../board'
+import { foldNode, isSticky, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { CardComments } from './CardComments'
 import { emit } from '../lib'
@@ -27,7 +27,7 @@ export function inGroups(groups: CardAction[][]): CardAction[] {
 }
 
 /** Sharing with agents, and moving to another space: the same in a card's menu and full screen. `ids` are the cards
- * a mark goes on (several, when several are picked); a move takes the one card. */
+ * it acts on (several, when several are picked). */
 export function agentAndSpaceActions(board: ReturnType<typeof useBoard>, ids: () => string[], nodeId: string | null | undefined, mark: CardNode['data']['agents']): CardAction[][] {
   const setMark = (m: 'shared' | 'private' | null, said: string) => {
     board.setCardAgents(ids(), m)
@@ -51,7 +51,7 @@ export function agentAndSpaceActions(board: ReturnType<typeof useBoard>, ids: ()
       ...board.spaces
         .filter(x => x.id !== board.space)
         .slice(0, 8)
-        .map((x): CardAction => ({ label: `Move to ${x.name}`, icon: Layers, run: () => void (nodeId && board.moveToSpace([nodeId], x.id)) })),
+        .map((x): CardAction => ({ label: `Move to ${x.name}`, icon: Layers, run: () => void (nodeId && board.moveToSpace(ids(), x.id)) })),
       {
         label: 'Move to a new space',
         icon: Layers,
@@ -59,7 +59,7 @@ export function agentAndSpaceActions(board: ReturnType<typeof useBoard>, ids: ()
           if (!nodeId) return
           const was = board.space
           const to = board.newSpace()
-          board.moveToSpace([nodeId], to)
+          board.moveToSpace(ids(), to)
           board.toast('Moved to a new space', { label: 'Go back', run: () => board.switchSpace(was) })
         },
       },
@@ -201,7 +201,60 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const isEnd = (a: CardAction) => /^(Remove from board|Archive|Delete)/.test(a.label)
   const own = actions.filter(a => !a.context && !isEnd(a))
   const end = actions.filter(a => !a.context && isEnd(a))
-  const groups: CardAction[][] = [
+  // Several cards picked and this one among them: its menu acts on all of them, with only what makes sense for
+  // several (no opening, renaming or copying one card)
+  const many = manyPicked && !!selected
+  const pickedState = useStore(s => {
+    if (!many) return ''
+    const p = s.nodes.filter(n => n.selected) as CardNode[]
+    const all = (f: (n: CardNode) => boolean) => (p.every(f) ? '1' : '0')
+    return [all(n => !!n.data.folded), all(n => !!n.data.locked), all(n => !!n.data.veiled), all(n => isSticky(n.type, n.data.ref)), all(n => n.type === 'note'), all(n => !n.data.locked)].join('')
+  })
+  const [allFolded, allLocked, allVeiled, allSticky, allNotes, noneLocked] = pickedState.split('').map(c => c === '1')
+  const pickedIds = () => rf.getNodes().filter(n => n.selected).map(n => n.id)
+  const manyGroups = (): CardAction[][] => {
+    const n = pickedCount
+    return [
+      [
+        { label: board.focusing ? 'Bring everything back' : 'Focus on these cards', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
+        { label: 'Compare side by side', icon: SquareSplitHorizontal, run: () => board.compareCards(pickedIds()), hidden: n !== 2, keys: 'Space' },
+      ],
+      [
+        {
+          label: allFolded ? `Unfold these ${n}` : `Fold these ${n}`,
+          icon: allFolded ? ChevronsUpDown : ChevronsDownUp,
+          run: () => {
+            const ids = new Set(pickedIds())
+            board.remember()
+            rf.setNodes(ns => ns.map(x => (ids.has(x.id) ? foldNode(x, !allFolded) : x)))
+            board.persist()
+          },
+          keys: 'F',
+        },
+        { label: `Tuck these ${n} away at the top`, icon: ArrowUpToLine, run: () => board.tuck(pickedIds()) },
+      ],
+      [
+        { label: allLocked ? `Unlock these ${n}` : `Lock these ${n} in place`, icon: allLocked ? LockOpen : Lock, run: () => board.setLocked(pickedIds(), !allLocked), keys: 'Ctrl+Shift+L' },
+        { label: allVeiled ? 'Show their contents' : 'Hide their contents', icon: allVeiled ? Eye : EyeOff, run: () => board.setVeiled(pickedIds(), !allVeiled), keys: 'H' },
+      ],
+      ...agentAndSpaceActions(board, pickedIds, nodeId, mark),
+      [
+        {
+          label: `Archive these ${n} notes`,
+          icon: Archive,
+          danger: true,
+          hidden: !allNotes,
+          run: () => {
+            emit('note-archive', { ids: pickedIds() })
+            board.toast(`Archived ${n} notes (kept in .archive)`)
+          },
+        },
+        // a locked card stays (as with the Delete key)
+        { label: noneLocked ? `Remove these ${n} from board` : 'Remove the unlocked ones from board', icon: X, run: () => board.removeCards(pickedIds()), keys: 'Del' },
+      ],
+    ]
+  }
+  const groups: CardAction[][] = many ? manyGroups() : [
     here,
     [...own, { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) }],
     [
@@ -250,7 +303,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     context = false,
   ) => (
     <>
-      {sticky && (
+      {sticky && (!many || allSticky) && (
         <>
           <div className="sticky-swatches" role="group" aria-label="Colour">
             {STICKY_COLORS.map(c => (
@@ -258,8 +311,8 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
                 key={c.value}
                 aria-label={c.label}
                 title={c.label}
-                className={cn('sticky-swatch', `paper-${c.value}`, sticky === c.value && 'is-on')}
-                onSelect={() => nodeId && board.setColor(nodeId, c.value)}
+                className={cn('sticky-swatch', `paper-${c.value}`, !many && sticky === c.value && 'is-on')}
+                onSelect={() => (many ? pickedIds() : nodeId ? [nodeId] : []).forEach(id => board.setColor(id, c.value))}
               />
             ))}
           </div>

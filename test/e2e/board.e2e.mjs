@@ -301,6 +301,59 @@ test('Claude draws an arrow between cards it can see, sees it on both, and takin
   await clearSelection()
 })
 
+test('an arrow between two cards side by side runs straight, and a card dragged near level snaps into line', async () => {
+  await clearSelection()
+  const card = id => page.locator(`.react-flow__node[data-id="${id}"]`)
+  const ys = () =>
+    page.evaluate(() => {
+      const d = document.querySelector('.react-flow__edge[aria-label="Edge from private to shared"] .arrow-line').getAttribute('d')
+      const n = d.match(/-?\d+(\.\d+)?/g).map(Number)
+      return [...new Set(n.filter((_, i) => i % 2 === 1).map(Math.round))]
+    })
+  // the strip, right of its title: drag it by dy (the first pixel's move only starts the drag)
+  const dragBy = async (id, dy) => {
+    const b = await card(id).boundingBox()
+    await page.mouse.move(b.x + 125, b.y + 10)
+    await page.mouse.down()
+    await page.mouse.move(b.x + 125, b.y + 10 + 3 * Math.sign(dy))
+    await page.mouse.move(b.x + 125, b.y + 10 + 4 * Math.sign(dy))
+    await page.mouse.move(b.x + 125, b.y + 10 + dy / 2, { steps: 4 })
+    await page.mouse.move(b.x + 125, b.y + 10 + dy, { steps: 4 })
+    await page.mouse.up()
+    await page.waitForTimeout(900) // saved a moment after
+  }
+  const yOf = async id => (await api('/api/board')).cards.find(c => c.id === id).y
+
+  await dragBy('private', 60)
+  const down = await yOf('private')
+  assert.ok(down >= 50 && down <= 62, `moved down, out of line (${down})`)
+  assert.equal((await ys()).length, 1, 'still straight: one height end to end')
+  // to a few pixels short of level: it snaps the rest of the way
+  await dragBy('private', -(down - 4))
+  assert.equal(await yOf('private'), 0, 'snapped level with the card it points to')
+  assert.equal((await ys()).length, 1)
+})
+
+test('with several cards selected, a card menu acts on all of them, and leaves out what is for one card', async () => {
+  await clearSelection()
+  await note('Plain list').click({ position: { x: 150, y: 200 } })
+  await note('Shared plan').click({ position: { x: 150, y: 200 }, modifiers: ['Shift'] })
+  await note('Shared plan').click({ button: 'right', position: { x: 60, y: 12 } })
+  const menu = page.locator('[role=menu]').last()
+  await menu.waitFor()
+  const labels = (await menu.locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
+  for (const l of ['Fold these 2', 'Tuck these 2 away at the top', 'Lock these 2 in place', 'Hide their contents', 'Archive these 2 notes', 'Remove these 2 from board'])
+    assert.ok(labels.includes(l), `${l} is in it`)
+  for (const l of ['Open full screen', 'Rename', 'Add a title', 'Copy the text', 'Comment']) assert.ok(!labels.includes(l), `${l} is not`)
+  await menu.getByRole('menuitem', { name: 'Remove these 2 from board' }).click()
+  const on = async () => (await api('/api/board')).cards.map(c => c.id)
+  assert.ok(await until(async () => !(await on()).includes('plain') && !(await on()).includes('shared')), 'both taken off')
+  await page.mouse.click(EMPTY.x, EMPTY.y)
+  await page.keyboard.press('Control+z')
+  assert.ok(await until(async () => (await on()).includes('plain') && (await on()).includes('shared')), 'one Undo brings both back')
+  await clearSelection()
+})
+
 // last: a pasted card lands where the mouse is, on the empty spot the other tests use
 test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short password goes to Snippets', async () => {
   await clearSelection()

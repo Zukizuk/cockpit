@@ -86,12 +86,44 @@ function Canvas({ initial }: { initial: Board }) {
 
   const onChange = useCallback(
     (changes: NodeChange<CardNode>[]) => {
+      changes = snapToLinked(changes)
       onNodesChange(changes)
       // save once a move, resize or removal is finished (not on every frame, not on selection)
       if (changes.some(c => (c.type === 'position' && !c.dragging) || (c.type === 'dimensions' && !c.resizing) || c.type === 'remove')) board.persist()
     },
     [onNodesChange, board],
   )
+  // A card dragged on its own, near level with a card it has an arrow to (its middle, top or bottom within a few
+  // pixels on screen), snaps into line with it, so the arrow between them runs straight.
+  function snapToLinked(changes: NodeChange<CardNode>[]) {
+    // while dragging, and where it's let go (React Flow's last change carries the place under the pointer, unsnapped)
+    const moving = changes.filter(c => c.type === 'position' && c.position && c.dragging !== undefined)
+    if (moving.length !== 1 || moving[0].type !== 'position' || !moving[0].position) return changes
+    const ch = moving[0]
+    const me = rf.getNode(ch.id)
+    if (!me) return changes
+    const linked = new Set(rf.getEdges().flatMap(e => (e.source === ch.id ? [e.target] : e.target === ch.id ? [e.source] : [])))
+    if (!linked.size) return changes
+    const size = (n: CardNode) => ({ w: n.measured?.width ?? n.width ?? 0, h: n.measured?.height ?? n.height ?? 0 })
+    const { w, h } = size(me)
+    const near = 10 / rf.getZoom()
+    const { x, y } = ch.position!
+    // the smallest shift that lines something up, on each axis (none further than `near`)
+    let dx = 0
+    let dy = 0
+    let bestX = near
+    let bestY = near
+    for (const id of linked) {
+      const o = rf.getNode(id)
+      if (!o || o.hidden) continue
+      const os = size(o)
+      // middles, tops or bottoms level; middles, left edges or right edges in line
+      for (const d of [o.position.y + os.h / 2 - (y + h / 2), o.position.y - y, o.position.y + os.h - (y + h)]) if (Math.abs(d) < bestY) (bestY = Math.abs(d)), (dy = d)
+      for (const d of [o.position.x + os.w / 2 - (x + w / 2), o.position.x - x, o.position.x + os.w - (x + w)]) if (Math.abs(d) < bestX) (bestX = Math.abs(d)), (dx = d)
+    }
+    if (!dx && !dy) return changes
+    return changes.map(c => (c === ch ? { ...ch, position: { x: x + dx, y: y + dy } } : c))
+  }
   // arrows between cards
   const [edges, , onEdgesChange] = useEdgesState<LinkEdge>(useMemo(() => (initial.links || []).map(toEdge), [initial]))
   const onEdgeChange = useCallback(

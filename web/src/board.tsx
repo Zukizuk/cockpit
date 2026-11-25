@@ -300,6 +300,8 @@ interface Ctx {
   /** Changes an arrow: its label, dashes, heads, or which way it points (reverse). */
   setLink: (id: string, change: Partial<LinkData> | 'reverse') => void
   removeLink: (id: string) => void
+  /** Takes several cards off the board at once (locked ones stay); one Undo brings them back. */
+  removeCards: (ids: string[]) => void
 }
 
 const BoardCtx = createContext<Ctx | null>(null)
@@ -655,6 +657,20 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       persist()
     },
     [rf, persist, remember, removing],
+  )
+
+  /** Takes several cards off at once: one Undo brings them all back. */
+  const removeCards = useCallback(
+    (ids: string[]) => {
+      const set = new Set(ids)
+      const nodes = rf.getNodes().filter(n => set.has(n.id) && !n.data.locked)
+      if (!nodes.length) return
+      removing(nodes)
+      const gone = new Set(nodes.map(n => n.id))
+      rf.setNodes(ns => ns.filter(x => !gone.has(x.id)))
+      persist()
+    },
+    [rf, persist, removing],
   )
 
   const retarget = useCallback(
@@ -1263,7 +1279,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
 
   const value = useMemo<Ctx>(
     () => ({
-      addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
+      addCard, removeCard, removeCards, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
       keysOpen, setKeysOpen, focusing, toggleFocus, compareCards, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
@@ -1272,7 +1288,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>
