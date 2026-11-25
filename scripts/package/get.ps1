@@ -22,9 +22,43 @@
   $work = Join-Path $env:TEMP ('cockpit-setup-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
   New-Item -ItemType Directory -Force $work | Out-Null
   try {
-    Write-Host "Downloading Cockpit $($release.tag_name) ($([math]::Round($asset.size / 1MB)) MB)..."
+    Write-Host "Downloading Cockpit $($release.tag_name)..."
     $zip = Join-Path $work $asset.name
-    Invoke-WebRequest -UseBasicParsing $asset.browser_download_url -OutFile $zip
+    # read in chunks and say how far it's got on one line, a few times a second (PowerShell's own progress bar is
+    # what makes Invoke-WebRequest slow)
+    $res = ([Net.HttpWebRequest]::Create($asset.browser_download_url)).GetResponse()
+    $total = if ($res.ContentLength -gt 0) { $res.ContentLength } else { $asset.size }
+    $in = $res.GetResponseStream()
+    $out = [IO.File]::Create($zip)
+    try {
+      $buf = New-Object byte[] 262144
+      $got = 0
+      $clock = [Diagnostics.Stopwatch]::StartNew()
+      $shown = -1000
+      $say = {
+        $mb = [math]::Round($got / 1MB)
+        $of = [math]::Round($total / 1MB)
+        $pct = if ($total) { [math]::Floor(100 * $got / $total) } else { 0 }
+        $secs = [math]::Max(0.001, $clock.Elapsed.TotalSeconds)
+        $speed = [math]::Round($got / 1MB / $secs, 1)
+        Write-Host -NoNewline ("`r  {0} of {1} MB ({2}%), {3} MB/s    " -f $mb, $of, $pct, $speed)
+      }
+      while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+        $out.Write($buf, 0, $n)
+        $got += $n
+        if ($clock.ElapsedMilliseconds - $shown -ge 250) {
+          & $say
+          $shown = $clock.ElapsedMilliseconds
+        }
+      }
+      & $say
+      Write-Host ''
+    }
+    finally {
+      $out.Close()
+      $in.Close()
+      $res.Close()
+    }
     if ($sha256 -and (Get-FileHash $zip -Algorithm SHA256).Hash -ne $sha256) {
       throw "The download doesn't match the release (checksum). Nothing was installed; try again."
     }
