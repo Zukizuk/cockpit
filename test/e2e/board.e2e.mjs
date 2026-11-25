@@ -445,7 +445,7 @@ test('while Claude reads a card a frame round it says so, the pill says Claude i
   assert.ok(f.x < c.x && f.y < c.y && f.x + f.width > c.x + c.width && f.y + f.height > c.y + c.height, 'round the card read')
   // (a read is over in a moment: by now the pill says Claude worked on the board, just now)
   assert.match(await page.locator('.agent-pill.is-shown').innerText(), /Claude (is working on|worked on) the board/)
-  assert.ok(await until(async () => (await page.locator('.agent-frame').count()) === 0, 6000), 'gone a moment later')
+  assert.ok(await until(async () => (await page.locator('.agent-frame').count()) === 0, 9000), 'gone a few seconds later')
   // the pill stays a while, saying when Claude last was at work
   assert.match(await page.locator('.agent-pill.is-shown.is-after').innerText(), /Claude worked on the board · (just now|\d+ s ago)/)
 })

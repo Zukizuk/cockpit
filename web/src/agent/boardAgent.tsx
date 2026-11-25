@@ -607,6 +607,8 @@ export function BoardAgent() {
       }),
     )
     board.persist()
+    // the view follows it, so the card doesn't vanish from where the person is looking (on the space they're on)
+    if (there === board.space) setTimeout(() => rf.fitView({ nodes: [{ id: s.id }], duration: 320, padding: 0.15, maxZoom: 1 }), 60)
     said(`Claude put ${c.title} in the section "${name}"`)
   }
   const spaceNames = useMemo(() => openSpaces.map(s => s.name), [openSpaces])

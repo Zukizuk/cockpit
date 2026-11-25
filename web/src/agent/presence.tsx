@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 export type Verb = 'reading' | 'writing' | 'commenting' | 'arranging' | 'made'
 const SAY: Record<Verb, string> = { reading: 'reading', writing: 'writing', commenting: 'commenting', arranging: 'arranging', made: 'made this' }
 /** How long a frame stays after the agent last touched its card (and after the call is answered). */
-const LINGER = 2200
+const LINGER = 5000
 /** How long a frame takes to fade. */
 const FADE = 400
 
