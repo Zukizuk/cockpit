@@ -101,8 +101,9 @@ export function startAgentBridge(ask: Ask) {
     })
     if (asks.length < 2) return true
     for (const a of asks) emit('agent-asking', { component: a.component, action: a.action, label: a.label, arg: a.arg })
-    const list = asks.map((a, i) => `${i + 1}. ${a.what}`).join('; ')
-    const ok = await ask(`Claude wants to do ${asks.length} things: ${list}`, 'Allow all')
+    // one per line
+    const list = asks.map((a, i) => `${i + 1}. ${a.what[0].toUpperCase()}${a.what.slice(1)}`).join('\n')
+    const ok = await ask(`Claude wants to do ${asks.length} things:\n${list}`, 'Allow all')
     if (ok) for (const a of asks) allowed.set(a.action, (allowed.get(a.action) ?? 0) + 1)
     return ok
   }

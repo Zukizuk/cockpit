@@ -527,6 +527,7 @@ test('Claude asks a question with its guess in grey and carries on; the person a
   const both = agent('act', { steps: two })
   const all = page.getByRole('button', { name: 'Allow all' })
   assert.ok(await until(async () => (await all.count()) === 1), 'Allow all')
+  assert.ok((await all.boundingBox()).height <= 30, '"Allow all" on one line')
   await all.click()
   assert.equal((await both).output.ok, true)
   assert.ok(await until(async () => !(await left()).some(q => q === 'How many are coming?' || q === 'Which room?')), 'both gone, one Allow')

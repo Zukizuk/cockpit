@@ -1159,7 +1159,15 @@ button.space-switch:active {
   pointer-events: auto;
 }
 
+/* a line break in what it says is kept (a list of what Claude wants to do, one per line) */
+.toast > span {
+  white-space: pre-line;
+}
+
 .toast-btn {
+  /* its words never wrap ("Allow all"); the text beside it does */
+  flex-shrink: 0;
+  white-space: nowrap;
   height: 28px;
   padding: 0 11px;
   border-radius: 7px; /* 12px toast, 5px inset */
