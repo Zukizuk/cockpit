@@ -59,9 +59,10 @@ const BOARD_NOTE =
   "add(text), complete(task), reopen(task), rename(task, newText), remove(task)); 'Later list' (later-list: " +
   "read() for the items with their links, add(linkOrNote), setState(item, 'to check' | 'reading' | 'done'), " +
   "remove(item)); 'Snippets list' (snippet-list: read(item) for one snippet's text, add(text, title?), remove(item); a " +
-  "secret's text is never shown); 'Questions list' (question-list: ask(question, guess, about?) leaves the user a question " +
+  "secret's text is never shown); 'Questions list' (question-list: ask(question, guess, about?, choices?) leaves the user a question " +
   'on the board without stopping: give your best guess as guess and carry on with it as if it were the answer; about ' +
-  "names the card it's about. read() gives every question with your guess and the user's answer when they've given " +
+  "names the card it's about; choices, an array of 2 to 8 short answers, shows them as buttons to pick from (make the " +
+  "guess one of them), for a question with a few likely answers. read() gives every question with your guess and the user's answer when they've given " +
   'one (no answer yet: your guess stands); look again before you rely on a guess for something that matters. ' +
   'remove(question) waits for Allow. Ask this way, not in the chat, when you are working on the board and only the ' +
   'user can say, but a sensible guess lets you go on). ' +

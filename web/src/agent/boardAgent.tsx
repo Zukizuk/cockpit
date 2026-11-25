@@ -7,14 +7,14 @@
 // - "Later" and "Snippets": the lists themselves.
 // Notes are files: a card gives the path, so an agent reads and edits the note where it is, and the board follows.
 // Removing anything waits for the person (the bridge's allow). Experimental (spike/ui-sdk-today).
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
 import { contentsOf, foldNode, freeSpot, isSection, isSticky, sectionOf, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
 import { get, post, put, type Question, type Snippet, type StickyColor, type TableData } from '../api'
 import { newTable, rowsFromText } from '../cards/TableCard'
-import { useData } from '../lib'
+import { onEvent, useData } from '../lib'
 import { summary } from '../cards/OutputsCard'
 import { setVisible, useAgentView } from './view'
 import { touchCard } from './presence'
@@ -313,8 +313,8 @@ const { Root: LaterRoot } = createParts(laterPrimitive, { root: 'div' })
 // What an agent asks instead of stopping: the question with its best guess, which it carries on with; the person
 // answers on the board when they like, and the agent reads the answers when it next looks.
 
-type QuestionItem = { id: string; question: string; guess?: string; about?: string; answer?: string; state: 'open' | 'answered' }
-type QuestionOptions = { value?: { question: string; state: string }[]; items?: QuestionItem[]; onAsk?: (question: string, guess: string, about: string) => void; onRemove?: (id: string) => void }
+type QuestionItem = { id: string; question: string; guess?: string; about?: string; choices?: string[]; answer?: string; state: 'open' | 'answered' }
+type QuestionOptions = { value?: { question: string; state: string }[]; items?: QuestionItem[]; onAsk?: (question: string, guess: string, about: string, choices: string[]) => void; onRemove?: (id: string) => void }
 
 const questionPrimitive = definePrimitive({
   name: 'question-list',
@@ -325,10 +325,13 @@ const questionPrimitive = definePrimitive({
     const list = () => context.options().items ?? []
     const call = <K extends keyof QuestionOptions>(key: K) => context.options()[key] as NonNullable<QuestionOptions[K]>
     return {
-      ask: (question: string, guess?: string, about?: string) => {
+      // choices: a few answers to pick from (2 to 8; the person can still write something else)
+      ask: (question: string, guess?: string, about?: string, choices?: unknown) => {
         const q = words(question)
         if (!q) throw new Error('Give the question.')
-        call('onAsk')(q, words(guess), words(about))
+        const options = Array.isArray(choices) ? choices.map(words).filter(Boolean) : []
+        if (Array.isArray(choices) && options.length < 2) throw new Error('Give at least two choices, or none.')
+        call('onAsk')(q, words(guess), words(about), options)
       },
       // every question with your guess and the person's answer (an open one: your guess stands)
       read: () => list().map(({ id: _id, ...q }) => q),
@@ -648,6 +651,20 @@ export function BoardAgent() {
     if (there === board.space) setTimeout(() => rf.fitView({ nodes: [{ id: s.id }], duration: 320, padding: 0.15, maxZoom: 1 }), 60)
     said(`Claude put ${c.title} in the section "${name}"`)
   }
+  // A change waiting for the person's Allow (agent/bridge.ts): the card it's on is framed while they decide; for a
+  // list (Later, Snippets, Today, Questions), its card.
+  const latest = useRef({ cards, visible })
+  latest.current = { cards, visible }
+  useEffect(
+    () =>
+      onEvent('agent-asking', (d: { component: string; action: string; label: string }) => {
+        const { cards: all, visible: seen } = latest.current
+        const LIST: Record<string, string> = { 'later-list': 'later', 'snippet-list': 'snippets', 'task-list': 'tasks', 'question-list': 'questions' }
+        const card = d.component === 'card' ? seen.find(c => c.title === d.label) : all.find(c => c.type === LIST[d.component])
+        if (card) touchCard(card.id, d.action === 'remove' ? 'removing' : d.action === 'disconnect' ? 'arranging' : 'rewriting')
+      }),
+    [],
+  )
   const spaceNames = useMemo(() => openSpaces.map(s => s.name), [openSpaces])
   // every visible card's title, for "next to which card" (the same array while the cards stay the same)
   const allTitles = useMemo(() => visible.map(c => [c.id, c.title] as const), [visible])
@@ -667,6 +684,7 @@ export function BoardAgent() {
         question: q.question,
         ...(q.guess ? { guess: q.guess } : {}),
         ...(q.about ? { about: q.about } : {}),
+        ...(q.choices?.length ? { choices: q.choices } : {}),
         ...(q.answer ? { answer: q.answer } : {}),
         state: q.answeredAt ? 'answered' : 'open',
       })),
@@ -884,8 +902,8 @@ export function BoardAgent() {
         className="sr-only"
         value={questionsOpen ? questionList.map(({ question, state }) => ({ question, state })) : []}
         items={questionsOpen ? questionList : []}
-        onAsk={(question, guess, about) =>
-          void post<{ id: string }>('/api/questions', { question, guess, about, by: 'Claude' }).then(
+        onAsk={(question, guess, about, choices) =>
+          void post<{ id: string }>('/api/questions', { question, guess, about, choices, by: 'Claude' }).then(
             () => {
               questions.reload()
               // the Questions card comes onto the board where the person is looking, if it isn't on it yet

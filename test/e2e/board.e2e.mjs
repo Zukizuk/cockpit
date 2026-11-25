@@ -486,7 +486,8 @@ test('Claude asks a question with its guess in grey and carries on; the person a
   assert.ok(await until(async () => (await box.count()) === 1), 'the Questions card came onto the board, with the question')
   assert.equal(await box.getAttribute('placeholder'), 'About 25', 'the guess, in grey where the answer goes')
   await box.fill('40')
-  await box.press('Enter')
+  // the arrow in the box keeps it (Enter does too)
+  await page.getByRole('button', { name: 'Save the answer' }).first().click()
   const read = async () => {
     const o = (await agent('act', { steps: [{ ref: 'Questions list', action: 'read' }] })).output
     return o.steps?.[0]?.result || []
@@ -496,6 +497,20 @@ test('Claude asks a question with its guess in grey and carries on; the person a
   await agent('act', { steps: [{ ref: 'Questions list', action: 'ask', args: ['Which room?', 'The big one'] }] })
   await page.getByRole('button', { name: 'Use the guess' }).click()
   assert.ok(await until(async () => (await read()).some(q => q.question === 'Which room?' && q.answer === 'The big one')), 'the guess taken as the answer')
+
+  // choices: buttons to pick from, the guess marked
+  await agent('act', { steps: [{ ref: 'Questions list', action: 'ask', args: ['Which day?', 'Friday', '', ['Thursday', 'Friday', 'Saturday']] }] })
+  const friday = page.getByRole('button', { name: /^Friday/ })
+  assert.ok(await until(async () => (await friday.count()) === 1), 'the choices, as buttons')
+  assert.match(await friday.innerText(), /Claude's guess/)
+  await page.getByRole('button', { name: 'Saturday' }).click()
+  assert.ok(await until(async () => (await read()).some(q => q.question === 'Which day?' && q.answer === 'Saturday' && q.choices?.length === 3)), 'picked')
+
+  // taking a question away waits for Allow, the Questions card framed meanwhile
+  const gone = agent('act', { steps: [{ ref: 'Questions list', action: 'remove', args: ['Which day?'] }] })
+  assert.ok(await until(async () => (await page.locator('.agent-frame', { hasText: 'Claude · wants to remove' }).count()) === 1), 'framed while it waits')
+  await page.getByRole('button', { name: 'Allow' }).click()
+  assert.equal((await gone).output.ok, true)
   await page.locator('.react-flow__node-questions').evaluate(el => el.scrollIntoView())
 })
 

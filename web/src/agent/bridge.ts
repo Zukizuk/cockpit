@@ -36,6 +36,10 @@ function trimAct(out: unknown) {
   return { ...rest, ...(fresh.length ? { appeared: fresh } : {}) }
 }
 
+// the actions that wait for the person's Allow (below): anywhere, and on a card
+const ASKS = new Set(['remove'])
+const CARD_ASKS = new Set(['setRows', 'setText', 'removeRow', 'disconnect'])
+
 let started = false
 let me = 0
 
@@ -46,6 +50,8 @@ export function startAgentBridge(ask: Ask) {
     allow: ({ component, action, args, label }) => {
       const where = WHERE[component]
       if (!where) return false
+      // a change that waits for the person: the card it's on is framed while they decide (agent/presence.tsx)
+      if (ASKS.has(action) || (component === 'card' && CARD_ASKS.has(action))) emit('agent-asking', { component, action, label: String(label ?? '') })
       // taking something away is the person's call
       // a card is named by its own label; a list item by the step's argument
       if (action === 'remove') return ask(`Claude wants to remove "${String(component === 'card' ? label : (args?.[0] ?? ''))}" ${where}`)

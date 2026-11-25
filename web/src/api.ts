@@ -503,6 +503,8 @@ export interface Question {
   guess?: string
   /** the card it's about, by title */
   about?: string
+  /** a few answers to pick from (something else can still be written) */
+  choices?: string[]
   by: string
   at: string
   answer?: string

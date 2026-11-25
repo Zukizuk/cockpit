@@ -840,7 +840,7 @@ async function api(req, res, url) {
     if (!a && method === 'GET') return json(res, 200, questions.listQuestions())
     if (!a && method === 'POST') {
       const body = await readBody(req)
-      const q = questions.askQuestion({ question: body.question, guess: body.guess, about: body.about, by: body.by })
+      const q = questions.askQuestion({ question: body.question, guess: body.guess, about: body.about, choices: body.choices, by: body.by })
       broadcast('questions', { id: q.id })
       return json(res, 200, q)
     }

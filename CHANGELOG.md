@@ -5,7 +5,8 @@ Newest first. Each change is listed under New, Improved or Fixed.
 ## Coming next
 
 **New**
-- Questions from Claude that don't stop it. When Claude, working on your board, needs something only you know, it leaves the question on a **Questions** card with its best guess in grey where the answer goes, and carries on with that guess. Type over the grey whenever you like (Enter keeps it), or click **Use the guess**. Claude reads your answers when it next looks. Answered questions go below, and an answer can be changed.
+- Questions from Claude that don't stop it. When Claude, working on your board, needs something only you know, it leaves the question on a **Questions** card with its best guess in grey where the answer goes, and carries on with that guess. Type over the grey whenever you like (Enter, or the arrow in the box, keeps it), or click **Use the guess**. A question can come with a few answers to pick from, Claude's guess marked, and you can still write something else. Claude reads your answers when it next looks. Answered questions go below, and an answer can be changed.
+- Your view follows Claude: a card it changes, makes or asks about, on the space you're on, glides into view when it's mostly off the screen. And while Claude waits for your Allow (to remove something, or rewrite a note), the card it's about is framed: "Claude · wants to remove".
 
 **Fixed**
 - Claude couldn't name the Later and Snippets lists on their own ("Later" also named the Later card). They're the Later list and the Snippets list now.

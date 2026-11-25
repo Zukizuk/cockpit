@@ -3,7 +3,7 @@
 // the guess as it is. The agent reads the answers when it next looks. Answered ones go below, and can be changed.
 import { useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { Check, MessageCircleQuestion, Pencil, X } from 'lucide-react'
+import { ArrowUp, Check, MessageCircleQuestion, Pencil, X } from 'lucide-react'
 import { get, post, type Question } from '../api'
 import { useBoard, type CardNode } from '../board'
 import { ago, useData } from '../lib'
@@ -84,25 +84,52 @@ function QuestionRow({ q, onAnswer, onRemove }: { q: Question; onAnswer: (text: 
         </div>
       ) : (
         <>
-          <textarea
-            className="question-input"
-            rows={1}
-            value={text}
-            placeholder={q.guess || 'Your answer'}
-            aria-label={`Answer: ${q.question}`}
-            data-typeto
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => {
-              e.stopPropagation()
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                keep()
-              } else if (e.key === 'Escape' && editing) setEditing(false)
-            }}
-          />
+          {/* a few to pick from: one click answers; the agent's guess is marked */}
+          {!!q.choices?.length && (
+            <div className="question-choices" role="group" aria-label="Choices">
+              {q.choices.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  className={cn('question-choice', c === q.guess && 'is-guess', c === q.answer && 'is-picked')}
+                  onClick={() => onAnswer(c).then(() => setEditing(false))}
+                >
+                  {c}
+                  {c === q.guess && <span className="question-guess-mark">{q.by === 'Claude' ? "Claude's guess" : 'the guess'}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="question-field">
+            <textarea
+              className="question-input"
+              rows={1}
+              value={text}
+              placeholder={q.choices?.length ? 'Or write something else' : q.guess || 'Your answer'}
+              aria-label={`Answer: ${q.question}`}
+              data-typeto
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => {
+                e.stopPropagation()
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  keep()
+                } else if (e.key === 'Escape' && editing) setEditing(false)
+              }}
+            />
+            <button type="button" className="question-send" aria-label="Save the answer" title="Save the answer (Enter)" disabled={!text.trim()} onClick={keep}>
+              <ArrowUp className="size-4" strokeWidth={2} />
+            </button>
+          </div>
           <div className="question-foot">
-            {q.guess && !done ? <span>{q.by} is going with the grey answer until you say otherwise.</span> : <span>Enter keeps it.</span>}
-            {q.guess && !done && (
+            {q.guess && !done ? (
+              <span>
+                {q.by} is going with {q.choices?.length ? 'its guess' : 'the grey answer'} until you say otherwise.
+              </span>
+            ) : (
+              <span>Enter, or the arrow, keeps it.</span>
+            )}
+            {q.guess && !done && !q.choices?.length && (
               <button type="button" className="question-take" onClick={() => onAnswer(q.guess!)}>
                 Use the guess
               </button>

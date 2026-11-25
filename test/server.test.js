@@ -1370,6 +1370,11 @@ test('questions: asked with a guess, answered, the answer taken back, asked agai
   assert.equal(back.answer, undefined, 'an empty answer opens it again')
   assert.equal(back.answeredAt, undefined)
   assert.equal(q.askQuestion({ question: 'Who?', by: 'someone' }).by, 'An agent')
+  // choices: 2 to 8, no two the same; one alone is no choice
+  assert.deepEqual(q.askQuestion({ question: 'Which day?', choices: ['Fri', ' fri ', 'Sat', ''] }).choices, ['Fri', 'Sat'])
+  assert.equal(q.askQuestion({ question: 'Which room?', choices: ['Big'] }).choices, undefined)
+  q.removeQuestion(q.listQuestions().find(x => x.question === 'Which day?').id)
+  q.removeQuestion(q.listQuestions().find(x => x.question === 'Which room?').id)
   q.removeQuestion(a.id)
   assert.deepEqual(q.listQuestions().map(x => x.question), ['Who?'])
   assert.throws(() => q.removeQuestion(a.id), /gone/)

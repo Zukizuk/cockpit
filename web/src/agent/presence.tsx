@@ -5,13 +5,13 @@
 // - a small pill at the top while a call is running: looking (a snapshot or a search), or working (an act).
 // The bridge (agent/bridge.ts) says when a call starts and ends; the board's agent components (agent/boardAgent.tsx)
 // say which card each action touched.
-import { useEffect, useState } from 'react'
-import { ViewportPortal, useStore } from '@xyflow/react'
+import { useEffect, useRef, useState } from 'react'
+import { ViewportPortal, useReactFlow, useStore } from '@xyflow/react'
 import { emit, onEvent } from '../lib'
 import { cn } from '@/lib/utils'
 
-export type Verb = 'reading' | 'writing' | 'commenting' | 'arranging' | 'made'
-const SAY: Record<Verb, string> = { reading: 'reading', writing: 'writing', commenting: 'commenting', arranging: 'arranging', made: 'made this' }
+export type Verb = 'reading' | 'writing' | 'commenting' | 'arranging' | 'made' | 'removing' | 'rewriting'
+const SAY: Record<Verb, string> = { reading: 'reading', writing: 'writing', commenting: 'commenting', arranging: 'arranging', made: 'made this', removing: 'wants to remove', rewriting: 'wants to rewrite' }
 /** How long a frame stays after the agent last touched its card (and after the call is answered). */
 const LINGER = 5000
 /** How long a frame takes to fade. */
@@ -31,7 +31,35 @@ export function AgentFrames() {
   const [busy, setBusy] = useState(false)
   // a turn of the clock: the frames that have faded go, and the next fade is timed
   const [ticks, tick] = useState(0)
-  useEffect(() => onEvent('agent-touch', (d: { id: string; verb: Verb }) => setTouched(m => new Map(m).set(d.id, { verb: d.verb, until: Date.now() + LINGER, who }))), [])
+  const rf = useReactFlow()
+  // The view follows the agent: a card it changes, makes or asks about, on the space shown, that is mostly off the
+  // screen, glides into view (the zoom stays). Not for reading: that would jump about.
+  const follow = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(
+    () =>
+      onEvent('agent-touch', (d: { id: string; verb: Verb }) => {
+        setTouched(m => new Map(m).set(d.id, { verb: d.verb, until: Date.now() + LINGER, who }))
+        if (d.verb === 'reading') return
+        clearTimeout(follow.current)
+        // the last one touched in a moment, once it has its place
+        follow.current = setTimeout(() => {
+          const n = rf.getInternalNode(d.id)
+          if (!n || n.hidden) return
+          const { x, y } = n.internals.positionAbsolute
+          const w = n.measured?.width ?? n.width ?? 0
+          const h = n.measured?.height ?? n.height ?? 0
+          const { x: vx, y: vy, zoom } = rf.getViewport()
+          const sx0 = x * zoom + vx
+          const sy0 = y * zoom + vy
+          const sx1 = sx0 + w * zoom
+          const sy1 = sy0 + h * zoom
+          const seen = Math.max(0, Math.min(sx1, innerWidth) - Math.max(sx0, 0)) * Math.max(0, Math.min(sy1, innerHeight) - Math.max(sy0, 0))
+          if (seen >= 0.6 * Math.max(1, (sx1 - sx0) * (sy1 - sy0))) return
+          rf.setCenter(x + w / 2, y + Math.min(h / 2, innerHeight / zoom / 2 - 60), { zoom, duration: 420 })
+        }, 150)
+      }),
+    [rf],
+  )
   useEffect(
     () =>
       onEvent('agent-busy', (d: Busy) => {

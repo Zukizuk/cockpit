@@ -25,14 +25,27 @@ const save = list => writeFileAtomic(file(), JSON.stringify({ questions: list },
 /** Every question, oldest first: { id, question, guess?, about?, by, at, answer?, answeredAt? }. */
 export const listQuestions = () => readAll()
 
-export function askQuestion({ question, guess, about, by = 'Claude' }, now = new Date()) {
+/** A question's choices, if it has some: 2 to 8 short ones, no two the same. */
+function choicesOf(list) {
+  const out = []
+  for (const c of Array.isArray(list) ? list : []) {
+    const t = clean(c, 120)
+    if (t && !out.some(x => x.toLowerCase() === t.toLowerCase())) out.push(t)
+    if (out.length === 8) break
+  }
+  return out.length >= 2 ? out : []
+}
+
+export function askQuestion({ question, guess, about, choices, by = 'Claude' }, now = new Date()) {
   const q = clean(question)
   if (!q) throw new UserError('Write the question')
+  const options = choicesOf(choices)
   const list = readAll()
-  // the same question asked again while it's still open: the one there stands (its guess brought up to date)
+  // the same question asked again while it's still open: the one there stands (its guess and choices brought up to date)
   const open = list.find(x => !x.answeredAt && x.question.toLowerCase() === q.toLowerCase())
   if (open) {
     if (clean(guess)) open.guess = clean(guess)
+    if (options.length) open.choices = options
     save(list)
     return open
   }
@@ -40,6 +53,8 @@ export function askQuestion({ question, guess, about, by = 'Claude' }, now = new
     id: crypto.randomUUID().slice(0, 12),
     question: q,
     ...(clean(guess) ? { guess: clean(guess) } : {}),
+    // a few to pick from (the person can still write something else)
+    ...(options.length ? { choices: options } : {}),
     ...(clean(about, 200) ? { about: clean(about, 200) } : {}),
     by: BY.has(by) ? by : 'An agent',
     at: now.toISOString(),
