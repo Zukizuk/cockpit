@@ -2,6 +2,7 @@
 // in its paper). A click brings the card back to where it was. Only this space's.
 import { useStore } from '@xyflow/react'
 import { useBoard, spaceOf, type CardNode } from '../board'
+import { SquareDashed } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const MAX = 12
@@ -37,14 +38,16 @@ export function TuckedTray() {
       {tucked.slice(0, MAX).map(([id, type, ref, color]) => {
         const sticky = type === 'note' && !/^(journal|drafts)\//.test(ref)
         const title = titleOf(type, ref)
+        // a section's tab is dashed, like the area it stands for, with its mark
         return (
           <button
             key={id}
             type="button"
-            className={cn('tuck-tab', sticky && `is-paper paper-${color || board.prefs.stickyColor}`)}
+            className={cn('tuck-tab', sticky && `is-paper paper-${color || board.prefs.stickyColor}`, type === 'section' && 'is-section', type === 'section' && color && `paper-${color}`)}
             onClick={() => board.untuck(id)}
-            title={`${title}: click to bring it back`}
+            title={type === 'section' ? `The section "${title}", with what's in it: click to bring it back` : `${title}: click to bring it back`}
           >
+            {type === 'section' && <SquareDashed className="size-3 shrink-0" strokeWidth={2} />}
             <span className="truncate">{title}</span>
           </button>
         )

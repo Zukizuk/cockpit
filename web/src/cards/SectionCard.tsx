@@ -21,6 +21,9 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
   const [naming, setNaming] = useState(() => !!data.born && Date.now() - data.born < 2500 && !data.title)
   // F2 on the board, with it selected
   useEffect(() => onEvent('note-rename', (d: { id?: string }) => d.id === id && setNaming(true)), [id])
+  // a card dragged over it, from outside: it lights up (let go, the card joins it)
+  const [dropTarget, setDropTarget] = useState(false)
+  useEffect(() => onEvent('section-drop', (d: { id?: string | null }) => setDropTarget(d.id === id)), [id])
   const locked = !!data.locked
   // folded: just a bar under its title, what's in it held out of sight where it was
   const folded = !!data.folded
@@ -61,7 +64,7 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
           onResizeEnd={() => board.persist()}
         />
       )}
-      <div className={cn('section', data.color && `section-tint paper-${data.color}`, selected && 'is-selected', locked && 'is-locked', folded && 'is-folded')}>
+      <div className={cn('section', data.color && `section-tint paper-${data.color}`, selected && 'is-selected', locked && 'is-locked', folded && 'is-folded', dropTarget && 'is-drop')}>
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div

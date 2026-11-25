@@ -509,6 +509,7 @@ test('a section folds to its bar and opens, tucks away with its cards, and goes 
   assert.ok(await until(async () => (await plan()).tucked && (await heldIds()).join() === inIt.join()), 'tucked with what was in it')
   const tabs = page.locator('.tuck-tab')
   assert.deepEqual(await tabs.allInnerTexts(), ['Plan'], 'one tab, the section')
+  assert.match(await tabs.first().getAttribute('class'), /is-section/, "a section's tab looks apart (dashed)")
   assert.deepEqual((await agent('snapshot')).output.find(c => c.component === 'board').value.tuckedSections, ['Plan'], 'Claude sees it tucked')
   await tabs.first().click()
   assert.ok(await until(async () => !(await plan()).tucked && (await heldIds()).length === 0), 'back')
@@ -530,6 +531,38 @@ test('a section folds to its bar and opens, tucks away with its cards, and goes 
   assert.ok(await until(async () => (await plan()).folded), 'Claude folded it')
   assert.equal((await act('foldSection', ['Plan', false])).output.ok, true)
   assert.ok(await until(async () => !(await plan()).folded && (await heldIds()).length === 0), 'Claude opened it')
+  await clearSelection()
+})
+
+test('a card dragged into a section lights it up, and let go half out, the section grows round it', async () => {
+  await clearSelection()
+  const cards = async () => (await api('/api/board')).cards
+  const s0 = (await cards()).find(c => c.type === 'section' && c.title === 'Plan')
+  assert.ok(s0, 'the section from the tests before')
+  const sec = await page.locator(`.react-flow__node-section[data-id="${s0.id}"]`).boundingBox()
+  const head = page.locator('.react-flow__node[data-id="later"] .card-drag').first()
+  const h = await head.boundingBox()
+  const card = await page.locator('.react-flow__node[data-id="later"]').boundingBox()
+  // its middle just inside the section's lower edge, the rest hanging out below
+  const to = { x: sec.x + sec.width / 2, y: sec.y + sec.height - 20 - card.height / 2 + (h.y + h.height / 2 - card.y) }
+  await page.mouse.move(h.x + 40, h.y + h.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(h.x + 44, h.y + h.height / 2 - 4)
+  await page.mouse.move(to.x, to.y, { steps: 12 })
+  assert.ok(await until(async () => (await page.locator('.section.is-drop').count()) === 1, 2000), 'it lights up while the card is over it')
+  await page.mouse.up()
+  assert.ok(await until(async () => (await page.locator('.section.is-drop').count()) === 0, 2000), 'and not once let go')
+  assert.ok(
+    await until(async () => {
+      const all = await cards()
+      const s = all.find(c => c.id === s0.id)
+      const l = all.find(c => c.id === 'later')
+      return s.h > s0.h && s.y + s.h >= l.y + l.h + 40 && s.x <= l.x - 40
+    }),
+    'the section grew round it, with room',
+  )
+  await page.keyboard.press('Control+z')
+  assert.ok(await until(async () => (await cards()).find(c => c.id === s0.id).h === s0.h), 'one Undo puts both back')
   await clearSelection()
 })
 

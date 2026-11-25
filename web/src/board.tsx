@@ -386,6 +386,8 @@ interface Ctx {
   fitSection: (id: string) => boolean
   /** Folds a section to its bar (what's in it hidden, where it was) or opens it again. */
   foldSection: (id: string, fold: boolean) => void
+  /** The sections these cards are in grow to hold them, with room round them (never shrink); true if one did. */
+  growAround: (ids: string[]) => boolean
   /** What's in a section: the cards on the board in it, and the ones it holds while folded. */
   sectionCards: (id: string) => CardNode[]
 }
@@ -855,6 +857,51 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       return true
     },
     [rf, remember, persist],
+  )
+
+  /**
+   * The sections these cards are in grow, if need be, so each card sits inside with room round it: a card dropped in
+   * half out, or one that got bigger (a table's new rows, a resize). A section never shrinks by itself (Fit does
+   * that), and a locked one stays as it is. A section that grows may make the one it's in grow too.
+   */
+  const growAround = useCallback(
+    (ids: string[]) => {
+      const PAD = 40
+      const all = rf.getNodes()
+      const boxes = new Map(all.map(n => [n.id, boxOf(n)]))
+      const grown = new Set<string>()
+      let todo = all.filter(n => ids.includes(n.id) && !n.hidden)
+      for (let round = 0; round < 4 && todo.length; round++) {
+        const next: CardNode[] = []
+        for (const n of todo) {
+          const s = sectionOf(n, all)
+          if (!s || s.data.locked || s.data.folded) continue
+          const b = boxes.get(n.id)!
+          const sb = boxes.get(s.id)!
+          const x0 = Math.min(sb.x, b.x - PAD)
+          const y0 = Math.min(sb.y, b.y - PAD)
+          const x1 = Math.max(sb.x + sb.w, b.x + b.w + PAD)
+          const y1 = Math.max(sb.y + sb.h, b.y + b.h + PAD)
+          if (x0 === sb.x && y0 === sb.y && x1 === sb.x + sb.w && y1 === sb.y + sb.h) continue
+          boxes.set(s.id, { x: x0, y: y0, w: x1 - x0, h: y1 - y0 })
+          grown.add(s.id)
+          next.push(s)
+        }
+        todo = next
+      }
+      if (!grown.size) return false
+      rf.setNodes(ns =>
+        ns.map(n => {
+          if (!grown.has(n.id)) return n
+          const b = boxes.get(n.id)!
+          return { ...n, position: { x: b.x, y: b.y }, width: Math.round(b.w), height: Math.round(b.h) }
+        }),
+      )
+      persist()
+      return true
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf, persist],
   )
 
   const sectionCards = useCallback(
@@ -1548,7 +1595,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
 
   const value = useMemo<Ctx>(
     () => ({
-      addCard, removeCard, removeCards, addSection, fitSection, foldSection, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
+      addCard, removeCard, removeCards, addSection, fitSection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
       keysOpen, setKeysOpen, focusing, toggleFocus, compareCards, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
@@ -1557,7 +1604,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removeCards, addSection, fitSection, foldSection, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, addSection, fitSection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

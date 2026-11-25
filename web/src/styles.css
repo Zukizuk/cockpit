@@ -764,6 +764,16 @@
 .section.is-selected {
   box-shadow: inset 0 0 0 1.5px oklch(var(--contrast) / 0.38);
 }
+/* a card dragged over it from outside: it lights up, so it's clear the card joins it when let go */
+.section.is-drop,
+.section.section-tint.is-drop {
+  background: oklch(var(--contrast) / 0.07);
+  box-shadow: inset 0 0 0 2px oklch(var(--contrast) / 0.45);
+}
+.section.section-tint.is-drop {
+  background: color-mix(in oklab, var(--paper) 24%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--paper) 95%, transparent);
+}
 /* a colour: the sticky note's paper, faint */
 .section.section-tint {
   background: color-mix(in oklab, var(--paper) 13%, transparent);
@@ -3366,6 +3376,22 @@ table.data tbody tr:hover td {
   background: var(--paper);
   color: var(--ink);
   box-shadow: 0 4px 12px oklch(0 0 0 / 0.25);
+}
+
+/* a section's tab: dashed and see-through, like the area it stands for (its colour, faint, when it has one) */
+.tuck-tab.is-section {
+  gap: 5px;
+  align-items: center;
+  padding-top: 6px;
+  background: color-mix(in oklab, var(--card) 70%, transparent);
+  backdrop-filter: blur(8px);
+  border: 1.5px dashed oklch(var(--contrast) / 0.35);
+  border-top: none;
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.18);
+}
+.tuck-tab.is-section[class*='paper-'] {
+  background: color-mix(in oklab, var(--paper) 28%, var(--card));
+  border-color: color-mix(in oklab, var(--paper) 80%, var(--foreground) 20%);
 }
 
 .tuck-tab:hover {

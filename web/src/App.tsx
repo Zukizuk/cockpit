@@ -5,7 +5,7 @@ import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProv
 import '@xyflow/react/dist/base.css'
 import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
-import { BoardProvider, contentsOf, heldBy, offBoard, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
+import { BoardProvider, contentsOf, heldBy, offBoard, sectionOf, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
@@ -94,7 +94,15 @@ function Canvas({ initial }: { initial: Board }) {
       changes = carryContents(changes)
       // a box dragged out on the board picks cards, not the sections they're in (a section is picked by its title)
       if (store.getState().userSelectionActive) changes = changes.filter(c => !(c.type === 'select' && c.selected && rf.getNode(c.id)?.type === 'section'))
+      // a card that got bigger (a table's new rows, a resize let go; not its first measuring): its section grows to hold it
+      const bigger = changes.flatMap(c => {
+        if (c.type !== 'dimensions' || !c.dimensions || c.resizing) return []
+        const was = rf.getNode(c.id)?.measured
+        if (!was?.width || !was.height) return []
+        return c.dimensions.width > was.width + 1 || c.dimensions.height > was.height + 1 ? [c.id] : []
+      })
       onNodesChange(changes)
+      if (bigger.length) setTimeout(() => board.growAround(bigger), 0)
       // save once a move, resize or removal is finished (not on every frame, not on selection)
       if (changes.some(c => (c.type === 'position' && !c.dragging) || (c.type === 'dimensions' && !c.resizing) || c.type === 'remove')) board.persist()
     },
@@ -103,6 +111,8 @@ function Canvas({ initial }: { initial: Board }) {
   // A section dragged by its title takes what's in it along: the cards (and smaller sections) whose middle was in it
   // when the drag began, unless they're being dragged anyway or are locked in place.
   const store = useStoreApi()
+  // a card being dragged: the section it began in, and the one it's over now (lit up), if another
+  const dropping = useRef<{ from?: string; over?: string } | null>(null)
   const carrying = useRef<{ leaders: Map<string, { x: number; y: number }>; items: Map<string, { x: number; y: number; leader: string }> } | null>(null)
   const startCarrying = (dragged: CardNode[]) => {
     const draggedIds = new Set(dragged.map(n => n.id))
@@ -693,12 +703,30 @@ function Canvas({ initial }: { initial: Board }) {
         multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
         deleteKeyCode={['Delete']}
         onMoveEnd={() => board.persist()}
-        onNodeDragStart={(_e, _node, dragged) => {
+        onNodeDragStart={(_e, node, dragged) => {
           board.remember()
           startCarrying(dragged)
+          dropping.current = { from: isSection(node) ? undefined : sectionOf(node, rf.getNodes())?.id, over: undefined }
         }}
-        // (after the last move, which carries what's in a section to where it's let go)
-        onNodeDragStop={() => setTimeout(() => (carrying.current = null), 0)}
+        // a card dragged over a section it isn't in yet: the section lights up (it joins it there)
+        onNodeDrag={(_e, node, dragged) => {
+          const d = dropping.current
+          if (!d || dragged.some(isSection)) return
+          const moving = new Set(dragged.map(n => n.id))
+          const s = sectionOf(node, rf.getNodes().filter(n => !moving.has(n.id)))?.id
+          const over = s && s !== d.from ? s : undefined
+          if (over !== d.over) emit('section-drop', { id: (d.over = over) ?? null })
+        }}
+        // (after the last move, which carries what's in a section to where it's let go); a card let go half out of
+        // a section, or newly in one, has it grow to hold it
+        onNodeDragStop={(_e, _node, dragged) => {
+          if (dropping.current?.over) emit('section-drop', { id: null })
+          dropping.current = null
+          setTimeout(() => {
+            carrying.current = null
+            board.growAround(dragged.filter(n => !isSection(n)).map(n => n.id))
+          }, 0)
+        }}
         // the Delete key only (cards taken off in code are kept for Undo where that happens)
         onBeforeDelete={async ({ nodes, edges }) => {
           if (nodes.length) board.removing(nodes as CardNode[])
