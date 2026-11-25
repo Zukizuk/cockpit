@@ -12,6 +12,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 - Sections: a titled area on the board, behind the cards. Right-click the board for **Section here**, or select cards and press Ctrl+Alt+G (or right-click them: Put these in a section). A card whose middle is in a section is in it: drop one in and it's there, drag it out and it isn't. Drag a section by its title and what's in it comes along. Its title's menu renames it, colours it, fits it to what's in it, selects what's in it, locks it, moves it with its cards to another space, or takes it off (its cards stay, or go too). Inside a section it's still the board: drag to select, right-click, paste. Tidy leaves sections and their cards as you arranged them.
 - Claude sees which section a card is in, and can put cards in a new section.
+- You see where Claude is at work: an orange frame round each card it reads, writes, comments on, arranges or makes ("Claude · reading", and so on), which fades a couple of seconds after it's done, and a small note at the top right while it looks at or works on the board.
 
 **Improved**
 - The one-line install shows how far its download has got.

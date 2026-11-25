@@ -7,7 +7,7 @@
 import { createAgent } from '@ui-sdk/react/agent'
 import { post, type AgentAccess } from '../api'
 import { agentView, setAgentAccess } from './view'
-import { lastEvent, onEvent } from '../lib'
+import { emit, lastEvent, onEvent } from '../lib'
 
 type Call = { id: string; client: number; tool: 'snapshot' | 'act' | 'query'; input?: unknown; access?: AgentAccess; agent?: string }
 export type Ask = (text: string) => Promise<boolean>
@@ -75,6 +75,8 @@ export function startAgentBridge(ask: Ask) {
     // for the log (Settings > Agents): what it asked, and the cards it could see then (titles only)
     let what = ''
     let saw: string[] = []
+    // the board says an agent is at work (agent/presence.tsx), until the answer has gone back
+    emit('agent-busy', { on: true, tool: c.tool, agent: c.agent || '' })
     try {
       // the board shows this agent only what its access allows (agent/view.ts)
       await setAgentAccess(c.access === 'all' || c.access === 'off' ? c.access : 'shared', c.agent || '')
@@ -92,6 +94,7 @@ export function startAgentBridge(ask: Ask) {
     } catch (e: any) {
       output = { error: e?.message || String(e) }
     }
+    emit('agent-busy', { on: false })
     post('/api/agent/result', { id: c.id, output, what, saw }).catch(() => {})
   })
 }

@@ -33,6 +33,7 @@ import { SpaceSwitcher } from './views/SpaceSwitcher'
 import { TuckedTray } from './views/TuckedTray'
 import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
+import { AgentFrames, AgentPill } from './agent/presence'
 import { DictionaryExtra, openDictionary } from './views/Dictionary'
 import { TableCard } from './cards/TableCard'
 import { Arrow } from './cards/Arrow'
@@ -67,6 +68,7 @@ export function App() {
           <SpaceSwitcher />
           <TuckedTray />
           <BoardAgent />
+          <AgentPill />
           <DictionaryExtra />
           <Toast />
           <Badge />
@@ -706,6 +708,7 @@ function Canvas({ initial }: { initial: Board }) {
         colorMode="dark"
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.8} color="var(--dots)" />
+        <AgentFrames />
       </ReactFlow>
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">

@@ -17,6 +17,7 @@ import { newTable, rowsFromText } from '../cards/TableCard'
 import { useData } from '../lib'
 import { summary } from '../cards/OutputsCard'
 import { setVisible, useAgentView } from './view'
+import { touchCard } from './presence'
 
 const words = (s: unknown) => String(s ?? '').trim()
 const PEEK = 2000
@@ -615,6 +616,7 @@ export function BoardAgent() {
   const place = (id: string | undefined, space?: string) => {
     // what an agent makes is shared with agents: it can go on working with it
     if (id) board.setCardAgents([id], 'shared')
+    if (id) touchCard(id, 'made')
     if (!id || !space || spaceId(space) === board.space) return
     board.moveToSpace([id], spaceId(space))
   }
@@ -693,7 +695,7 @@ export function BoardAgent() {
           const named = titles.map(t => pick(visible, t, c => c.id, c => c.title, 'card'))
           const away = named.filter(c => c.spaceId !== board.space)
           if (away.length) throw new Error(`${away.map(c => `"${c.title}"`).join(', ')} ${away.length === 1 ? 'is' : 'are'} in another space: switchSpace there first, or moveToSpace them here.`)
-          board.addSection({ around: named.map(c => c.id), title })
+          touchCard(board.addSection({ around: named.map(c => c.id), title }), 'made')
           said(`Claude put ${named.length === 1 ? 'a card' : `${named.length} cards`} in the section "${title}"`)
         }}
         onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t })).then(id => place(id, s))}
@@ -713,34 +715,35 @@ export function BoardAgent() {
             aria-label={c.title}
             className="sr-only"
             value={values.get(c.id) ?? c.value}
-            onRead={() => readCard(c)}
-            onConnect={(other, label) => connect(c, other, label)}
-            onDisconnect={other => disconnect(c, other)}
+            onRead={() => (touchCard(c.id, 'reading'), readCard(c))}
+            onConnect={(other, label) => (touchCard(c.id, 'arranging'), connect(c, other, label))}
+            onDisconnect={other => (touchCard(c.id, 'arranging'), disconnect(c, other))}
             spaces={spaceNames}
             onComment={t => {
+              touchCard(c.id, 'commenting')
               board.addComment(c.id, t, 'Claude').catch(() => {})
               said(`Claude commented on ${c.title}`)
             }}
-            onFold={f => fold(c.id, f)}
-            onFocus={() => focus(c.id)}
+            onFold={f => (touchCard(c.id, 'arranging'), fold(c.id, f))}
+            onFocus={() => (touchCard(c.id, 'reading'), focus(c.id))}
             onMoveToSpace={s => board.moveToSpace([c.id], spaceId(s))}
             onRename={
               c.type === 'note'
                 ? t =>
-                    post('/api/notes/title', { path: c.ref, title: t }).then(
+                    (touchCard(c.id, 'writing'), post('/api/notes/title', { path: c.ref, title: t })).then(
                       () => said(t ? `Claude named the note "${t}"` : "Claude took the note's title off"),
                       (e: Error) => said(e.message),
                     )
                 : undefined
             }
-            onColor={c.value.kind === 'sticky note' ? color => board.setColor(c.id, color) : undefined}
+            onColor={c.value.kind === 'sticky note' ? color => (touchCard(c.id, 'arranging'), board.setColor(c.id, color)) : undefined}
             onRemove={() => board.removeCard(c.id)}
             onTuck={t => (t ? board.tuck([c.id]) : board.untuck(c.id))}
             onVeil={v => board.setVeiled([c.id], v)}
-            onTable={c.type === 'table' ? ch => changeTable(c.ref, c.title, ch) : undefined}
-            onWrite={c.type === 'note' ? ch => writeNote(c.ref, c.title, ch) : undefined}
+            onTable={c.type === 'table' ? ch => (touchCard(c.id, 'writing'), changeTable(c.ref, c.title, ch)) : undefined}
+            onWrite={c.type === 'note' ? ch => (touchCard(c.id, 'writing'), writeNote(c.ref, c.title, ch)) : undefined}
             others={titlesBut(c.id)}
-            onPlaceNextTo={(other, side) => placeNextTo(c.id, c.title, other, side)}
+            onPlaceNextTo={(other, side) => (touchCard(c.id, 'arranging'), placeNextTo(c.id, c.title, other, side))}
           />
         </div>
       ))}

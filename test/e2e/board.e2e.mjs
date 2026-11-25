@@ -434,6 +434,20 @@ test('sections: one from the board menu or around selected cards, named, dragged
   await clearSelection()
 })
 
+test('while Claude reads a card a frame round it says so, the pill says Claude is at work, and both go a moment later', async () => {
+  await clearSelection()
+  const out = await agent('act', { steps: [{ ref: 'Shared plan', action: 'read' }] })
+  assert.equal(out.output.ok, true)
+  const frame = page.locator('.agent-frame', { hasText: 'Claude · reading' })
+  assert.ok(await until(async () => (await frame.count()) === 1), 'framed')
+  const f = await frame.boundingBox()
+  const c = await page.locator('.react-flow__node[data-id="shared"]').boundingBox()
+  assert.ok(f.x < c.x && f.y < c.y && f.x + f.width > c.x + c.width && f.y + f.height > c.y + c.height, 'round the card read')
+  assert.match(await page.locator('.agent-pill').innerText(), /Claude is working on the board/)
+  assert.ok(await until(async () => (await page.locator('.agent-frame').count()) === 0, 6000), 'gone a moment later')
+  assert.equal(await page.locator('.agent-pill.is-shown').count(), 0)
+})
+
 // last: a pasted card lands where the mouse is, on the empty spot the other tests use
 test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short password goes to Snippets', async () => {
   await clearSelection()

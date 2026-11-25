@@ -44,7 +44,8 @@ Windows may warn that the installer is from an unknown publisher: the release is
 - **Claude on your board.** From a Claude Code chat, Claude reads the cards you share with it, comments back, draws
   arrows between them, and adds tasks, notes, links and snippets; anything it takes away waits for your Allow. It sees only what you share:
   cards you select or share (right-click: Share with agents) and shared spaces. A card or space kept private never
-  shows. Settings → Agents sets this per agent and lists what agents looked at.
+  shows. Settings → Agents sets this per agent and lists what agents looked at. While Claude is at work, a frame round
+  each card it reads or changes says so.
 - **Bring in files from Windows.** Right-click files or folders in Explorer and choose **Send to → Cockpit**, or
   pick **Choose files…** in the + box for Windows' own Open dialog. A folder becomes a card with its files as a tree.
   Something sent while Cockpit is closed is there when you open it.
