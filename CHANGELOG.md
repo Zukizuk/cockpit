@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 25 November 2026 (version 0.2.9)
 
 **New**
 - Arrows between cards. Hover a card and drag from the dot on any side to another card; let go on empty board and a new sticky note appears there with the arrow to it. An arrow follows its cards as they move. Double-click it to give it a label; right-click it to point it the other way, put a head at both ends or none, make it dashed, or remove it. Undo works on all of it, and an arrow goes out of view with its card (another space, tucked away).

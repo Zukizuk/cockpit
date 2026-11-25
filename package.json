@@ -1,6 +1,6 @@
 {
   "name": "cockpit",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "private": true,
   "description": "A calm, free-form board on your PC for links to read later, files, sticky notes, a daily journal, snippets and what your AI agents make.",
   "type": "module",
