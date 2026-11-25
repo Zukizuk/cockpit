@@ -53,6 +53,7 @@ type BoardOptions = {
   onCompare?: (cards: string[]) => void
   onAddSection?: (title: string, cards: string[]) => void
   onFitSection?: (section: string) => void
+  onRemoveSection?: (section: string, withCards: boolean) => void
   /** the sections in the space shown (for fitSection) */
   sectionNames?: string[]
 }
@@ -66,7 +67,7 @@ function rowsOf(rows: unknown): string[][] {
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action', onFitSection: 'action', sectionNames: 'value' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action', onFitSection: 'action', onRemoveSection: 'action', sectionNames: 'value' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -115,6 +116,8 @@ const boardPrimitive = definePrimitive({
       },
       // a section made just big enough for what's in it
       fitSection: (section: string) => call('onFitSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section')),
+      // a section taken off the board: its cards stay, unless withCards is true (it waits for the user's Allow)
+      removeSection: (section: string, withCards?: unknown) => call('onRemoveSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section'), withCards === true || words(withCards).toLowerCase() === 'true'),
       addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
@@ -123,7 +126,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection', 'removeSection'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -490,12 +493,16 @@ export function BoardAgent() {
       }
       return { id, type, ref, title, value, content, mark, spaceId: space }
     })
-    // two cards with one name (two untitled notes, two copies of a file): the second is "… (2)", so each can be named
+    // two cards with one name (two untitled notes, two copies of a file): each gets a number, "… (1)", "… (2)", so each
+    // can be named (a bare name would match them all)
+    const count = new Map<string, number>()
+    for (const c of built) count.set(c.title, (count.get(c.title) ?? 0) + 1)
     const seen = new Map<string, number>()
     return built.map(c => {
+      if ((count.get(c.title) ?? 0) < 2) return c
       const k = (seen.get(c.title) ?? 0) + 1
       seen.set(c.title, k)
-      return k === 1 ? c : { ...c, title: `${c.title} (${k})`, content: { ...c.content, title: `${c.title} (${k})` } }
+      return { ...c, title: `${c.title} (${k})`, content: { ...c.content, title: `${c.title} (${k})` } }
     })
   }, [cardsKey, board.spaces, board.space, board.items, board.outputs, board.comments, notes, sep, tables.data])
 
@@ -568,6 +575,8 @@ export function BoardAgent() {
       })
   }, [sectionsKey, openSpaces])
   const sectionNames = useMemo(() => sectionList.map(s => s.name), [sectionList])
+  const sectionListRef = useRef(sectionList)
+  sectionListRef.current = sectionList
   const boardValue: BoardValue = useMemo(
     () => ({
       space: openSpaces.some(s => s.id === board.space) ? spaceName(board.space) : '(not shared with you)',
@@ -657,9 +666,11 @@ export function BoardAgent() {
   latest.current = { cards, visible }
   useEffect(
     () =>
-      onEvent('agent-asking', (d: { component: string; action: string; label: string }) => {
+      onEvent('agent-asking', (d: { component: string; action: string; label: string; arg?: string }) => {
         const { cards: all, visible: seen } = latest.current
         const LIST: Record<string, string> = { 'later-list': 'later', 'snippet-list': 'snippets', 'task-list': 'tasks', 'question-list': 'questions' }
+        // a section being taken off: the section itself
+        if (d.action === 'removeSection') return touchCard(sectionListRef.current.find(s => s.name === d.arg)?.id, 'removing')
         const card = d.component === 'card' ? seen.find(c => c.title === d.label) : all.find(c => c.type === LIST[d.component])
         if (card) touchCard(card.id, d.action === 'remove' ? 'removing' : d.action === 'disconnect' ? 'arranging' : 'rewriting')
       }),
@@ -832,6 +843,14 @@ export function BoardAgent() {
           said(`Claude put ${named.length === 1 ? 'a card' : `${named.length} cards`} in the section "${title}"`)
         }}
         sectionNames={sectionNames}
+        onRemoveSection={(name, withCards) => {
+          const id = sectionList.find(s => s.name === name)?.id
+          const s = id && rf.getNode(id)
+          if (!s) throw new Error(`No section "${name}".`)
+          const inside = withCards ? contentsOf(s, rf.getNodes()).map(n => n.id) : []
+          board.removeCards([s.id, ...inside])
+          said(withCards ? `Claude took the section "${name}" off, with what was in it` : `Claude took the section "${name}" off (its cards stay)`)
+        }}
         onFitSection={name => {
           const id = sectionList.find(s => s.name === name)?.id
           if (!id || !board.fitSection(id)) throw new Error(`The section "${name}" has nothing in it to fit to.`)

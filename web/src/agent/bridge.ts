@@ -47,6 +47,8 @@ function needsAllow(component: string, action: string, args: unknown[] | undefin
   if (!where) return null
   const arg = String(args?.[0] ?? '')
   if (action === 'remove') return `remove "${component === 'card' ? String(label) : arg}" ${where}`
+  if (component === 'board' && action === 'removeSection')
+    return `remove the section "${arg}"${args?.[1] === true || String(args?.[1]) === 'true' ? ' and everything in it' : ' (its cards stay)'}`
   if (component !== 'card') return null
   if (action === 'setRows') return `replace everything in the table "${String(label)}"`
   if (action === 'setText') return `rewrite the note "${String(label)}"`
@@ -69,7 +71,7 @@ export function startAgentBridge(ask: Ask) {
       const what = needsAllow(component, action, args, label)
       if (!what) return true
       // a change that waits for the person: the card it's on is framed while they decide (agent/presence.tsx)
-      emit('agent-asking', { component, action, label: String(label ?? '') })
+      emit('agent-asking', { component, action, label: String(label ?? ''), arg: String(args?.[0] ?? '') })
       // allowed with the rest of its call
       const left = allowed.get(action) ?? 0
       if (left > 0) {
@@ -95,10 +97,10 @@ export function startAgentBridge(ask: Ask) {
     const asks = steps.flatMap(s => {
       const c = find(s.ref)
       const what = c && needsAllow(String(c.component), String(s.action ?? ''), s.args, c.label)
-      return what ? [{ what, action: String(s.action), component: String(c!.component), label: String(c!.label ?? '') }] : []
+      return what ? [{ what, action: String(s.action), component: String(c!.component), label: String(c!.label ?? ''), arg: String(s.args?.[0] ?? '') }] : []
     })
     if (asks.length < 2) return true
-    for (const a of asks) emit('agent-asking', { component: a.component, action: a.action, label: a.label })
+    for (const a of asks) emit('agent-asking', { component: a.component, action: a.action, label: a.label, arg: a.arg })
     const list = asks.map((a, i) => `${i + 1}. ${a.what}`).join('; ')
     const ok = await ask(`Claude wants to do ${asks.length} things: ${list}`, 'Allow all')
     if (ok) for (const a of asks) allowed.set(a.action, (allowed.get(a.action) ?? 0) + 1)

@@ -438,8 +438,13 @@ test('sections: one from the board menu or around selected cards, named, dragged
     'fitted',
   )
 
+  // Claude takes it off (after the user's Allow), its cards staying
   await clearSelection()
-  await removeSection('Plan')
+  const off = agent('act', { steps: [{ ref: 'Board', action: 'removeSection', args: ['Plan'] }] })
+  const allowIt = page.getByRole('button', { name: 'Allow', exact: true })
+  assert.ok(await until(async () => (await allowIt.count()) === 1), 'it asks first')
+  await allowIt.click()
+  assert.equal((await off).output.ok, true)
   assert.ok(await until(async () => (await sections()).length === 0), 'its cards stay when it goes')
   assert.ok((await board()).cards.some(c => c.id === 'plain'))
   await page.keyboard.press('Control+z')
