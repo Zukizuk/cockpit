@@ -840,7 +840,8 @@ export function BoardAgent() {
           said(`Claude made the space "${name}"`)
         }}
         onRenameSpace={(s, name) => board.renameSpace(spaceId(s), name)}
-        onAddSticky={(t, s) => void board.newSticky(t).then(id => place(id, s))}
+        // what Claude makes doesn't take the person's view to it (agent/presence.tsx glides there if it's out of sight)
+        onAddSticky={(t, s) => void board.newSticky(t, { quiet: true }).then(id => place(id, s))}
         onJot={board.prefs.extras.journal ? t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message)) : undefined}
         onTidy={() => board.tidy()}
         onFocusOn={titles => {
@@ -898,7 +899,7 @@ export function BoardAgent() {
           if (!id || !board.fitSection(id)) throw new Error(`The section "${name}" has nothing in it to fit to.`)
           said(`Claude fitted the section "${name}" to what's in it`)
         }}
-        onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t })).then(id => place(id, s))}
+        onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }, { quiet: true }) : board.showItem({ path: t }, { quiet: true })).then(id => place(id, s))}
         onAddTable={
           board.prefs.extras.tables
             ? (title, rows, s) =>

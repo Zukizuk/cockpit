@@ -263,7 +263,8 @@ export type Shown = { type: 'item' | 'note'; ref: string }
 /** Full screen: one thing, or two side by side (beside, on the right) to compare. */
 export type Expanded = (Shown & { beside?: Shown }) | null
 /** Where a new card goes: beside another card (near), at a point on the board (at, where something was dropped), or else the middle. */
-export type PlaceOpts = { near?: string; at?: { x: number; y: number }; size?: { w: number; h: number } }
+/** quiet: made by an agent, so the view stays where the person is (it glides to the card only if that's out of sight). */
+export type PlaceOpts = { near?: string; at?: { x: number; y: number }; size?: { w: number; h: number }; quiet?: boolean }
 /** Something from Quick access: a pin or an often-opened thing. */
 export type QuickThing = { kind: Pin['kind'] | 'item' | 'text'; target: string; title: string }
 /** A button in the toast: Undo, mostly. */
@@ -790,8 +791,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
           ...ns.map(n => ({ ...n, selected: false })),
           { id, type, position: pos, data: { ref, pulse: Date.now(), born: Date.now(), ...here }, width: HUGS.has(type) ? undefined : size.w, height: AUTO_HEIGHT.has(type) || HUGS.has(type) ? undefined : size.h, selected: true, dragHandle: '.card-drag' },
         ])
-      // dropped somewhere on purpose: stay where the user is looking
-      if (!opts.at) requestAnimationFrame(() => rf.fitView({ nodes: [{ id }], duration: 320, padding: 0.25, maxZoom: 1, minZoom: Math.min(rf.getZoom(), 1) }))
+      // dropped somewhere on purpose, or made by an agent: stay where the user is looking
+      if (!opts.at && !opts.quiet) requestAnimationFrame(() => rf.fitView({ nodes: [{ id }], duration: 320, padding: 0.25, maxZoom: 1, minZoom: Math.min(rf.getZoom(), 1) }))
       persist()
       return id
     },

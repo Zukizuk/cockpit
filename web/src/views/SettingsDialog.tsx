@@ -527,9 +527,19 @@ function AgentsSection({ cfg, save }: { cfg: Config; save: Save }) {
             {log.slice(0, 60).map((e, i) => (
               <li key={`${e.at}-${i}`} className="border-b border-ink/[0.06] py-1.5 text-[12.5px] last:border-0">
                 <span className="text-muted-foreground">{ago(e.at)} · </span>
-                {e.agent} {e.refused ? `was refused (${e.refused})` : e.tool === 'act' ? `did: ${e.what || 'something'}` : e.tool === 'query' ? (e.what || 'looked') : 'looked at the board'}
+                {/* (a ping is the person's Tell Claude: "You told Claude: …", nothing seen) */}
+                {e.agent}{' '}
+                {e.refused
+                  ? `was refused (${e.refused})`
+                  : e.tool === 'act'
+                  ? `did: ${e.what || 'something'}`
+                  : e.tool === 'query'
+                  ? e.what || 'looked'
+                  : e.tool === 'ping'
+                  ? e.what || 'told Claude'
+                  : 'looked at the board'}
                 {e.saw?.length ? <span className="text-muted-foreground"> · could see {e.saw.length === 1 ? e.saw[0] : `${e.saw.length} cards: ${e.saw.slice(0, 6).join(', ')}${e.saw.length > 6 ? '…' : ''}`}</span> : null}
-                {!e.refused && e.tool !== 'act' && !e.saw?.length ? <span className="text-muted-foreground"> · could see no cards</span> : null}
+                {!e.refused && e.tool !== 'act' && e.tool !== 'ping' && !e.saw?.length ? <span className="text-muted-foreground"> · could see no cards</span> : null}
               </li>
             ))}
           </ul>
