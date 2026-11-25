@@ -571,6 +571,36 @@ test('a card dragged into a section lights it up; let go on its cards, it moves 
   await clearSelection()
 })
 
+test("a right-click inside a section gives its menu, then what can go there; outside, the board's menu", async () => {
+  await clearSelection()
+  const s0 = (await api('/api/board')).cards.find(c => c.type === 'section' && c.title === 'Plan')
+  assert.ok(s0, 'the section from the tests before')
+  const sec = await page.locator(`.react-flow__node-section[data-id="${s0.id}"]`).boundingBox()
+  const labels = async () => (await page.locator('[role=menu]').last().locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
+  // the empty strip along its bottom, under the notes (away from its left corner, where Later reaches in)
+  await page.mouse.click(sec.x + sec.width * 0.6, sec.y + sec.height - 14, { button: 'right' })
+  await page.locator('[role=menu]').last().waitFor()
+  assert.match(await page.locator('.pane-section-label').innerText(), /Plan/, 'its name heads the menu')
+  const inside = await labels()
+  for (const l of ['Fold it to its bar', "Fit it to what's in it", 'Sticky note here', 'Section here']) assert.ok(inside.includes(l), `${l} is in it`)
+  for (const l of ['Tidy', 'Settings', 'Show everything', 'Undo']) assert.ok(!inside.includes(l), `${l} is not (board-wide)`)
+  assert.deepEqual(await wrapped(), [], 'nothing wraps')
+  await page.getByRole('menuitem', { name: 'Fold it to its bar' }).click()
+  const plan = async () => (await api('/api/board')).cards.find(c => c.id === s0.id)
+  assert.ok(await until(async () => (await plan()).folded), 'folded from there')
+  await page.locator('.section-bar').click()
+  assert.ok(await until(async () => !(await plan()).folded), 'open again')
+
+  // outside it: the board's menu, no section in it
+  await page.mouse.click(Math.min(1380, sec.x + sec.width + 80), sec.y + sec.height / 2, { button: 'right' })
+  await page.locator('[role=menu]').last().waitFor()
+  const outside = await labels()
+  assert.ok(outside.includes('Tidy') && !outside.includes('Fold it to its bar'), "the board's own menu")
+  assert.equal(await page.locator('.pane-section-label').count(), 0)
+  await page.keyboard.press('Escape')
+  await clearSelection()
+})
+
 test('while Claude reads a card a frame round it says so, the pill says Claude is at work, and both go a moment later', async () => {
   await clearSelection()
   const out = await agent('act', { steps: [{ ref: 'Shared plan', action: 'read' }] })

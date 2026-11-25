@@ -6,7 +6,7 @@ import '@xyflow/react/dist/base.css'
 import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
 import { BoardProvider, besideSpot, contentsOf, heldBy, offBoard, sectionOf, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
 import { NoteCard } from './cards/NoteCard'
@@ -37,7 +37,7 @@ import { AgentFrames, AgentPill } from './agent/presence'
 import { DictionaryExtra, openDictionary } from './views/Dictionary'
 import { TableCard } from './cards/TableCard'
 import { Arrow } from './cards/Arrow'
-import { SectionCard } from './cards/SectionCard'
+import { SectionCard, SectionMenuItems } from './cards/SectionCard'
 import { QuestionsCard } from './cards/QuestionsCard'
 
 const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard, table: TableCard, section: SectionCard, questions: QuestionsCard }
@@ -534,8 +534,12 @@ function Canvas({ initial }: { initial: Board }) {
   // right-click on empty board: what applies to the whole board
   // where it was opened stays after it closes: the menu fades out where it was, not at the top-left corner its
   // anchor would jump back to (it flashed there for a moment)
-  const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; at: { x: number; y: number } } | null>(null)
+  // (section: the one right-clicked inside, if any: its menu comes first)
+  const [paneMenu, setPaneMenu] = useState<{ x: number; y: number; at: { x: number; y: number }; section?: string } | null>(null)
   const [paneOpen, setPaneOpen] = useState(false)
+  // right-clicked inside a section: its own menu first, and only what can go there from the board's (the board-wide
+  // items are a right-click outside any section away)
+  const inSection = paneMenu?.section ? rf.getNode(paneMenu.section) : undefined
   // the cards on this space that fold (sticky notes fold one at a time, with their own button or F, not all at once;
   // cards in other spaces or tucked away are left as they are)
   const foldable = nodes.filter(n => !n.hidden && !isSticky(n.type, n.data.ref) && !isSection(n))
@@ -591,7 +595,17 @@ function Canvas({ initial }: { initial: Board }) {
         <DropdownMenuTrigger asChild>
           <span aria-hidden data-anchor="board" className="pointer-events-none fixed size-px" style={{ left: paneMenu?.x ?? 0, top: paneMenu?.y ?? 0 }} />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-60">
+        <DropdownMenuContent align="start" className="min-w-64">
+          {inSection && (
+            <>
+              <DropdownMenuLabel className="pane-section-label">
+                <SquareDashed className="size-3.5" strokeWidth={2} />
+                <span className="truncate">{inSection.data.title || 'Section'}</span>
+              </DropdownMenuLabel>
+              <SectionMenuItems id={inSection.id} Item={DropdownMenuItem} Separator={DropdownMenuSeparator} />
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem onSelect={() => paneMenu && board.newSticky('', { at: paneMenu.at })}>
             <StickyNote strokeWidth={1.75} />
             Sticky note here
@@ -607,6 +621,8 @@ function Canvas({ initial }: { initial: Board }) {
             Add or find…
             <DropdownMenuShortcut>Ctrl K</DropdownMenuShortcut>
           </DropdownMenuItem>
+          {!inSection && (
+            <>
           <DropdownMenuSeparator />
           <DropdownMenuItem disabled={!foldable.some(n => !n.data.folded)} onSelect={() => foldAll(true)}>
             <ChevronsDownUp strokeWidth={1.75} />
@@ -626,6 +642,10 @@ function Canvas({ initial }: { initial: Board }) {
             Show everything
             <DropdownMenuShortcut>0</DropdownMenuShortcut>
           </DropdownMenuItem>
+            </>
+          )}
+          {!inSection && (
+            <>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => board.undo()}>
             <Undo2 strokeWidth={1.75} />
@@ -637,6 +657,10 @@ function Canvas({ initial }: { initial: Board }) {
             Redo
             <DropdownMenuShortcut>Ctrl Y</DropdownMenuShortcut>
           </DropdownMenuItem>
+            </>
+          )}
+          {!inSection && (
+            <>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => board.setKeysOpen(true)}>
             <Keyboard strokeWidth={1.75} />
@@ -656,6 +680,8 @@ function Canvas({ initial }: { initial: Board }) {
             <MessageSquare strokeWidth={1.75} />
             Send feedback
           </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       <ReactFlow<CardNode, LinkEdge>
@@ -748,7 +774,15 @@ function Canvas({ initial }: { initial: Board }) {
         onPaneContextMenu={e => {
           e.preventDefault()
           track('board.menu')
-          setPaneMenu({ x: e.clientX, y: e.clientY, at: rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }) })
+          const at = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+          // inside a section (the smallest one there, on this space): its menu, then what can go there
+          const section = rf
+            .getNodes()
+            .filter(n => isSection(n) && !n.hidden && !n.data.folded)
+            .map(n => ({ n, w: n.measured?.width ?? n.width ?? 0, h: n.measured?.height ?? n.height ?? 0 }))
+            .filter(({ n, w, h }) => at.x > n.position.x && at.x < n.position.x + w && at.y > n.position.y && at.y < n.position.y + h)
+            .sort((a, b) => a.w * a.h - b.w * b.h)[0]?.n.id
+          setPaneMenu({ x: e.clientX, y: e.clientY, at, ...(section ? { section } : {}) })
           setPaneOpen(true)
         }}
         proOptions={{ hideAttribution: true }}
