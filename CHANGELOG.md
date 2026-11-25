@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 25 November 2026 (version 0.2.8)
 
 **New**
 - Full screen has the card's menu too: ⋮ on its bar, or right-click the bar. It holds what makes sense there (open elsewhere, copy, pin, Comment, sharing with agents, moving to another space, archive, Remove from board) and leaves out what's about the board, like folding, focus, tuck and lock. Archiving a note full screen now takes its card off the board too.
