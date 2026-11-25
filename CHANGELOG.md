@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 25 November 2026 (version 0.2.10)
 
 **New**
 - Questions from Claude that don't stop it. When Claude, working on your board, needs something only you know, it leaves the question on a **Questions** card with its best guess in grey where the answer goes, and carries on with that guess. Type over the grey whenever you like (Enter, or the arrow in the box, keeps it), or click **Use the guess**. A question can come with a few answers to pick from, Claude's guess marked, and you can still write something else. Claude reads your answers when it next looks. Answered questions go below, and an answer can be changed.
