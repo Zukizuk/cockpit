@@ -463,6 +463,21 @@ test('while Claude reads a card a frame round it says so, the pill says Claude i
   assert.match(await page.locator('.agent-pill.is-shown.is-after').innerText(), /Claude worked on the board · (just now|\d+ s ago)/)
 })
 
+test("a comment can be deleted from its card's thread, Claude's too", async () => {
+  await clearSelection()
+  await api('/api/comments', { method: 'POST', body: JSON.stringify({ card: 'plain', text: 'Mine', by: 'you' }) })
+  await api('/api/comments', { method: 'POST', body: JSON.stringify({ card: 'plain', text: 'From Claude', by: 'Claude' }) })
+  const thread = async () => ((await api('/api/comments')).cards?.plain || []).map(c => c.text)
+  await page.locator('.react-flow__node[data-id="plain"] .comment-bubble').click()
+  const del = page.getByRole('button', { name: 'Delete comment' })
+  assert.ok(await until(async () => (await del.count()) === 2), 'a delete button on each')
+  await del.last().click()
+  assert.ok(await until(async () => JSON.stringify(await thread()) === JSON.stringify(['Mine'])), "Claude's comment deleted")
+  await del.first().click()
+  assert.ok(await until(async () => (await thread()).length === 0), 'and mine')
+  await page.keyboard.press('Escape')
+})
+
 // last: a pasted card lands where the mouse is, on the empty spot the other tests use
 test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short password goes to Snippets', async () => {
   await clearSelection()
