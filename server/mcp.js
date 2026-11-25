@@ -42,7 +42,8 @@ const BOARD_NOTE =
   "(the board's focus lists the cards in focus); compare(cardA, cardB) opens two files, pages or notes full screen " +
   "side by side (cardA on the left) for the user to read and compare, notes still editable; addSection(title, cards) " +
   'puts a section (a titled area, which the cards in it move with) around the cards named, an array of titles in the ' +
-  "space shown. Each card is a component (card) named by its title " +
+  'space shown; fitSection(section) makes a section just big enough for what is in it. Each card is a component ' +
+  '(card) named by its title ' +
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
   'its value has kind, space, the section it is in, selected, inView, folded, color (sticky notes), shared, rowCount ' +
   '(tables), how many comments it has and its arrows to and from the cards you can see; actions read() for its contents (a note: its whole text; a file or link: its path or address and ' +

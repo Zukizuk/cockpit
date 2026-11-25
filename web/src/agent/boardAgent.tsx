@@ -52,6 +52,9 @@ type BoardOptions = {
   onBringBack?: () => void
   onCompare?: (cards: string[]) => void
   onAddSection?: (title: string, cards: string[]) => void
+  onFitSection?: (section: string) => void
+  /** the sections in the space shown (for fitSection) */
+  sectionNames?: string[]
 }
 
 /** Rows an agent gives: an array of arrays (the first is the header), or text (tab-separated, Markdown or CSV). */
@@ -63,7 +66,7 @@ function rowsOf(rows: unknown): string[][] {
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action', onFitSection: 'action', sectionNames: 'value' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -110,6 +113,8 @@ const boardPrimitive = definePrimitive({
         if (!list.length) throw new Error('Name the cards to put in the section (an array of titles).')
         call('onAddSection')(words(title) || 'Section', list)
       },
+      // a section made just big enough for what's in it
+      fitSection: (section: string) => call('onFitSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section')),
       addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
@@ -118,7 +123,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -759,6 +764,12 @@ export function BoardAgent() {
           if (away.length) throw new Error(`${away.map(c => `"${c.title}"`).join(', ')} ${away.length === 1 ? 'is' : 'are'} in another space: switchSpace there first, or moveToSpace them here.`)
           touchCard(board.addSection({ around: named.map(c => c.id), title }), 'made')
           said(`Claude put ${named.length === 1 ? 'a card' : `${named.length} cards`} in the section "${title}"`)
+        }}
+        sectionNames={sectionNames}
+        onFitSection={name => {
+          const id = sectionList.find(s => s.name === name)?.id
+          if (!id || !board.fitSection(id)) throw new Error(`The section "${name}" has nothing in it to fit to.`)
+          said(`Claude fitted the section "${name}" to what's in it`)
         }}
         onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t })).then(id => place(id, s))}
         onAddTable={

@@ -425,6 +425,19 @@ test('sections: one from the board menu or around selected cards, named, dragged
   for (const id of ['plain', 'shared', 'private']) assert.deepEqual([after[id].x - before[id].x, after[id].y - before[id].y], [dx, dy], `${id} came along`)
   assert.deepEqual(after.later, before.later, 'a card outside it stayed')
 
+  // Claude fits it to what's in it: 40 round the cards
+  const fitted = await agent('act', { steps: [{ ref: 'Board', action: 'fitSection', args: ['Plan'] }] })
+  assert.equal(fitted.output.ok, true)
+  assert.ok(
+    await until(async () => {
+      const b = await board()
+      const s = b.cards.find(c => c.type === 'section')
+      const inside = b.cards.filter(c => ['plain', 'shared', 'private'].includes(c.id))
+      return s.x === Math.min(...inside.map(c => c.x)) - 40 && s.y === Math.min(...inside.map(c => c.y)) - 40
+    }),
+    'fitted',
+  )
+
   await clearSelection()
   await removeSection('Plan')
   assert.ok(await until(async () => (await sections()).length === 0), 'its cards stay when it goes')

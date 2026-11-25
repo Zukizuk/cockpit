@@ -336,6 +336,8 @@ interface Ctx {
   /** A new section around these cards, or at a spot, or in the middle of the screen; returns its id. */
   addSection: (opts?: { around?: string[]; at?: { x: number; y: number }; title?: string }) => string
   setSectionTitle: (id: string, title: string) => void
+  /** Makes a section just big enough for what's in it; false when it holds nothing. */
+  fitSection: (id: string) => boolean
 }
 
 const BoardCtx = createContext<Ctx | null>(null)
@@ -724,6 +726,27 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       ])
       persist()
       return id
+    },
+    [rf, remember, persist],
+  )
+
+  /** A section made just big enough for what's in it, with room round it. False when it holds nothing. */
+  const fitSection = useCallback(
+    (id: string) => {
+      const s = rf.getNode(id)
+      if (!s) return false
+      const cs = contentsOf(s, rf.getNodes())
+      if (!cs.length) return false
+      const PAD = 40
+      const b = cs.map(boxOf)
+      const x0 = Math.min(...b.map(r => r.x)) - PAD
+      const y0 = Math.min(...b.map(r => r.y)) - PAD
+      const x1 = Math.max(...b.map(r => r.x + r.w)) + PAD
+      const y1 = Math.max(...b.map(r => r.y + r.h)) + PAD
+      remember()
+      rf.setNodes(ns => ns.map(n => (n.id === id ? { ...n, position: { x: x0, y: y0 }, width: Math.round(x1 - x0), height: Math.round(y1 - y0) } : n)))
+      persist()
+      return true
     },
     [rf, remember, persist],
   )
@@ -1367,7 +1390,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
 
   const value = useMemo<Ctx>(
     () => ({
-      addCard, removeCard, removeCards, addSection, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
+      addCard, removeCard, removeCards, addSection, fitSection, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
       keysOpen, setKeysOpen, focusing, toggleFocus, compareCards, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
@@ -1376,7 +1399,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removeCards, addSection, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, addSection, fitSection, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

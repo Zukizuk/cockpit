@@ -14,8 +14,6 @@ import { STICKY_COLORS } from './CardShell'
 import { TitleInput } from './NoteCard'
 import { cn } from '@/lib/utils'
 
-const PAD = 40
-
 export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
   const board = useBoard()
   const rf = useReactFlow<CardNode>()
@@ -33,18 +31,7 @@ export function SectionCard({ id, data, selected }: NodeProps<CardNode>) {
     const me = rf.getNode(id)
     return me ? contentsOf(me, rf.getNodes()) : []
   }
-  const fit = () => {
-    const cs = inside()
-    if (!cs.length) return board.toast('Nothing in it yet: drop cards in it')
-    const b = cs.map(n => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.measured?.width ?? 0, h: n.height ?? n.measured?.height ?? 0 }))
-    const x0 = Math.min(...b.map(r => r.x)) - PAD
-    const y0 = Math.min(...b.map(r => r.y)) - PAD
-    const x1 = Math.max(...b.map(r => r.x + r.w)) + PAD
-    const y1 = Math.max(...b.map(r => r.y + r.h)) + PAD
-    board.remember()
-    rf.setNodes(ns => ns.map(n => (n.id === id ? { ...n, position: { x: x0, y: y0 }, width: Math.round(x1 - x0), height: Math.round(y1 - y0) } : n)))
-    board.persist()
-  }
+  const fit = () => void (board.fitSection(id) || board.toast('Nothing in it yet: drop cards in it'))
   const setColor = (color: StickyColor | null) => {
     rf.setNodes(ns =>
       ns.map(n => {
