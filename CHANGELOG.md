@@ -2,6 +2,15 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 26 November 2026 (version 0.2.13)
+
+**Improved**
+- Cards Claude makes or puts on your board no longer zoom your view to them. You stay where you are; the view glides over (without zooming) only when a new card lands out of sight.
+- When Claude lines up two cards joined by an arrow, it leaves room between them, so the arrow and its label show.
+
+**Fixed**
+- Settings → Agents listed a message you sent with Tell Claude as "You looked at the board · could see no cards". It now reads "You told Claude: …".
+
 ## 25 November 2026 (version 0.2.12)
 
 **New**
