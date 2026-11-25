@@ -28,11 +28,12 @@ function facing(a: Box, b: Box): Side {
   return dy >= 0 ? 'bottom' : 'top'
 }
 
-/** Where an arrow meets a side: its middle, or, with several arrows on that side, spread along it (`at` of `of`). */
-function point(b: Box, side: Side, at = 0, of = 1) {
+/** Where an arrow meets a side: its middle, or, with several arrows on that side, spread along it (`at` of `of`),
+ * around the middle (`mid`: the place that sits at the middle, which is the arrow to a card in line, if there is one). */
+function point(b: Box, side: Side, at = 0, of = 1, mid = (of - 1) / 2) {
   const along = side === 'top' || side === 'bottom' ? b.w : b.h
   const step = Math.min(28, along / (of + 1))
-  const d = (at - (of - 1) / 2) * step
+  const d = (at - mid) * step
   if (side === 'top') return { x: b.cx + d, y: b.y }
   if (side === 'bottom') return { x: b.cx + d, y: b.y + b.h }
   if (side === 'left') return { x: b.x, y: b.cy + d }
@@ -42,11 +43,14 @@ function point(b: Box, side: Side, at = 0, of = 1) {
 type Store = { edges: LinkEdge[]; nodeLookup: Map<string, InternalNode> }
 
 /** The arrows that meet this card on this side, ordered along it by where their other card is, and this one's place
- * among them: so two arrows on one side don't start from the same point and run on top of each other. */
-function placeOnSide(s: Store, self: string, card: string, side: Side): [number, number] {
+ * among them: so two arrows on one side don't start from the same point and run on top of each other. And which
+ * place is at the middle: the arrow to a card in line with this one (their middles level), so that arrow runs
+ * straight; with none, the middle of them all. */
+function placeOnSide(s: Store, self: string, card: string, side: Side): [number, number, number] {
   const here = s.nodeLookup.get(card)
-  if (!here) return [0, 1]
+  if (!here) return [0, 1, 0]
   const H = box(here)
+  const mine = side === 'top' || side === 'bottom' ? H.cx : H.cy
   const on: { id: string; key: number }[] = []
   for (const e of s.edges) {
     if (e.source !== card && e.target !== card) continue
@@ -60,7 +64,9 @@ function placeOnSide(s: Store, self: string, card: string, side: Side): [number,
   }
   on.sort((a, b) => a.key - b.key || a.id.localeCompare(b.id))
   const i = on.findIndex(x => x.id === self)
-  return i < 0 ? [0, 1] : [i, on.length]
+  if (i < 0) return [0, 1, 0]
+  const level = on.findIndex(x => Math.abs(x.key - mine) < 1.5)
+  return [i, on.length, level >= 0 ? level : (on.length - 1) / 2]
 }
 
 /** An arrowhead whose tip is at p, pointing into a card through its side. */
@@ -86,9 +92,9 @@ export function Arrow({ id, source, target, data, selected }: EdgeProps<LinkEdge
   // a string, so the arrow draws again only when its place on a side changes
   const places = useStore(s => [...placeOnSide(s as unknown as Store, id, source, fromSide), ...placeOnSide(s as unknown as Store, id, target, toSide)].join(','))
   if (!A || !B) return null
-  const [fi, fn, ti, tn] = places.split(',').map(Number)
-  const s = point(A, fromSide, fi, fn)
-  const t = point(B, toSide, ti, tn)
+  const [fi, fn, fm, ti, tn, tm] = places.split(',').map(Number)
+  const s = point(A, fromSide, fi, fn, fm)
+  const t = point(B, toSide, ti, tn, tm)
   // (an arrow always leaves and reaches the middle of a side, or spreads around it with others there; it runs straight
   // when the two cards are in line, which dragging one near level with the other snaps them into: see snapToLinked)
   // the first and last legs stand 22 off each card, less when the cards are close (so it doesn't double back)
