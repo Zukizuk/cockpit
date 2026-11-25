@@ -1,11 +1,11 @@
 // Cockpit: a free-form board. Paste a link or path anywhere (or press +) and it lands as a card you can read,
 // move, resize and put beside anything else. A small dock is the only chrome.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Background, BackgroundVariant, ReactFlow, ReactFlowProvider, SelectionMode, useNodesState, useReactFlow, useStore, type NodeChange } from '@xyflow/react'
+import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStore, type EdgeChange, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { Bookmark, ChevronRight, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
+import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
-import { BoardProvider, offBoard, fitsContent, foldNode, isSticky, resizingRef, toNode, useBoard, type CardNode } from './board'
+import { BoardProvider, offBoard, fitsContent, foldNode, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
@@ -35,8 +35,10 @@ import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
 import { DictionaryExtra, openDictionary } from './views/Dictionary'
 import { TableCard } from './cards/TableCard'
+import { Arrow } from './cards/Arrow'
 
 const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard, table: TableCard }
+const edgeTypes = { arrow: Arrow }
 
 export function App() {
   const [board, setBoard] = useState<Board | null>(null)
@@ -90,6 +92,37 @@ function Canvas({ initial }: { initial: Board }) {
     },
     [onNodesChange, board],
   )
+  // arrows between cards
+  const [edges, , onEdgesChange] = useEdgesState<LinkEdge>(useMemo(() => (initial.links || []).map(toEdge), [initial]))
+  const onEdgeChange = useCallback(
+    (changes: EdgeChange<LinkEdge>[]) => {
+      onEdgesChange(changes)
+      if (changes.some(c => c.type === 'remove')) board.persist()
+    },
+    [onEdgesChange, board],
+  )
+  // right-click on an arrow: its menu, where it was opened (as the board's own)
+  const [arrowMenu, setArrowMenu] = useState<{ x: number; y: number; id: string; data: LinkData } | null>(null)
+  const [arrowOpen, setArrowOpen] = useState(false)
+  const openArrowMenu = (x: number, y: number, id: string) => {
+    setArrowMenu({ x, y, id, data: (rf.getEdge(id)?.data || {}) as LinkData })
+    setArrowOpen(true)
+  }
+  // A card's dots sit where its arrows meet it, so between two close cards they cover the line: a right-click or
+  // double-click on a dot goes to the arrow under it.
+  const throughDot = (what: 'menu' | 'label') => (e: React.MouseEvent) => {
+    if (!(e.target as HTMLElement).closest?.('.link-handle')) return
+    const edge = document
+      .elementsFromPoint(e.clientX, e.clientY)
+      .map(el => el.closest('.react-flow__edge') as HTMLElement | null)
+      .find(Boolean)
+    const id = edge?.dataset.id
+    if (!id) return
+    e.preventDefault()
+    e.stopPropagation()
+    if (what === 'menu') openArrowMenu(e.clientX, e.clientY, id)
+    else emit('arrow-label', { id })
+  }
 
   // A card that fits its content (Snippets, until a height is dragged by hand) never keeps a stray fixed height,
   // which would cut it off.
@@ -421,10 +454,46 @@ function Canvas({ initial }: { initial: Board }) {
   const fitAll = () => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 })
 
   return (
-    <div className="board" onDragOver={onDragOver} onDrop={onDrop}>
+    <div className="board" onDragOver={onDragOver} onDrop={onDrop} onContextMenuCapture={throughDot('menu')} onDoubleClickCapture={throughDot('label')}>
+      <DropdownMenu open={arrowOpen} onOpenChange={open => !open && setArrowOpen(false)} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <span aria-hidden data-anchor="arrow" className="pointer-events-none fixed size-px" style={{ left: arrowMenu?.x ?? 0, top: arrowMenu?.y ?? 0 }} />
+        </DropdownMenuTrigger>
+        {arrowMenu && (
+          <DropdownMenuContent align="start" className="w-56" aria-label="Arrow">
+            <DropdownMenuItem onSelect={() => setTimeout(() => emit('arrow-label', { id: arrowMenu.id }), 60)}>
+              <Tag strokeWidth={1.75} />
+              {arrowMenu.data.label ? 'Change the label' : 'Add a label'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => board.setLink(arrowMenu.id, 'reverse')}>
+              <ArrowLeftRight strokeWidth={1.75} />
+              Point the other way
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => board.setLink(arrowMenu.id, { heads: arrowMenu.data.heads === 'both' ? undefined : 'both' })}>
+              <MoveRight strokeWidth={1.75} />
+              {arrowMenu.data.heads === 'both' ? 'Arrowhead at one end' : 'Arrowheads at both ends'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => board.setLink(arrowMenu.id, { heads: arrowMenu.data.heads === 'none' ? undefined : 'none' })}>
+              <Minus strokeWidth={1.75} />
+              {arrowMenu.data.heads === 'none' ? 'Make it an arrow' : 'Plain line, no arrowhead'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => board.setLink(arrowMenu.id, { dash: !arrowMenu.data.dash })}>
+              <Spline strokeWidth={1.75} />
+              {arrowMenu.data.dash ? 'Solid line' : 'Dashed line'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => board.removeLink(arrowMenu.id)}>
+              <Trash2 strokeWidth={1.75} />
+              Remove the arrow
+              <DropdownMenuShortcut>Del</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        )}
+      </DropdownMenu>
       <DropdownMenu open={paneOpen} onOpenChange={open => !open && setPaneOpen(false)} modal={false}>
         <DropdownMenuTrigger asChild>
-          <span aria-hidden className="pointer-events-none fixed size-px" style={{ left: paneMenu?.x ?? 0, top: paneMenu?.y ?? 0 }} />
+          <span aria-hidden data-anchor="board" className="pointer-events-none fixed size-px" style={{ left: paneMenu?.x ?? 0, top: paneMenu?.y ?? 0 }} />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-60">
           <DropdownMenuItem onSelect={() => paneMenu && board.newSticky('', { at: paneMenu.at })}>
@@ -488,10 +557,34 @@ function Canvas({ initial }: { initial: Board }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <ReactFlow<CardNode>
+      <ReactFlow<CardNode, LinkEdge>
         nodes={nodes}
         onNodesChange={onChange}
         nodeTypes={nodeTypes}
+        edges={edges}
+        onEdgesChange={onEdgeChange}
+        edgeTypes={edgeTypes}
+        // an arrow: drag from the dot on any side of a card to another card; let go on empty board for a new sticky
+        // note there, with the arrow to it
+        connectionMode={ConnectionMode.Loose}
+        connectionRadius={36}
+        onConnect={c => c.source && c.target && board.addLink(c.source, c.target)}
+        onConnectEnd={(e, state) => {
+          if (state.isValid || !state.fromNode) return
+          const p = 'changedTouches' in e ? e.changedTouches[0] : e
+          const from = state.fromNode.id
+          // let go anywhere on a card (not only near one of its dots): the arrow goes to that card
+          const over = (document.elementFromPoint(p.clientX, p.clientY)?.closest('.react-flow__node') as HTMLElement | null)?.dataset.id
+          if (over) return void (over !== from && board.addLink(from, over))
+          board.newSticky('', { at: rf.screenToFlowPosition({ x: p.clientX, y: p.clientY }) }).then(id => id && board.addLink(from, id))
+        }}
+        onEdgeDoubleClick={(_e, edge) => emit('arrow-label', { id: edge.id })}
+        onEdgeContextMenu={(e, edge) => {
+          e.preventDefault()
+          openArrowMenu(e.clientX, e.clientY, edge.id)
+        }}
+        // a click on a dot doesn't start an arrow (only a drag does): it may be on top of an arrow's end
+        connectOnClick={false}
         defaultViewport={initial.viewport ?? { x: 0, y: 0, zoom: 1 }}
         fitView={!initial.viewport && nodes.some(n => !n.hidden)}
         fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
@@ -511,8 +604,9 @@ function Canvas({ initial }: { initial: Board }) {
         onMoveEnd={() => board.persist()}
         onNodeDragStart={() => board.remember()}
         // the Delete key only (cards taken off in code are kept for Undo where that happens)
-        onBeforeDelete={async ({ nodes }) => {
-          board.removing(nodes as CardNode[])
+        onBeforeDelete={async ({ nodes, edges }) => {
+          if (nodes.length) board.removing(nodes as CardNode[])
+          else if (edges.length) board.remember()
           return true
         }}
         onPaneClick={() => rf.setNodes(ns => ns.map(n => (n.selected ? { ...n, selected: false } : n)))}

@@ -494,12 +494,29 @@ export interface CardComment {
 
 export type StickyColor = 'yellow' | 'green' | 'pink' | 'orange' | 'ink'
 
+export type Side = 'top' | 'right' | 'bottom' | 'left'
+
+/** An arrow from one card to another. It shows only while both are on the board (same space, not tucked away). */
+export interface BoardLink {
+  id: string
+  from: string
+  to: string
+  /** The side of each card it leaves and reaches (left out: whichever faces the other card). */
+  fromSide?: Side
+  toSide?: Side
+  label?: string
+  dash?: boolean
+  /** Arrowheads: at the `to` end (left out), at both ends, or none (a plain line). */
+  heads?: 'both' | 'none'
+}
+
 export interface Board {
   cards: BoardCard[]
   viewport: { x: number; y: number; zoom: number } | null
   spaces?: Space[]
   /** The space shown now. */
   space?: string
+  links?: BoardLink[]
 }
 
 export type Shell = 'pwsh' | 'bash'

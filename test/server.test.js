@@ -846,7 +846,7 @@ test('outputs: a turn kept as one group; only listed targets can be opened', asy
 
 test('board: cards saved and read back, bad ones dropped, sizes kept sane', async () => {
   const { readBoard, saveBoard } = await import('../server/lib/board.js')
-  assert.deepEqual(readBoard(), { cards: [], viewport: null, spaces: [{ id: 'main', name: 'Main' }], space: 'main' })
+  assert.deepEqual(readBoard(), { cards: [], viewport: null, spaces: [{ id: 'main', name: 'Main' }], space: 'main', links: [] })
   saveBoard({ cards: [{ id: 'a', type: 'item', ref: 'x', x: 10, y: 20, w: 50, h: 9000 }, { id: 'b', type: 'nope', ref: 'y' }], viewport: { x: 1, y: 2, zoom: 9 } })
   const b = readBoard()
   assert.deepEqual(b.cards, [{ id: 'a', type: 'item', ref: 'x', x: 10, y: 20, w: 200, h: 4000 }])
@@ -1311,6 +1311,30 @@ test('spaces: kept with the board, each card in one; a card whose space is gone 
   assert.equal(b.cards.find(c => c.id === 'c').space, undefined, 'a space that is gone: Main')
   saveBoard({ cards: [], viewport: null, space: 'nowhere' })
   assert.equal(readBoard().space, 'main')
+})
+
+test('arrows: kept with the board; one whose card is gone, to itself, or a second with the same id is dropped', async () => {
+  const { readBoard, saveBoard } = await import('../server/lib/board.js')
+  const r = saveBoard({
+    cards: [{ id: 'a', type: 'note', ref: 'n.md' }, { id: 'b', type: 'note', ref: 'm.md' }],
+    viewport: null,
+    links: [
+      { id: 'l1', from: 'a', to: 'b', label: '  feeds  ', dash: true, heads: 'both', fromSide: 'right', toSide: 'nowhere', extra: 'x' },
+      { id: 'l1', from: 'b', to: 'a' },
+      { id: 'l2', from: 'a', to: 'gone' },
+      { id: 'l3', from: 'a', to: 'a' },
+      { id: 'l4', from: 'b', to: 'a', heads: 'sideways', dash: 'yes', label: '' },
+      null,
+    ],
+  })
+  assert.equal(r.links, 2)
+  assert.deepEqual(readBoard().links, [
+    { id: 'l1', from: 'a', to: 'b', fromSide: 'right', label: 'feeds', dash: true, heads: 'both' },
+    { id: 'l4', from: 'b', to: 'a' },
+  ])
+  // a card taken off takes its arrows with it
+  saveBoard({ cards: [{ id: 'a', type: 'note', ref: 'n.md' }], viewport: null, links: readBoard().links })
+  assert.deepEqual(readBoard().links, [])
 })
 
 test('comments: a thread per card, yours and Claude\'s; one can be deleted', async () => {

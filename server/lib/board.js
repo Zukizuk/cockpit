@@ -43,14 +43,44 @@ function spacesOf(list) {
   return out
 }
 
+// Arrows from one card to another. One whose card is gone goes too.
+const MAX_LINKS = 800
+const SIDES = new Set(['top', 'right', 'bottom', 'left'])
+const HEADS = new Set(['both', 'none'])
+
+/** The arrows as saved: both ends on the board, not to itself, no two the same id. */
+export function linksOf(list, cardIds) {
+  const out = []
+  const seen = new Set()
+  for (const l of Array.isArray(list) ? list : []) {
+    if (out.length >= MAX_LINKS) break
+    if (!l || typeof l.id !== 'string' || !l.id || seen.has(l.id)) continue
+    if (typeof l.from !== 'string' || typeof l.to !== 'string' || l.from === l.to || !cardIds.has(l.from) || !cardIds.has(l.to)) continue
+    seen.add(l.id)
+    const label = typeof l.label === 'string' ? l.label.trim().slice(0, 200) : ''
+    out.push({
+      id: l.id.slice(0, 80),
+      from: l.from,
+      to: l.to,
+      ...(SIDES.has(l.fromSide) ? { fromSide: l.fromSide } : {}),
+      ...(SIDES.has(l.toSide) ? { toSide: l.toSide } : {}),
+      ...(label ? { label } : {}),
+      ...(l.dash === true ? { dash: true } : {}),
+      ...(HEADS.has(l.heads) ? { heads: l.heads } : {}),
+    })
+  }
+  return out
+}
+
 export function readBoard() {
   try {
     const b = JSON.parse(fs.readFileSync(file(), 'utf8'))
     const spaces = spacesOf(b.spaces)
     const space = spaces.some(s => s.id === b.space) ? b.space : 'main'
-    return { cards: Array.isArray(b.cards) ? b.cards : [], viewport: b.viewport || null, spaces, space }
+    const cards = Array.isArray(b.cards) ? b.cards : []
+    return { cards, viewport: b.viewport || null, spaces, space, links: linksOf(b.links, new Set(cards.map(c => c?.id))) }
   } catch {
-    return { cards: [], viewport: null, spaces: spacesOf([]), space: 'main' }
+    return { cards: [], viewport: null, spaces: spacesOf([]), space: 'main', links: [] }
   }
 }
 
@@ -109,9 +139,10 @@ export function saveBoard(body) {
   // a card whose space is gone goes back to Main
   for (const c of cards) if (c.space && !spaces.some(s => s.id === c.space)) delete c.space
   const space = spaces.some(s => s.id === body.space) ? body.space : 'main'
-  writeFileAtomic(file(), JSON.stringify({ cards, viewport, spaces, space }, null, 1) + '\n')
+  const links = linksOf(body.links, new Set(cards.map(c => c.id)))
+  writeFileAtomic(file(), JSON.stringify({ cards, viewport, spaces, space, links }, null, 1) + '\n')
   backup()
-  return { ok: true, count: cards.length }
+  return { ok: true, count: cards.length, links: links.length }
 }
 
 const KEEP_BACKUPS = 14

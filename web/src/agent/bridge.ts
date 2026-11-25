@@ -53,6 +53,7 @@ export function startAgentBridge(ask: Ask) {
       if (component === 'card' && action === 'setRows') return ask(`Claude wants to replace everything in the table "${String(label)}"`)
       if (component === 'card' && action === 'setText') return ask(`Claude wants to rewrite the note "${String(label)}"`)
       if (component === 'card' && action === 'removeRow') return ask(`Claude wants to take row "${String(args?.[0] ?? '')}" out of the table "${String(label)}"`)
+      if (component === 'card' && action === 'disconnect') return ask(`Claude wants to take away the arrow between "${String(label)}" and "${String(args?.[0] ?? '')}"`)
       return true
     },
   })

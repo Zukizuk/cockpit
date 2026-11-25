@@ -2,7 +2,7 @@
 // and selects text without moving the card, resize handles, and the same actions on right-click and in "⋯".
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { NodeResizer, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
+import { Handle, NodeResizer, Position, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
 import { ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, minSize, resizingRef, useBoard, type CardNode } from '../board'
@@ -12,6 +12,8 @@ import { emit } from '../lib'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+
+const SIDE_POS = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left } as const
 
 export type CardAction = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean; hidden?: boolean; keys?: string; /** only in the right-click menu (about what was right-clicked) */ context?: boolean }
 
@@ -305,6 +307,10 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     <>
       {/* the comments hang off the card's top-right corner, outside it */}
       {nodeId && <CardComments nodeId={nodeId} />}
+      {/* a dot just outside each side, on hover: drag from it to another card for an arrow */}
+      {(['top', 'right', 'bottom', 'left'] as const).map(side => (
+        <Handle key={side} id={side} type="source" position={SIDE_POS[side]} className={`link-handle link-${side}`} title="Drag to another card for an arrow" />
+      ))}
       {locked || hug ? null : (
         <NodeResizer
           minWidth={min.w}

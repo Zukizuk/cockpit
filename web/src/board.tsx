@@ -5,9 +5,9 @@
 // card added or taken off) can be undone with Ctrl+Z.
 import { startAgentBridge } from './agent/bridge'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useReactFlow, type Node } from '@xyflow/react'
+import { useReactFlow, type Edge, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
-import { get, post, put, track, type Board, type BoardCard, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
+import { get, post, put, track, type Board, type BoardCard, type BoardLink, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
 import { pack } from './layout'
 import { useData, useEvent } from './lib'
 
@@ -91,6 +91,34 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.veiled ? { veiled: true } : {}),
   ...(n.data.agents ? { agents: n.data.agents } : {}),
 })
+
+// ---- arrows ---------------------------------------------------------------------------------------------------
+// An arrow from one card to another is a React Flow edge. React Flow leaves out an edge whose card is hidden, so an
+// arrow shows only while both its cards are on the board.
+export type LinkData = { label?: string; dash?: boolean; heads?: 'both' | 'none'; fromSide?: BoardLink['fromSide']; toSide?: BoardLink['toSide'] }
+export type LinkEdge = Edge<LinkData, 'arrow'>
+
+export const toEdge = (l: BoardLink): LinkEdge => ({
+  id: l.id,
+  type: 'arrow',
+  source: l.from,
+  target: l.to,
+  data: { ...(l.label ? { label: l.label } : {}), ...(l.dash ? { dash: true } : {}), ...(l.heads ? { heads: l.heads } : {}), ...(l.fromSide ? { fromSide: l.fromSide } : {}), ...(l.toSide ? { toSide: l.toSide } : {}) },
+})
+
+export const fromEdge = (e: Edge): BoardLink => {
+  const d = (e.data || {}) as LinkData
+  return {
+    id: e.id,
+    from: e.source,
+    to: e.target,
+    ...(d.fromSide ? { fromSide: d.fromSide } : {}),
+    ...(d.toSide ? { toSide: d.toSide } : {}),
+    ...(d.label?.trim() ? { label: d.label.trim() } : {}),
+    ...(d.dash ? { dash: true } : {}),
+    ...(d.heads ? { heads: d.heads } : {}),
+  }
+}
 
 /** Off the board right now: in another space, or tucked away at the top edge. */
 export const offBoard = (c: { space?: string; tucked?: boolean }, space: string) => (c.space || 'main') !== space || !!c.tucked
@@ -267,6 +295,11 @@ interface Ctx {
   setCardAgents: (ids: string[], mark: AgentMark | null) => void
   /** The same for a whole space. */
   setSpaceAgents: (id: string, mark: AgentMark | null) => void
+  /** Draws an arrow from one card to another (not a second one between the same two); returns its id. */
+  addLink: (from: string, to: string, data?: LinkData) => string | undefined
+  /** Changes an arrow: its label, dashes, heads, or which way it points (reverse). */
+  setLink: (id: string, change: Partial<LinkData> | 'reverse') => void
+  removeLink: (id: string) => void
 }
 
 const BoardCtx = createContext<Ctx | null>(null)
@@ -331,6 +364,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const [versions, setVersions] = useState<Record<string, number>>({})
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** The cards and arrows as saved (set below, with undo). */
+  const layoutRef = useRef<() => { cards: BoardCard[]; links: BoardLink[] }>(() => ({ cards: [], links: [] }))
   const glideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const outputs = useData(() => get<OutputGroup[]>('/api/outputs'), [], { refreshEvery: 60_000 })
@@ -374,7 +409,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const viewport = rf.getViewport()
       // each space keeps where its view was
       const spacesNow = spacesRef.current.map(x => (x.id === spaceRef.current ? { ...x, viewport } : x))
-      const body: Board = { cards: rf.getNodes().map(fromNode), viewport, spaces: spacesNow, space: spaceRef.current }
+      const { cards, links } = layoutRef.current()
+      const body: Board = { cards, viewport, spaces: spacesNow, space: spaceRef.current, links }
       put('/api/board', body).catch(() => toast("Couldn't save the board's layout"))
     }, 600)
   }, [rf, toast])
@@ -404,10 +440,18 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const discardable = (n: CardNode) => isSticky(n.type, n.data.ref) || n.type === 'table'
 
   // ---- undo -----------------------------------------------------------------------------------------------------
-  // The whole layout (every card with its place, size, fold and lock) before each change; Ctrl+Z puts it back.
-  const past = useRef<BoardCard[][]>([])
-  const future = useRef<BoardCard[][]>([])
-  const layoutNow = useCallback(() => rf.getNodes().map(fromNode), [rf])
+  // The whole layout (every card with its place, size, fold and lock, and the arrows between them) before each
+  // change; Ctrl+Z puts it back.
+  type Layout = { cards: BoardCard[]; links: BoardLink[] }
+  const past = useRef<Layout[]>([])
+  const future = useRef<Layout[]>([])
+  const layoutNow = useCallback((): Layout => {
+    const cards = rf.getNodes().map(fromNode)
+    const ids = new Set(cards.map(c => c.id))
+    // an arrow whose card was taken off goes with it (Undo brings both back)
+    return { cards, links: rf.getEdges().filter(e => ids.has(e.source) && ids.has(e.target)).map(fromEdge) }
+  }, [rf])
+  layoutRef.current = layoutNow
   const remember = useCallback(() => {
     const now = layoutNow()
     const last = past.current[past.current.length - 1]
@@ -417,13 +461,14 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     future.current = []
   }, [layoutNow])
   const apply = useCallback(
-    (layout: BoardCard[]) => {
+    (layout: Layout) => {
       const nodes = rf.getNodes()
       const picked = new Set(nodes.filter(n => n.selected).map(n => n.id))
-      const kept = new Set(layout.map(c => c.id))
+      const kept = new Set(layout.cards.map(c => c.id))
       for (const n of nodes) if (!kept.has(n.id) && discardable(n)) discardIfEmpty(n.data.ref, n.type as CardType)
       glide()
-      rf.setNodes(layout.map(c => ({ ...toNode(c), hidden: offBoard(c, spaceRef.current), selected: picked.has(c.id) })))
+      rf.setNodes(layout.cards.map(c => ({ ...toNode(c), hidden: offBoard(c, spaceRef.current), selected: picked.has(c.id) })))
+      rf.setEdges(layout.links.map(toEdge))
       persist()
     },
     [rf, glide, persist, discardIfEmpty],
@@ -639,6 +684,53 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       persist()
     },
     [rf, persist],
+  )
+
+  const addLink = useCallback(
+    (from: string, to: string, data: LinkData = {}) => {
+      // (a card added a moment ago may not be in React Flow's store yet; an arrow to a card that never arrives is
+      // dropped when the board is saved)
+      if (from === to) return undefined
+      const same = rf.getEdges().find(e => (e.source === from && e.target === to) || (e.source === to && e.target === from))
+      if (same) return same.id
+      track('board.arrow')
+      remember()
+      const id = `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+      rf.setEdges(es => [...es, toEdge({ id, from, to, ...data })])
+      persist()
+      return id
+    },
+    [rf, remember, persist],
+  )
+
+  const setLink = useCallback(
+    (id: string, change: Partial<LinkData> | 'reverse') => {
+      remember()
+      rf.setEdges(es =>
+        es.map(e => {
+          if (e.id !== id) return e
+          if (change === 'reverse') {
+            const { fromSide, toSide, ...d } = (e.data || {}) as LinkData
+            return { ...e, source: e.target, target: e.source, data: { ...d, ...(toSide ? { fromSide: toSide } : {}), ...(fromSide ? { toSide: fromSide } : {}) } }
+          }
+          const data: LinkData = { ...(e.data as LinkData), ...change }
+          for (const k of Object.keys(data) as (keyof LinkData)[]) if (data[k] === undefined || data[k] === '' || data[k] === false) delete data[k]
+          return { ...e, data }
+        }),
+      )
+      persist()
+    },
+    [rf, remember, persist],
+  )
+
+  const removeLink = useCallback(
+    (id: string) => {
+      remember()
+      rf.setEdges(es => es.filter(e => e.id !== id))
+      persist()
+      toast('Arrow removed', { label: 'Undo', run: () => undoRef.current() })
+    },
+    [rf, remember, persist, toast],
   )
 
   const showItem = useCallback(
@@ -1178,9 +1270,9 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
       showImage, items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
-      comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents,
+      comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents],
+    [addCard, removeCard, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

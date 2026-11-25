@@ -40,11 +40,13 @@ const BOARD_NOTE =
   "(the board's focus lists the cards in focus); compare(cardA, cardB) opens two files, pages or notes full screen " +
   "side by side (cardA on the left) for the user to read and compare, notes still editable. Each card is a component (card) named by its title " +
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
-  'its value has kind, space, selected, inView, folded, color (sticky notes), shared, rowCount (tables) and how many ' +
-  'comments it has; actions read() for its contents (a note: its whole text; a file or link: its path or address and ' +
+  'its value has kind, space, selected, inView, folded, color (sticky notes), shared, rowCount (tables), how many ' +
+  'comments it has and its arrows to and from the cards you can see; actions read() for its contents (a note: its whole text; a file or link: its path or address and ' +
   'the start of what it shows; a table: its rows; and its comments), comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), ' +
   'placeNextTo(otherCard, side?) to put it beside another card (side: right, left, below or above; right if not ' +
-  'given; it goes to that card\'s space), rename(title) ' +
+  'given; it goes to that card\'s space), connectTo(otherCard, label?) to draw an arrow from it to another card (or ' +
+  "label the one already there; a card's arrows list them, \"→ Title\" it points to and \"← Title\" from), " +
+  'disconnect(otherCard) to take that arrow away (it waits for Allow), rename(title) ' +
   "(notes), setColor(yellow | green | pink | orange | charcoal) (sticky notes), tuck() to tuck it away as a tab at " +
   'the top edge, bringBack(), hideContents() and showContents() (blurred on the board, for sharing the screen; ' +
   "a card's tucked and hidden say which), remove(). 'Today's tasks' (task-list: " +

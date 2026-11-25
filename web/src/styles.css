@@ -402,6 +402,126 @@
   background: oklch(var(--contrast) / 0.35) !important;
 }
 
+/* ---- arrows between cards ----------------------------------------------------------------------------------- */
+
+/* a dot just outside the middle of each side, while the pointer is on the card (or it's selected): drag from it.
+   (.react-flow__handle too: React Flow's own handle rules would win otherwise, and catch the pointer unseen) */
+.react-flow__handle.link-handle {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  /* out of sight, out of the way: an arrow between two close cards stays clickable */
+  pointer-events: none;
+  transition-property: opacity;
+  transition-duration: 150ms;
+  cursor: crosshair;
+  z-index: 3;
+}
+.link-handle::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--background);
+  box-shadow: 0 0 0 1.5px oklch(var(--contrast) / 0.5);
+  transition-property: scale, box-shadow;
+  transition-duration: 150ms;
+}
+.link-handle:hover::after {
+  scale: 1.3;
+  box-shadow: 0 0 0 1.5px oklch(var(--contrast) / 0.85);
+}
+/* React Flow centres a handle on the side; these put its centre 12px outside it */
+.link-top {
+  top: -12px;
+}
+.link-bottom {
+  bottom: -12px;
+}
+.link-left {
+  left: -12px;
+}
+.link-right {
+  right: -12px;
+}
+.react-flow__node:hover > .react-flow__handle.link-handle,
+.react-flow__node.selected > .react-flow__handle.link-handle {
+  opacity: 1;
+  pointer-events: all;
+}
+/* while several cards are picked, or a card is being dragged, they're in the way */
+.react-flow__node.dragging > .react-flow__handle.link-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.arrow-line {
+  stroke: oklch(var(--contrast) / 0.42);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition-property: stroke;
+  transition-duration: 150ms;
+}
+.arrow-line.is-dashed {
+  stroke-dasharray: 7 6;
+}
+.arrow-head {
+  fill: oklch(var(--contrast) / 0.42);
+  transition-property: fill;
+  transition-duration: 150ms;
+}
+.react-flow__edge:hover .arrow-line,
+.arrow-line.is-selected {
+  stroke: oklch(var(--contrast) / 0.78);
+}
+.react-flow__edge:hover .arrow-head,
+.arrow-head.is-selected {
+  fill: oklch(var(--contrast) / 0.78);
+}
+.react-flow__edge {
+  cursor: pointer;
+}
+/* the line being drawn from a dot */
+.react-flow__connection-path {
+  stroke: oklch(var(--contrast) / 0.6);
+  stroke-width: 1.75;
+  stroke-dasharray: 5 5;
+  fill: none;
+}
+.arrow-label {
+  position: absolute;
+  pointer-events: all;
+  padding: 2px 8px;
+  border-radius: 7px;
+  background: var(--background);
+  box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.14);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--foreground);
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: text;
+}
+.arrow-label.is-selected {
+  box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.4);
+}
+.arrow-label input {
+  background: transparent;
+  border: 0;
+  outline: none;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+}
+
 /* ---- dock, toast -------------------------------------------------------------------------------------------- */
 
 .dock {

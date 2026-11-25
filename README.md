@@ -41,8 +41,8 @@ Windows may warn that the installer is from an unknown publisher: the release is
   key or password goes into Snippets, encrypted. **Later** (to check, reading, done) keeps links to read another time:
   Ctrl+Shift+V pastes a link straight there, and a card's menu keeps it on Later without taking it off the board.
 - **Spaces and comments.** Several boards to switch between, and a comment thread on any card.
-- **Claude on your board.** From a Claude Code chat, Claude reads the cards you share with it, comments back, and
-  adds tasks, notes, links and snippets; anything it takes away waits for your Allow. It sees only what you share:
+- **Claude on your board.** From a Claude Code chat, Claude reads the cards you share with it, comments back, draws
+  arrows between them, and adds tasks, notes, links and snippets; anything it takes away waits for your Allow. It sees only what you share:
   cards you select or share (right-click: Share with agents) and shared spaces. A card or space kept private never
   shows. Settings → Agents sets this per agent and lists what agents looked at.
 - **Bring in files from Windows.** Right-click files or folders in Explorer and choose **Send to → Cockpit**, or
@@ -62,6 +62,8 @@ Windows may warn that the installer is from an unknown publisher: the release is
   **Tables**, small grids saved as .csv files that paste to and from Excel and that Claude can fill in, and a
   **Journal** (<kbd>J</kbd>), one page a day: the card always shows today, earlier days are a click back and stay
   read-only until you unlock them, and `[[` refers to one of your notes.
+- **Arrows**: drag from the dot on a card's side to another card. Double-click an arrow to label it; right-click it
+  for heads, dashes and which way it points.
 - **The board**: drag, resize, fold, lock in place (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>), tidy
   (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd>), undo (<kbd>Ctrl</kbd> <kbd>Z</kbd>). Right-click the board for
   the rest, <kbd>Ctrl</kbd> <kbd>K</kbd> to add or find anything, <kbd>?</kbd> for every shortcut.

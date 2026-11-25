@@ -11,7 +11,7 @@ import { useEffect, useMemo } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
-import { foldNode, freeSpot, isSticky, spaceOf, useBoard, type CardNode } from '../board'
+import { foldNode, freeSpot, isSticky, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
 import { get, post, put, type Snippet, type StickyColor, type TableData } from '../api'
 import { newTable, rowsFromText } from '../cards/TableCard'
 import { useData } from '../lib'
@@ -133,6 +133,8 @@ export type CardValue = {
   rowCount?: number
   /** how many comments it has (read() gives them) */
   comments?: number
+  /** arrows to and from the other cards you can see: "→ Title" points to it, "← Title" from it, a label after a colon */
+  arrows?: string[]
 }
 /** What read() gives: a card's contents, asked for one card at a time. */
 export type CardContent = {
@@ -162,6 +164,8 @@ type CardOptions = {
   onPlaceNextTo?: (other: string, side: Side) => void
   onWrite?: (change: { text: string; append: boolean }) => Promise<void>
   onRead?: () => CardContent
+  onConnect?: (other: string, label: string) => void
+  onDisconnect?: (other: string) => void
   /** the other cards' titles (for placeNextTo) */
   others?: string[]
 }
@@ -172,7 +176,7 @@ const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', 
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', others: 'value' },
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', onConnect: 'action', onDisconnect: 'action', others: 'value' },
   // pending and error: a change that takes a moment (a note, a table) reports how it went; UI SDK's act waits on them
   // (any error that isn't null counts as a failure, an empty one too)
   state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' }, pending: false, error: null as string | null }),
@@ -227,6 +231,10 @@ const cardPrimitive = definePrimitive({
         if (!s) throw new Error('A side is right, left, below or above.')
         call('onPlaceNextTo')(pick(context.options().others || [], other, x => x, x => x, 'card'), s)
       },
+      // an arrow from this card to another (with a label, or a new label on the one already there); disconnect takes
+      // the arrows between the two away (that waits for the user's Allow)
+      connectTo: (other: string, label?: string) => call('onConnect')(pick(context.options().others || [], other, x => x, x => x, 'card'), words(label)),
+      disconnect: (other: string) => call('onDisconnect')(pick(context.options().others || [], other, x => x, x => x, 'card')),
     }
     // only what this kind of card does: an agent sees a note's, a table's or a sticky note's own actions, not all of
     // them on every card (UI SDK lists each function the api has)
@@ -241,7 +249,7 @@ const cardPrimitive = definePrimitive({
     return api
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'remove'] },
+  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -487,6 +495,42 @@ export function BoardAgent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [visible, openSpaces, board.space, board.focusing, access],
   )
+  // the arrows between the cards it can see, on each card's value: "→ Title" it points to, "← Title" from
+  const edgesKey = useStore(s => s.edges.map(e => [e.id, e.source, e.target, (e.data as LinkData | undefined)?.label || ''].join('|')).join(';'))
+  const values = useMemo(() => {
+    const titleOf = new Map(visible.map(c => [c.id, c.title]))
+    const arrows = new Map<string, string[]>()
+    const add = (id: string, line: string) => arrows.set(id, [...(arrows.get(id) || []), line])
+    for (const e of rf.getEdges()) {
+      const from = titleOf.get(e.source)
+      const to = titleOf.get(e.target)
+      if (!from || !to) continue
+      const label = (e.data as LinkData | undefined)?.label
+      add(e.source, `→ "${to}"${label ? `: ${label}` : ''}`)
+      add(e.target, `← "${from}"${label ? `: ${label}` : ''}`)
+    }
+    return new Map(cards.map(c => [c.id, arrows.has(c.id) ? { ...c.value, arrows: arrows.get(c.id) } : c.value]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cards, visible, edgesKey])
+  const between = (a: string, b: string) => rf.getEdges().filter(e => (e.source === a && e.target === b) || (e.source === b && e.target === a))
+  const connect = (c: Built, otherTitle: string, label: string) => {
+    const other = visible.find(x => x.title === otherTitle && x.id !== c.id)
+    if (!other) throw new Error(`No card "${otherTitle}" on the board.`)
+    const there = between(c.id, other.id)[0]
+    if (there) {
+      if (!label) return
+      board.setLink(there.id, { label })
+      return said(`Claude labelled the arrow between ${c.title} and ${other.title}`)
+    }
+    board.addLink(c.id, other.id, label ? { label } : {})
+    said(`Claude drew an arrow from ${c.title} to ${other.title}`)
+  }
+  const disconnect = (c: Built, otherTitle: string) => {
+    const other = visible.find(x => x.title === otherTitle && x.id !== c.id)
+    const there = other ? between(c.id, other.id) : []
+    if (!other || !there.length) throw new Error(`No arrow between "${c.title}" and "${otherTitle}".`)
+    for (const e of there) board.removeLink(e.id)
+  }
   const spaceNames = useMemo(() => openSpaces.map(s => s.name), [openSpaces])
   // every visible card's title, for "next to which card" (the same array while the cards stay the same)
   const allTitles = useMemo(() => visible.map(c => [c.id, c.title] as const), [visible])
@@ -644,8 +688,10 @@ export function BoardAgent() {
           <CardRoot
             aria-label={c.title}
             className="sr-only"
-            value={c.value}
+            value={values.get(c.id) ?? c.value}
             onRead={() => readCard(c)}
+            onConnect={(other, label) => connect(c, other, label)}
+            onDisconnect={other => disconnect(c, other)}
             spaces={spaceNames}
             onComment={t => {
               board.addComment(c.id, t, 'Claude').catch(() => {})
