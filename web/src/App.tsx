@@ -1,11 +1,11 @@
 // Cockpit: a free-form board. Paste a link or path anywhere (or press +) and it lands as a card you can read,
 // move, resize and put beside anything else. A small dock is the only chrome.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStore, type EdgeChange, type NodeChange } from '@xyflow/react'
+import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStore, useStoreApi, type EdgeChange, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
+import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
-import { BoardProvider, offBoard, fitsContent, foldNode, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
+import { BoardProvider, contentsOf, offBoard, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
@@ -36,8 +36,9 @@ import { BoardAgent } from './agent/boardAgent'
 import { DictionaryExtra, openDictionary } from './views/Dictionary'
 import { TableCard } from './cards/TableCard'
 import { Arrow } from './cards/Arrow'
+import { SectionCard } from './cards/SectionCard'
 
-const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard, table: TableCard }
+const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard, table: TableCard, section: SectionCard }
 const edgeTypes = { arrow: Arrow }
 
 export function App() {
@@ -87,12 +88,44 @@ function Canvas({ initial }: { initial: Board }) {
   const onChange = useCallback(
     (changes: NodeChange<CardNode>[]) => {
       changes = snapToLinked(changes)
+      changes = carryContents(changes)
+      // a box dragged out on the board picks cards, not the sections they're in (a section is picked by its title)
+      if (store.getState().userSelectionActive) changes = changes.filter(c => !(c.type === 'select' && c.selected && rf.getNode(c.id)?.type === 'section'))
       onNodesChange(changes)
       // save once a move, resize or removal is finished (not on every frame, not on selection)
       if (changes.some(c => (c.type === 'position' && !c.dragging) || (c.type === 'dimensions' && !c.resizing) || c.type === 'remove')) board.persist()
     },
     [onNodesChange, board],
   )
+  // A section dragged by its title takes what's in it along: the cards (and smaller sections) whose middle was in it
+  // when the drag began, unless they're being dragged anyway or are locked in place.
+  const store = useStoreApi()
+  const carrying = useRef<{ leaders: Map<string, { x: number; y: number }>; items: Map<string, { x: number; y: number; leader: string }> } | null>(null)
+  const startCarrying = (dragged: CardNode[]) => {
+    const draggedIds = new Set(dragged.map(n => n.id))
+    const all = rf.getNodes()
+    const leaders = new Map<string, { x: number; y: number }>()
+    const items = new Map<string, { x: number; y: number; leader: string }>()
+    for (const s of dragged.filter(isSection)) {
+      leaders.set(s.id, { ...s.position })
+      for (const n of contentsOf(s, all)) if (!draggedIds.has(n.id) && !n.data.locked && !items.has(n.id)) items.set(n.id, { x: n.position.x, y: n.position.y, leader: s.id })
+    }
+    carrying.current = items.size ? { leaders, items } : null
+  }
+  function carryContents(changes: NodeChange<CardNode>[]) {
+    const carry = carrying.current
+    if (!carry) return changes
+    const extra: NodeChange<CardNode>[] = []
+    for (const c of changes) {
+      if (c.type !== 'position' || !c.position) continue
+      const start = carry.leaders.get(c.id)
+      if (!start) continue
+      const dx = c.position.x - start.x
+      const dy = c.position.y - start.y
+      for (const [id, it] of carry.items) if (it.leader === c.id) extra.push({ type: 'position', id, position: { x: it.x + dx, y: it.y + dy }, dragging: c.dragging })
+    }
+    return extra.length ? [...changes, ...extra] : changes
+  }
   // A card dragged on its own, with its middle near level with (or in line with) the middle of a card it has an arrow
   // to, within a few pixels on screen, snaps into line with it, so the arrow between them runs straight.
   function snapToLinked(changes: NodeChange<CardNode>[]) {
@@ -285,6 +318,14 @@ function Canvas({ initial }: { initial: Board }) {
         board.setPalette(true)
         return
       }
+      // A section, as FigJam's Ctrl+Alt+G: around the selected cards, or an empty one in the middle of the screen. Also
+      // from inside a note (a click on a sticky note puts the cursor in it), where it types nothing.
+      if ((e.ctrlKey || e.metaKey) && e.altKey && !e.getModifierState('AltGraph') && e.key.toLowerCase() === 'g' && !board.expanded && !board.palette) {
+        e.preventDefault()
+        ;(document.activeElement as HTMLElement | null)?.blur()
+        board.addSection({ around: rf.getNodes().filter(n => n.selected && !isSection(n)).map(n => n.id) })
+        return
+      }
       if (typing || board.expanded || board.palette || document.querySelector('[role="menu"], [role="dialog"]')) return
       const picked = rf.getNodes().filter(n => n.selected)
       const one = picked.length === 1 ? picked[0] : null
@@ -345,7 +386,7 @@ function Canvas({ initial }: { initial: Board }) {
         }
       }
       // F2 names a note, as in Explorer
-      if (e.key === 'F2' && (one?.type === 'note' || one?.type === 'table')) {
+      if (e.key === 'F2' && (one?.type === 'note' || one?.type === 'table' || one?.type === 'section')) {
         e.preventDefault()
         emit('note-rename', { id: one.id })
         return
@@ -392,7 +433,7 @@ function Canvas({ initial }: { initial: Board }) {
         '0': () => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 }),
         f: () => {
           // every selected card (a sticky note rolls up into its strip); all fold, unless they all are already
-          const cards = picked
+          const cards = picked.filter(n => !isSection(n))
           if (!cards.length) return board.toast('Select a card first, then F folds it')
           const fold = !cards.every(n => n.data.folded)
           const ids = new Set(cards.map(n => n.id))
@@ -477,7 +518,7 @@ function Canvas({ initial }: { initial: Board }) {
   const [paneOpen, setPaneOpen] = useState(false)
   // the cards on this space that fold (sticky notes fold one at a time, with their own button or F, not all at once;
   // cards in other spaces or tucked away are left as they are)
-  const foldable = nodes.filter(n => !n.hidden && !isSticky(n.type, n.data.ref))
+  const foldable = nodes.filter(n => !n.hidden && !isSticky(n.type, n.data.ref) && !isSection(n))
   const foldAll = (fold: boolean) => {
     if (fold) track('board.foldall')
     const ids = new Set(foldable.filter(n => !!n.data.folded !== fold).map(n => n.id))
@@ -535,6 +576,11 @@ function Canvas({ initial }: { initial: Board }) {
             <StickyNote strokeWidth={1.75} />
             Sticky note here
             <DropdownMenuShortcut>N</DropdownMenuShortcut>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => paneMenu && board.addSection({ at: paneMenu.at })}>
+            <SquareDashed strokeWidth={1.75} />
+            Section here
+            <DropdownMenuShortcut>Ctrl Alt G</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => board.setPalette(true)}>
             <Plus strokeWidth={1.75} />
@@ -637,7 +683,12 @@ function Canvas({ initial }: { initial: Board }) {
         multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
         deleteKeyCode={['Delete']}
         onMoveEnd={() => board.persist()}
-        onNodeDragStart={() => board.remember()}
+        onNodeDragStart={(_e, _node, dragged) => {
+          board.remember()
+          startCarrying(dragged)
+        }}
+        // (after the last move, which carries what's in a section to where it's let go)
+        onNodeDragStop={() => setTimeout(() => (carrying.current = null), 0)}
         // the Delete key only (cards taken off in code are kept for Undo where that happens)
         onBeforeDelete={async ({ nodes, edges }) => {
           if (nodes.length) board.removing(nodes as CardNode[])

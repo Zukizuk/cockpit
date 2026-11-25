@@ -44,6 +44,7 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
       { keys: ['Ctrl', '0'], what: 'Back to 100%' },
       { keys: ['0'], what: 'Show everything' },
       { keys: ['Ctrl', 'Alt', 'T'], what: 'Tidy: line cards up from the top-left' },
+      { keys: ['Ctrl', 'Alt', 'G'], what: 'A section around the selected cards (or an empty one)' },
       { keys: ['[', ']'], what: 'The space before or after (S lists them)' },
       { keys: ['Alt', '1'], what: 'Go to space 1 (to 9)' },
       { keys: ['Ctrl', 'Z'], what: 'Undo (Ctrl Y redoes)' },

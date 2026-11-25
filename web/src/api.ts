@@ -404,7 +404,7 @@ export interface DictResult {
   from?: string[]
 }
 
-export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets' | 'folder' | 'table'
+export type CardType = 'item' | 'note' | 'outputs' | 'tasks' | 'tracker' | 'command' | 'later' | 'snippets' | 'folder' | 'table' | 'section'
 
 /** A task on the Today card's own list (when Todoist isn't connected). */
 export interface LocalTask {
@@ -457,6 +457,8 @@ export interface BoardCard {
   veiled?: boolean
   /** Shared with agents, or private (agents never see it); left out: as its space and Settings say. */
   agents?: AgentMark
+  /** A section's title (a section is an area on the board; the cards whose middle is in it are in it). */
+  title?: string
 }
 
 /** A card or space shared with agents, or kept from them. */

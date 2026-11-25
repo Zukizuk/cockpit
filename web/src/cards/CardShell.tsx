@@ -3,7 +3,7 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Handle, NodeResizer, Position, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
-import { Archive, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, X } from 'lucide-react'
+import { Archive, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, SquareDashed, X } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, isSticky, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -211,13 +211,15 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     return [all(n => !!n.data.folded), all(n => !!n.data.locked), all(n => !!n.data.veiled), all(n => isSticky(n.type, n.data.ref)), all(n => n.type === 'note'), all(n => !n.data.locked)].join('')
   })
   const [allFolded, allLocked, allVeiled, allSticky, allNotes, noneLocked] = pickedState.split('').map(c => c === '1')
-  const pickedIds = () => rf.getNodes().filter(n => n.selected).map(n => n.id)
+  // (a section picked along with them is left out: it has its own menu, on its title)
+  const pickedIds = () => rf.getNodes().filter(n => n.selected && n.type !== 'section').map(n => n.id)
   const manyGroups = (): CardAction[][] => {
     const n = pickedCount
     return [
       [
         { label: board.focusing ? 'Bring everything back' : 'Focus on these cards', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
         { label: 'Compare side by side', icon: SquareSplitHorizontal, run: () => board.compareCards(pickedIds()), hidden: n !== 2, keys: 'Space' },
+        { label: `Put these ${n} in a section`, icon: SquareDashed, run: () => board.addSection({ around: pickedIds() }), keys: 'Ctrl+Alt+G' },
       ],
       [
         {

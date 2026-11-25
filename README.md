@@ -64,6 +64,8 @@ Windows may warn that the installer is from an unknown publisher: the release is
   read-only until you unlock them, and `[[` refers to one of your notes.
 - **Arrows**: drag from the dot on a card's side to another card. Double-click an arrow to label it; right-click it
   for heads, dashes and which way it points.
+- **Sections**: a titled area that the cards in it move with. Right-click the board for one, or select cards and
+  press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>G</kbd>.
 - **The board**: drag, resize, fold, lock in place (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>), tidy
   (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd>), undo (<kbd>Ctrl</kbd> <kbd>Z</kbd>). Right-click the board for
   the rest, <kbd>Ctrl</kbd> <kbd>K</kbd> to add or find anything, <kbd>?</kbd> for every shortcut.

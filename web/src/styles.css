@@ -402,6 +402,87 @@
   background: oklch(var(--contrast) / 0.35) !important;
 }
 
+/* ---- sections ----------------------------------------------------------------------------------------------- */
+
+/* An area behind the cards. Only its title (and its resize corners, when picked) takes the pointer: inside, it's the
+   board (drag to select, right-click for the board's menu, paste). */
+.react-flow__node-section {
+  pointer-events: none !important;
+}
+.react-flow__node-section .react-flow__resize-control {
+  pointer-events: all;
+}
+.section {
+  position: absolute;
+  inset: 0;
+  border-radius: 20px;
+  background: oklch(var(--contrast) / 0.03);
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.11);
+  transition-property: box-shadow, background-color;
+  transition-duration: 150ms;
+}
+.section.is-selected {
+  box-shadow: inset 0 0 0 1.5px oklch(var(--contrast) / 0.38);
+}
+/* a colour: the sticky note's paper, faint */
+.section.section-tint {
+  background: color-mix(in oklab, var(--paper) 13%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--paper) 45%, transparent);
+}
+.section.section-tint.is-selected {
+  box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--paper) 85%, transparent);
+}
+/* its title sits just above its top-left corner; drag it to move the section and what's in it */
+.section-title {
+  position: absolute;
+  left: 6px;
+  bottom: calc(100% + 6px);
+  max-width: calc(100% - 12px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--foreground);
+  pointer-events: all;
+  cursor: grab;
+  white-space: nowrap;
+  /* zoomed out it grows from its bottom-left corner, staying on the section's corner */
+  transform-origin: bottom left;
+  transition-property: background-color, color;
+  transition-duration: 150ms;
+}
+.section-title:hover,
+.section.is-selected .section-title {
+  background: oklch(var(--contrast) / 0.07);
+}
+.section-tint .section-title {
+  background: color-mix(in oklab, var(--paper) 70%, transparent);
+  color: var(--ink);
+}
+.section-tint .section-title:hover,
+.section-tint.is-selected .section-title {
+  background: var(--paper);
+}
+.section-title.is-empty {
+  color: var(--muted-foreground);
+}
+.section-title .note-title-input {
+  font: inherit;
+  color: inherit;
+  min-width: 140px;
+}
+.react-flow__node-section.dragging .section-title {
+  cursor: grabbing;
+}
+.section-swatch-none {
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px oklch(var(--contrast) / 0.3);
+}
+
 /* ---- arrows between cards ----------------------------------------------------------------------------------- */
 
 /* a dot just outside the middle of each side, while the pointer is on the card (or it's selected): drag from it.

@@ -23,6 +23,7 @@ export const SIZES: Record<CardType, { w: number; h: number }> = {
   snippets: { w: 400, h: 140 },
   folder: { w: 420, h: 520 },
   table: { w: 520, h: 320 },
+  section: { w: 640, h: 420 },
 }
 
 /** A sticky note: any note that isn't a journal page or a draft (new ones live in notes/stickies). */
@@ -35,6 +36,7 @@ export function minSize(type: CardType, ref = '') {
   if (isSticky(type, ref)) return { w: 200, h: 140 }
   if (type === 'later') return { w: 380, h: 260 }
   if (type === 'snippets') return { w: 320, h: SNIPPETS_MIN_H }
+  if (type === 'section') return { w: 240, h: 160 }
   return { w: 260, h: 150 }
 }
 
@@ -49,7 +51,7 @@ export const STICKY_FOLDED_H = 36
 export const foldedH = (type: string | undefined, ref: string) => (isSticky(type, ref) ? STICKY_FOLDED_H : FOLDED_H)
 
 /** openH: the height a folded card goes back to when it's unfolded. */
-export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean; agents?: AgentMark }
+export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean; agents?: AgentMark; title?: string }
 export type CardNode = Node<CardData, CardType>
 
 /** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
@@ -67,11 +69,12 @@ export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}), ...(c.title ? { title: c.title } : {}) },
   width: HUGS.has(c.type) ? undefined : c.w,
   height: c.folded ? foldedH(c.type, c.ref) : HUGS.has(c.type) || (AUTO_HEIGHT.has(c.type) && !keepsSize(c)) ? undefined : c.h,
   dragHandle: '.card-drag',
   ...(c.locked ? { draggable: false, deletable: false } : {}),
+  ...(c.type === 'section' ? { zIndex: SECTION_Z } : {}),
 })
 
 export const fromNode = (n: CardNode): BoardCard => ({
@@ -90,6 +93,7 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.tucked ? { tucked: true } : {}),
   ...(n.data.veiled ? { veiled: true } : {}),
   ...(n.data.agents ? { agents: n.data.agents } : {}),
+  ...(n.type === 'section' && n.data.title ? { title: n.data.title } : {}),
 })
 
 // ---- arrows ---------------------------------------------------------------------------------------------------
@@ -118,6 +122,33 @@ export const fromEdge = (e: Edge): BoardLink => {
     ...(d.dash ? { dash: true } : {}),
     ...(d.heads ? { heads: d.heads } : {}),
   }
+}
+
+// ---- sections -------------------------------------------------------------------------------------------------
+// A section is an area on the board with a title, drawn behind the cards. Nothing ties a card to it: the cards whose
+// middle is inside it are in it, so dropping a card in puts it there and dragging it out takes it out. Dragging the
+// section by its title takes what's in it along.
+/** Below every card, selected or not (React Flow lifts a selected node by 1000). */
+export const SECTION_Z = -5000
+export const isSection = (n: { type?: string }) => n.type === 'section'
+const boxOf = (n: CardNode) => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.measured?.width ?? SIZES[n.type as CardType]?.w ?? 0, h: n.height ?? n.measured?.height ?? SIZES[n.type as CardType]?.h ?? 0 })
+/** Whether a card (or a smaller section) is in a section: its middle is inside it. */
+export function inSection(section: CardNode, n: CardNode) {
+  if (n.id === section.id || n.hidden) return false
+  const s = boxOf(section)
+  const b = boxOf(n)
+  const cx = b.x + b.w / 2
+  const cy = b.y + b.h / 2
+  // a section isn't in one smaller than itself
+  if (isSection(n) && b.w * b.h >= s.w * s.h) return false
+  return cx > s.x && cx < s.x + s.w && cy > s.y && cy < s.y + s.h
+}
+/** What a section holds now: the cards (and smaller sections) whose middle is in it. */
+export const contentsOf = (section: CardNode, nodes: CardNode[]) => nodes.filter(n => inSection(section, n))
+/** The section a card is in: the smallest one holding it. */
+export function sectionOf(n: CardNode, nodes: CardNode[]) {
+  const holding = nodes.filter(s => isSection(s) && !s.hidden && inSection(s, n))
+  return holding.sort((a, b) => boxOf(a).w * boxOf(a).h - boxOf(b).w * boxOf(b).h)[0]
 }
 
 /** Off the board right now: in another space, or tucked away at the top edge. */
@@ -302,6 +333,9 @@ interface Ctx {
   removeLink: (id: string) => void
   /** Takes several cards off the board at once (locked ones stay); one Undo brings them back. */
   removeCards: (ids: string[]) => void
+  /** A new section around these cards, or at a spot, or in the middle of the screen; returns its id. */
+  addSection: (opts?: { around?: string[]; at?: { x: number; y: number }; title?: string }) => string
+  setSectionTitle: (id: string, title: string) => void
 }
 
 const BoardCtx = createContext<Ctx | null>(null)
@@ -613,7 +647,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
           })()
       // a new card goes where nothing else is: the nearest free spot to where it was meant to go, in rings
       // around it, so it never lands on top of a card already there
-      pos = freeSpot(pos, size, rf.getNodes().filter(n => !n.hidden && n.id !== moving?.id))
+      // (a section isn't in the way: a card can go in one)
+      pos = freeSpot(pos, size, rf.getNodes().filter(n => !n.hidden && n.id !== moving?.id && !isSection(n)))
       const here = spaceRef.current === 'main' ? {} : { space: spaceRef.current }
       const id = moving ? moving.id : `${type}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
       if (moving) {
@@ -657,6 +692,55 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       persist()
     },
     [rf, persist, remember, removing],
+  )
+
+  /** A new section: around these cards (with room round them), or at a spot (where the board was right-clicked), or
+   * in the middle of the screen. Returns its id. */
+  const addSection = useCallback(
+    (opts: { around?: string[]; at?: { x: number; y: number }; title?: string } = {}) => {
+      track('board.section')
+      const around = (opts.around || []).map(id => rf.getNode(id)).filter((n): n is CardNode => !!n && !n.hidden)
+      const PAD = 40
+      let box: { x: number; y: number; w: number; h: number }
+      if (around.length) {
+        const bs = around.map(boxOf)
+        const x0 = Math.min(...bs.map(b => b.x))
+        const y0 = Math.min(...bs.map(b => b.y))
+        const x1 = Math.max(...bs.map(b => b.x + b.w))
+        const y1 = Math.max(...bs.map(b => b.y + b.h))
+        box = { x: x0 - PAD, y: y0 - PAD, w: x1 - x0 + PAD * 2, h: y1 - y0 + PAD * 2 }
+      } else {
+        const { w, h } = SIZES.section
+        const c = opts.at ?? rf.screenToFlowPosition({ x: innerWidth / 2, y: innerHeight / 2 })
+        box = { x: c.x - w / 2, y: c.y - 40, w, h }
+      }
+      remember()
+      const id = `section-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+      const here = spaceRef.current === 'main' ? {} : { space: spaceRef.current }
+      const title = opts.title?.trim()
+      rf.setNodes(ns => [
+        { id, type: 'section', position: { x: box.x, y: box.y }, width: Math.round(box.w), height: Math.round(box.h), zIndex: SECTION_Z, dragHandle: '.card-drag', selected: true, data: { ref: id, born: Date.now(), ...(title ? { title } : {}), ...here } },
+        ...ns.map(n => (n.selected ? { ...n, selected: false } : n)),
+      ])
+      persist()
+      return id
+    },
+    [rf, remember, persist],
+  )
+
+  const setSectionTitle = useCallback(
+    (id: string, title: string) => {
+      remember()
+      rf.setNodes(ns =>
+        ns.map(n => {
+          if (n.id !== id) return n
+          const { title: _was, ...data } = n.data
+          return { ...n, data: title.trim() ? { ...data, title: title.trim().slice(0, 80) } : data }
+        }),
+      )
+      persist()
+    },
+    [rf, remember, persist],
   )
 
   /** Takes several cards off at once: one Undo brings them all back. */
@@ -912,7 +996,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const shelfX = target.position.x - SHELF_W - 64
       // locked cards stay where they are
       const focused = new Set(targets.map(n => n.id))
-      const others = nodes.filter(n => !focused.has(n.id) && !n.data.locked).sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
+      // (sections stay where they are, behind)
+      const others = nodes.filter(n => !focused.has(n.id) && !n.data.locked && !isSection(n)).sort((a, b) => a.position.y - b.position.y || a.position.x - b.position.x)
       const spot = new Map(others.map((n, i) => [n.id, { x: shelfX, y: target.position.y + i * (FOLDED_H + 10) }]))
       // the focused cards in a row, tops lined up, a gap between them
       const row = new Map<string, { x: number; y: number }>()
@@ -947,14 +1032,17 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     track('board.tidy')
     if (focusSaved.current) return toast('Bring everything back first, then tidy')
     const nodes = rf.getNodes().filter(n => !n.hidden)
-    const free = nodes.filter(n => !n.data.locked)
+    // sections, and the cards in them, stay as they are (someone arranged them); the rest flow around them
+    const sections = nodes.filter(isSection)
+    const kept = (n: CardNode) => !!n.data.locked || isSection(n) || sections.some(s => inSection(s, n))
+    const free = nodes.filter(n => !kept(n))
     if (!free.length) return toast(nodes.length ? 'Every card is locked in place' : 'Nothing on the board yet')
     remember()
     const box = (n: CardNode) => ({ id: n.id, x: n.position.x, y: n.position.y, ...sizeOf(n) })
     const { zoom } = rf.getViewport()
     const margin = 28
     const topLeft = rf.screenToFlowPosition({ x: margin, y: margin })
-    const spots = pack(free.map(box), nodes.filter(n => n.data.locked).map(box), { x: topLeft.x, y: topLeft.y, w: (innerWidth - margin * 2) / zoom }, prefsRef.current.tidyGap)
+    const spots = pack(free.map(box), nodes.filter(kept).map(box), { x: topLeft.x, y: topLeft.y, w: (innerWidth - margin * 2) / zoom }, prefsRef.current.tidyGap)
     glide()
     rf.setNodes(ns => ns.map(n => (spots.has(n.id) ? { ...n, position: spots.get(n.id)! } : n)))
     persist()
@@ -1279,7 +1367,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
 
   const value = useMemo<Ctx>(
     () => ({
-      addCard, removeCard, removeCards, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
+      addCard, removeCard, removeCards, addSection, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
       keysOpen, setKeysOpen, focusing, toggleFocus, compareCards, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
@@ -1288,7 +1376,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removeCards, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, addSection, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

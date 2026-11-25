@@ -1337,6 +1337,22 @@ test('arrows: kept with the board; one whose card is gone, to itself, or a secon
   assert.deepEqual(readBoard().links, [])
 })
 
+test('sections: kept with the board with their title; a title on anything else is dropped', async () => {
+  const { readBoard, saveBoard } = await import('../server/lib/board.js')
+  saveBoard({
+    cards: [
+      { id: 's', type: 'section', ref: 's', x: -40, y: -40, w: 700, h: 400, title: '  Launch plan  ', color: 'green' },
+      { id: 'u', type: 'section', ref: 'u', x: 0, y: 500, w: 300, h: 200, title: '   ' },
+      { id: 'n', type: 'note', ref: 'n.md', title: 'not for notes' },
+    ],
+    viewport: null,
+  })
+  const [s, u, n] = readBoard().cards
+  assert.deepEqual([s.type, s.title, s.color, s.w, s.h], ['section', 'Launch plan', 'green', 700, 400])
+  assert.equal(u.title, undefined, 'an empty title is no title')
+  assert.equal(n.title, undefined)
+})
+
 test('comments: a thread per card, yours and Claude\'s; one can be deleted', async () => {
   const c = await import('../server/lib/comments.js')
   const mine = c.addComment({ card: 'later-1', text: ' Read this first ' })

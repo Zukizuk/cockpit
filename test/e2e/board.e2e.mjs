@@ -356,6 +356,71 @@ test('with several cards selected, a card menu acts on all of them, and leaves o
   await clearSelection()
 })
 
+test('sections: one from the board menu or around selected cards, named, dragged with what is in it, and Claude sees it', async () => {
+  await clearSelection()
+  const board = () => api('/api/board')
+  const sections = async () => (await board()).cards.filter(c => c.type === 'section')
+  const titleBox = page.locator('.react-flow__node-section .section-title')
+  // a new section's title box has the cursor (it takes it back from the closing menu)
+  const titleReady = () => until(() => page.evaluate(() => document.activeElement?.matches('.section-title input')))
+  const removeSection = async title => {
+    await page.locator('.react-flow__node-section .section-title', { hasText: title }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: /^Remove the section/ }).click()
+  }
+
+  // from the board's menu: a new one where it was right-clicked, its title ready to type
+  await page.mouse.click(EMPTY.x, EMPTY.y, { button: 'right' })
+  await page.getByRole('menuitem', { name: /Section here/ }).click()
+  await page.keyboard.type('Ideas')
+  await page.keyboard.press('Enter')
+  assert.ok(await until(async () => (await sections()).some(s => s.title === 'Ideas')), 'made and named')
+  await removeSection('Ideas')
+  assert.ok(await until(async () => (await sections()).length === 0), 'taken off')
+
+  // around two selected cards (Ctrl+Alt+G); the one between them is in it too, its middle being inside. (The board
+  // scrolled down a little first: a section's title sits above it, and the cards are at the top of the window.)
+  await page.mouse.move(EMPTY.x, EMPTY.y)
+  await page.mouse.wheel(0, -160)
+  await page.waitForTimeout(400)
+  await note('Plain list').click({ position: { x: 150, y: 200 } })
+  await note('Shared plan').click({ position: { x: 150, y: 200 }, modifiers: ['Shift'] })
+  await page.keyboard.press('Control+Alt+g')
+  await titleReady()
+  await page.keyboard.type('Plan')
+  await page.keyboard.press('Enter')
+  assert.ok(await until(async () => (await sections()).some(s => s.title === 'Plan')), 'around the two')
+  const snap = await agent('snapshot')
+  assert.equal(snap.output.find(c => c.label === 'Shared plan').value.section, 'Plan', 'Claude sees which section a card is in')
+  assert.ok(!snap.output.some(c => c.component === 'card' && /^Plan$|^Section$/.test(c.label)), 'a section is not a card to Claude')
+
+  // dragged by its title: what's in it comes along
+  const before = Object.fromEntries((await board()).cards.map(c => [c.id, { x: c.x, y: c.y }]))
+  const t = await titleBox.boundingBox()
+  await page.mouse.move(t.x + 20, t.y + t.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(t.x + 23, t.y + t.height / 2 + 3)
+  await page.mouse.move(t.x + 24, t.y + t.height / 2 + 4)
+  await page.mouse.move(t.x + 70, t.y + t.height / 2 + 34, { steps: 5 })
+  await page.mouse.move(t.x + 120, t.y + t.height / 2 + 64, { steps: 5 })
+  await page.mouse.up()
+  await page.waitForTimeout(900)
+  const after = Object.fromEntries((await board()).cards.map(c => [c.id, { x: c.x, y: c.y }]))
+  const plan = (await sections())[0]
+  const dx = after[plan.id].x - before[plan.id].x
+  const dy = after[plan.id].y - before[plan.id].y
+  assert.ok(dx > 50 && dy > 30, `the section moved (${dx}, ${dy})`)
+  for (const id of ['plain', 'shared', 'private']) assert.deepEqual([after[id].x - before[id].x, after[id].y - before[id].y], [dx, dy], `${id} came along`)
+  assert.deepEqual(after.later, before.later, 'a card outside it stayed')
+
+  await clearSelection()
+  await removeSection('Plan')
+  assert.ok(await until(async () => (await sections()).length === 0), 'its cards stay when it goes')
+  assert.ok((await board()).cards.some(c => c.id === 'plain'))
+  await page.keyboard.press('Control+z')
+  await page.keyboard.press('Control+z')
+  await clearSelection()
+})
+
 // last: a pasted card lands where the mouse is, on the empty spot the other tests use
 test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short password goes to Snippets', async () => {
   await clearSelection()

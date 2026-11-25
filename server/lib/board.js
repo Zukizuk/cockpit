@@ -5,7 +5,9 @@ import path from 'node:path'
 import { DATA_DIR, UserError, writeFileAtomic } from './config.js'
 import { newNote, setTitle } from './notes.js'
 
-const TYPES = new Set(['item', 'note', 'outputs', 'tasks', 'tracker', 'command', 'later', 'snippets', 'folder', 'table'])
+// a section is an area on the board with a title; the cards whose middle is inside it are in it (nothing else ties
+// them together)
+const TYPES = new Set(['item', 'note', 'outputs', 'tasks', 'tracker', 'command', 'later', 'snippets', 'folder', 'table', 'section'])
 const MAX_CARDS = 400
 /** A sticky note's paper. */
 export const COLORS = new Set(['yellow', 'green', 'pink', 'orange', 'ink'])
@@ -133,6 +135,8 @@ export function saveBoard(body) {
       ...(c.veiled === true ? { veiled: true } : {}),
       // shared with agents, or private (agents never see it)
       ...(AGENT_MARKS.has(c.agents) ? { agents: c.agents } : {}),
+      // a section's title
+      ...(c.type === 'section' && typeof c.title === 'string' && c.title.trim() ? { title: c.title.trim().slice(0, 80) } : {}),
     }))
   const viewport = viewportOf(body.viewport)
   const spaces = spacesOf(body.spaces)

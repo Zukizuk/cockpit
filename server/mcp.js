@@ -38,10 +38,12 @@ const BOARD_NOTE =
   "user's Ctrl+Alt+T does; focusOn(cards) puts one card or several (an array of titles, side by side in that order) " +
   "in focus, every other card folded into a column on the left, and bringBack() puts everything back where it was " +
   "(the board's focus lists the cards in focus); compare(cardA, cardB) opens two files, pages or notes full screen " +
-  "side by side (cardA on the left) for the user to read and compare, notes still editable. Each card is a component (card) named by its title " +
+  "side by side (cardA on the left) for the user to read and compare, notes still editable; addSection(title, cards) " +
+  'puts a section (a titled area, which the cards in it move with) around the cards named, an array of titles in the ' +
+  "space shown. Each card is a component (card) named by its title " +
   "(the cards of the lists are 'Today card', 'Later card' and 'Snippets card'): " +
-  'its value has kind, space, selected, inView, folded, color (sticky notes), shared, rowCount (tables), how many ' +
-  'comments it has and its arrows to and from the cards you can see; actions read() for its contents (a note: its whole text; a file or link: its path or address and ' +
+  'its value has kind, space, the section it is in, selected, inView, folded, color (sticky notes), shared, rowCount ' +
+  '(tables), how many comments it has and its arrows to and from the cards you can see; actions read() for its contents (a note: its whole text; a file or link: its path or address and ' +
   'the start of what it shows; a table: its rows; and its comments), comment(text), fold(), unfold(), focus() to bring it into view, moveToSpace(space), ' +
   'placeNextTo(otherCard, side?) to put it beside another card (side: right, left, below or above; right if not ' +
   'given; it goes to that card\'s space), connectTo(otherCard, label?) to draw an arrow from it to another card (or ' +

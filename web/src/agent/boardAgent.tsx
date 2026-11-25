@@ -11,7 +11,7 @@ import { useEffect, useMemo } from 'react'
 import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
-import { foldNode, freeSpot, isSticky, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
+import { foldNode, freeSpot, isSection, isSticky, sectionOf, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
 import { get, post, put, type Snippet, type StickyColor, type TableData } from '../api'
 import { newTable, rowsFromText } from '../cards/TableCard'
 import { useData } from '../lib'
@@ -50,6 +50,7 @@ type BoardOptions = {
   onFocusOn?: (cards: string[]) => void
   onBringBack?: () => void
   onCompare?: (cards: string[]) => void
+  onAddSection?: (title: string, cards: string[]) => void
 }
 
 /** Rows an agent gives: an array of arrays (the first is the header), or text (tab-separated, Markdown or CSV). */
@@ -61,7 +62,7 @@ function rowsOf(rows: unknown): string[][] {
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -102,6 +103,12 @@ const boardPrimitive = definePrimitive({
         if (list.length !== 2) throw new Error('Name the two cards to compare.')
         call('onCompare')(list)
       },
+      // a section (a titled area) around these cards, in the space shown
+      addSection: (title: string, ...cards: unknown[]) => {
+        const list = cards.flat().map(words).filter(Boolean)
+        if (!list.length) throw new Error('Name the cards to put in the section (an array of titles).')
+        call('onAddSection')(words(title) || 'Section', list)
+      },
       addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
@@ -110,7 +117,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -133,6 +140,8 @@ export type CardValue = {
   rowCount?: number
   /** how many comments it has (read() gives them) */
   comments?: number
+  /** the section it's in (an area on the board with a title) */
+  section?: string
   /** arrows to and from the other cards you can see: "→ Title" points to it, "← Title" from it, a label after a colon */
   arrows?: string[]
 }
@@ -324,7 +333,12 @@ const { Root: SnippetRoot } = createParts(snippetPrimitive, { root: 'div' })
 // ---- on the page -------------------------------------------------------------------------------------------
 
 const KIND: Record<string, string> = { item: 'file or link', note: 'note', outputs: 'Claude outputs', tasks: 'today', tracker: 'tracker', command: 'command', later: 'later', snippets: 'snippets', folder: 'folder', table: 'table' }
-type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string]
+/** The title of the section a card is in ("Section" for one with no title), or '' for none. */
+const sectionTitle = (n: CardNode, all: CardNode[]) => {
+  const s = sectionOf(n, all)
+  return s ? s.data.title || 'Section' : ''
+}
+type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string, section: string]
 type Built = { id: string; type: string; ref: string; title: string; value: CardValue; content: Omit<CardContent, 'text'> & { peek?: string }; mark: string; spaceId: string }
 
 export function BoardAgent() {
@@ -335,13 +349,15 @@ export function BoardAgent() {
   const cardsKey = useStore(s => {
     const [tx, ty, z] = s.transform
     const view = { x0: -tx / z, y0: -ty / z, x1: (s.width - tx) / z, y1: (s.height - ty) / z }
+    const all = s.nodes as CardNode[]
     return JSON.stringify(
-      s.nodes.map(n => {
+      // a section isn't a card: each card says which section it's in
+      all.filter(n => !isSection(n)).map(n => {
         const d = n.data as CardNode['data']
         const w = n.measured?.width ?? n.width ?? 0
         const h = n.measured?.height ?? n.height ?? 0
         const seen = !n.hidden && n.position.x < view.x1 && n.position.x + w > view.x0 && n.position.y < view.y1 && n.position.y + h > view.y0
-        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || ''] as Row
+        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || '', sectionTitle(n, all)] as Row
       }),
     )
   })
@@ -361,7 +377,7 @@ export function BoardAgent() {
 
   const cards: Built[] = useMemo(() => {
     const spaceOfId = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
-    return (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark]) => {
+    return (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section]) => {
       let title = KIND[type] ?? type
       let file: string | undefined
       let url: string | undefined
@@ -405,6 +421,7 @@ export function BoardAgent() {
         ...(veiled ? { hidden: true } : {}),
         ...(sticky ? { color: color === 'ink' || !color ? 'charcoal' : color } : {}),
         ...(mark === 'shared' ? { shared: true } : {}),
+        ...(section ? { section } : {}),
         ...(thread?.length ? { comments: thread.length } : {}),
       }
       const content: Built['content'] = {
@@ -619,7 +636,7 @@ export function BoardAgent() {
       : side === 'below' ? { x: b.position.x, y: b.position.y + sb.h + GAP }
       : { x: b.position.x, y: b.position.y - sa.h - GAP }
     const there = spaceOf(b)
-    const pos = freeSpot(want, sa, rf.getNodes().filter(n => n.id !== id && spaceOf(n) === there && !n.data.tucked))
+    const pos = freeSpot(want, sa, rf.getNodes().filter(n => n.id !== id && spaceOf(n) === there && !n.data.tucked && !isSection(n)))
     board.remember()
     rf.setNodes(ns =>
       ns.map(n => {
@@ -671,6 +688,13 @@ export function BoardAgent() {
           const [a, b] = titles.map(t => pick(visible, t, c => c.id, c => c.title, 'card').id)
           board.compareCards([a, b], true)
           said('Claude put two cards side by side')
+        }}
+        onAddSection={(title, titles) => {
+          const named = titles.map(t => pick(visible, t, c => c.id, c => c.title, 'card'))
+          const away = named.filter(c => c.spaceId !== board.space)
+          if (away.length) throw new Error(`${away.map(c => `"${c.title}"`).join(', ')} ${away.length === 1 ? 'is' : 'are'} in another space: switchSpace there first, or moveToSpace them here.`)
+          board.addSection({ around: named.map(c => c.id), title })
+          said(`Claude put ${named.length === 1 ? 'a card' : `${named.length} cards`} in the section "${title}"`)
         }}
         onShow={(t, s) => void (/^https?:\/\//i.test(t) ? board.showItem({ url: t }) : board.showItem({ path: t })).then(id => place(id, s))}
         onAddTable={
