@@ -2,6 +2,21 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 25 November 2026 (version 0.2.12)
+
+**New**
+- Fold a section down to a bar under its title ("3 cards in it"): the arrow at the end of its title, its menu, or F with it selected. Its cards wait out of sight where they were, and come back when you click the bar. Drag the folded section and they move with it.
+- Tuck a section away at the top with everything in it: one dashed tab with its name, and a click brings it all back as it was. Tuck the last cards in a section and the section goes with them, so no empty box is left behind.
+- Right-click inside a section for its menu, with what you can add there (a sticky note lands in it). Outside any section, the board's menu is as before.
+- Claude can fold, open, tuck and bring back a section, and sees which ones are folded or tucked.
+
+**Improved**
+- Drag a card over a section and the section lights up: let go, and the card joins it. Let go half outside and the section grows round it; let go on top of what's in it and the card moves beside the nearest card there, lined up.
+- A section grows when something in it gets bigger, such as a table gaining rows. It never shrinks by itself: "Fit it to what's in it" does that.
+
+**Fixed**
+- "Select what's in it" picked the section, not its cards.
+
 ## 25 November 2026 (version 0.2.11)
 
 **Improved**
