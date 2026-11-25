@@ -534,7 +534,7 @@ test('a section folds to its bar and opens, tucks away with its cards, and goes 
   await clearSelection()
 })
 
-test('a card dragged into a section lights it up, and let go half out, the section grows round it', async () => {
+test('a card dragged into a section lights it up; let go on its cards, it moves beside them, and the section grows round it', async () => {
   await clearSelection()
   const cards = async () => (await api('/api/board')).cards
   const s0 = (await cards()).find(c => c.type === 'section' && c.title === 'Plan')
@@ -561,6 +561,11 @@ test('a card dragged into a section lights it up, and let go half out, the secti
     }),
     'the section grew round it, with room',
   )
+  // let go on top of the notes in it: it moved beside one of them instead
+  const now = await cards()
+  const l = now.find(c => c.id === 'later')
+  const over = now.filter(c => ['shared', 'private', 'plain'].includes(c.id) && !(l.x + l.w <= c.x || c.x + c.w <= l.x || l.y + l.h <= c.y || c.y + c.h <= l.y))
+  assert.deepEqual(over.map(c => c.id), [], 'not on top of a card in the section')
   await page.keyboard.press('Control+z')
   assert.ok(await until(async () => (await cards()).find(c => c.id === s0.id).h === s0.h), 'one Undo puts both back')
   await clearSelection()

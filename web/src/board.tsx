@@ -237,6 +237,27 @@ export function freeSpot(pos: { x: number; y: number }, size: { w: number; h: nu
   return pos
 }
 
+/**
+ * Where a card goes when it's dropped on top of others: beside one of them (right, below, left or above, lined up with
+ * its edge), the free spot nearest to where it was let go. Null when it's on nothing.
+ */
+export function besideSpot(pos: { x: number; y: number }, size: { w: number; h: number }, nodes: CardNode[]) {
+  const GAP = 28
+  const boxes: Box[] = nodes.map(n => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.measured?.width ?? 400, h: n.height ?? n.measured?.height ?? 300 }))
+  const clear = (p: { x: number; y: number }, gap: number) =>
+    boxes.every(b => p.x + size.w + gap <= b.x || b.x + b.w + gap <= p.x || p.y + size.h + gap <= b.y || b.y + b.h + gap <= p.y)
+  // on nothing (a touch is fine): it stays where it was let go
+  if (clear(pos, 0)) return null
+  const spots = boxes.flatMap(b => [
+    { x: b.x + b.w + GAP, y: b.y },
+    { x: b.x, y: b.y + b.h + GAP },
+    { x: b.x - size.w - GAP, y: b.y },
+    { x: b.x, y: b.y - size.h - GAP },
+  ])
+  const free = spots.filter(p => clear(p, GAP - 1)).sort((a, b) => Math.hypot(a.x - pos.x, a.y - pos.y) - Math.hypot(b.x - pos.x, b.y - pos.y))
+  return free[0] ?? freeSpot(pos, size, nodes)
+}
+
 /** Something that opens full screen: a kept file or page, or a note. */
 export type Shown = { type: 'item' | 'note'; ref: string }
 /** Full screen: one thing, or two side by side (beside, on the right) to compare. */
@@ -387,7 +408,7 @@ interface Ctx {
   /** Folds a section to its bar (what's in it hidden, where it was) or opens it again. */
   foldSection: (id: string, fold: boolean) => void
   /** The sections these cards are in grow to hold them, with room round them (never shrink); true if one did. */
-  growAround: (ids: string[]) => boolean
+  growAround: (ids: string[], into?: string) => boolean
   /** What's in a section: the cards on the board in it, and the ones it holds while folded. */
   sectionCards: (id: string) => CardNode[]
 }
@@ -865,7 +886,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
    * that), and a locked one stays as it is. A section that grows may make the one it's in grow too.
    */
   const growAround = useCallback(
-    (ids: string[]) => {
+    (ids: string[], into?: string) => {
       const PAD = 40
       const all = rf.getNodes()
       const boxes = new Map(all.map(n => [n.id, boxOf(n)]))
@@ -874,7 +895,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       for (let round = 0; round < 4 && todo.length; round++) {
         const next: CardNode[] = []
         for (const n of todo) {
-          const s = sectionOf(n, all)
+          // (dropped into one: that one, even if moving it beside a card there put its middle just outside)
+          const s = (round === 0 && into ? all.find(x => x.id === into) : undefined) ?? sectionOf(n, all)
           if (!s || s.data.locked || s.data.folded) continue
           const b = boxes.get(n.id)!
           const sb = boxes.get(s.id)!

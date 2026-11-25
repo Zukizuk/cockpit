@@ -5,7 +5,7 @@ import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProv
 import '@xyflow/react/dist/base.css'
 import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
-import { BoardProvider, contentsOf, heldBy, offBoard, sectionOf, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
+import { BoardProvider, besideSpot, contentsOf, heldBy, offBoard, sectionOf, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
@@ -720,11 +720,22 @@ function Canvas({ initial }: { initial: Board }) {
         // (after the last move, which carries what's in a section to where it's let go); a card let go half out of
         // a section, or newly in one, has it grow to hold it
         onNodeDragStop={(_e, _node, dragged) => {
-          if (dropping.current?.over) emit('section-drop', { id: null })
+          const joined = dropping.current?.over
+          if (joined) emit('section-drop', { id: null })
           dropping.current = null
           setTimeout(() => {
             carrying.current = null
-            board.growAround(dragged.filter(n => !isSection(n)).map(n => n.id))
+            const cards = dragged.filter(n => !isSection(n)).map(n => n.id)
+            // dropped into a section on top of what's in it: it moves beside the nearest card there, lined up
+            const s = joined && rf.getNode(joined)
+            if (s && cards.length === 1) {
+              const me = rf.getNode(cards[0])
+              const others = contentsOf(s, rf.getNodes()).filter(n => n.id !== cards[0] && !isSection(n))
+              const size = me && { w: me.measured?.width ?? me.width ?? 300, h: me.measured?.height ?? me.height ?? 280 }
+              const to = me && size && besideSpot(me.position, size, others)
+              if (to) rf.setNodes(ns => ns.map(n => (n.id === cards[0] ? { ...n, position: to } : n)))
+            }
+            setTimeout(() => board.growAround(cards, joined && cards.length === 1 ? joined : undefined), 0)
           }, 0)
         }}
         // the Delete key only (cards taken off in code are kept for Undo where that happens)
