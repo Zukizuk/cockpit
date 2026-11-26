@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 26 November 2026 (version 0.2.14)
 
 **New**
 - Pages that remember. A page on your board (one Claude makes for you, a drawing from a chat, or any HTML file) now keeps what you type, pick or tick in it: close Cockpit, come back, and it's all still filled in. Ask Claude for a checklist, a calculator or a trip splitter and it lands on your board as a card like that; Claude can read back what you've filled in.
