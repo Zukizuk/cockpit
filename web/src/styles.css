@@ -4436,16 +4436,29 @@ body.col-resizing .reader-divider::after {
   outline: 2px dashed oklch(1 0 0 / 0.9);
   box-shadow: 0 0 0 9999px oklch(0 0 0 / 0.55);
 }
+/* the words being typed, right on the picture as they'll be drawn: no box round them, just the caret */
 .img-text-input {
   position: absolute;
-  min-width: 180px;
-  min-height: 34px;
-  padding: 2px 4px;
-  font: 600 18px system-ui, 'Segoe UI', sans-serif;
-  background: oklch(0 0 0 / 0.55);
-  border-radius: 4px;
-  outline: 1px dashed oklch(1 0 0 / 0.6);
-  resize: both;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  field-sizing: content;
+  min-width: 2ch;
+  line-height: 1.2;
+  font-family: system-ui, 'Segoe UI', sans-serif;
+  font-weight: 600;
+  caret-color: currentColor;
+  /* the same dark edge the saved words get, so they read on any background */
+  text-shadow: -1px -1px 0 oklch(0 0 0 / 0.85), 1px -1px 0 oklch(0 0 0 / 0.85), -1px 1px 0 oklch(0 0 0 / 0.85), 1px 1px 0 oklch(0 0 0 / 0.85);
+}
+.img-text-input::placeholder {
+  color: oklch(1 0 0 / 0.55);
+  text-shadow: none;
 }
 .img-editor-frame {
   overflow: hidden;

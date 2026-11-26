@@ -1140,6 +1140,7 @@ test('a picture: Claude draws on it, the user draws on it and saves, and goes ba
   const words = editor.getByRole('textbox', { name: 'Text to add' })
   assert.ok(await until(() => words.evaluate(el => el === document.activeElement).catch(() => false)), 'a text box, ready to type in')
   await page.keyboard.type('Look here')
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT.replace(/\.png$/, '-typing.png') })
   await page.keyboard.press('Enter')
   assert.ok(await until(async () => (await words.count()) === 0), 'put on the picture')
   assert.equal(await editor.getByRole('button', { name: 'Save' }).isDisabled(), false, 'the words are a change to save')

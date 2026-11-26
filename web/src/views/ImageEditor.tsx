@@ -262,9 +262,17 @@ export function ImageEditor() {
               autoFocus
               className="img-text-input"
               // the size the words will be on the picture, as it's shown here
-              style={{ left: `${(typing.x / img.naturalWidth) * 100}%`, top: `${(typing.y / img.naturalHeight) * 100}%`, color: hex, fontSize: Math.max(12, Math.round(size * 7 * shown)) }}
+              rows={1}
+              style={{
+                left: `${(typing.x / img.naturalWidth) * 100}%`,
+                top: `${(typing.y / img.naturalHeight) * 100}%`,
+                color: hex,
+                fontSize: Math.max(12, Math.round(size * 7 * shown)),
+                // black words get a light edge, as they're drawn
+                ...(color === 'black' ? { textShadow: '-1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff' } : {}),
+              }}
               value={typing.text}
-              placeholder="Type, then Enter"
+              placeholder="Type…"
               aria-label="Text to add"
               onChange={e => setTyping(t => t && { ...t, text: e.target.value })}
               onKeyDown={e => {
