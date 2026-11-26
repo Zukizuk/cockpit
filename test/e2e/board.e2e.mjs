@@ -827,6 +827,8 @@ test('put away on the shelf: until when, off the board and the tray, listed with
   await agent('act', { steps: [{ ref: 'Board', action: 'addSticky', args: ['Team call notes\n\nfor the 27th'] }] })
   const card = note('Team call notes')
   assert.ok(await until(async () => (await card.count()) === 1, 8000), 'the card')
+  await agent('act', { steps: [{ ref: 'Team call notes', action: 'focus' }] })
+  await page.waitForTimeout(500)
   await card.click({ button: 'right', position: { x: 60, y: 14 } })
   await page.getByRole('menuitem', { name: 'Put away on the shelf…' }).click()
   await page.getByRole('button', { name: /^In two weeks/ }).click()
@@ -867,6 +869,62 @@ test('put away on the shelf: until when, off the board and the tray, listed with
   // the saved board keeps it as it is now: on the board, not on the shelf
   const saved = (await api('/api/board')).cards.find(c => c.type === 'note' && /team-call|Team call/i.test(c.ref + (c.title || '')))
   assert.ok(!saved || !saved.shelf, 'not on the shelf in the saved board')
+})
+
+test('a page Claude makes keeps what is typed and ticked in it, after the board reloads; Claude reads it back', async () => {
+  await clearSelection()
+  const html = `<style>body{font:16px sans-serif;padding:12px}</style>
+    <label>People <input id="people" type="number" value="1"></label>
+    <label>Cost <input id="cost" type="number" value="0"></label>
+    <label><input id="paid" type="checkbox"> Paid</label>
+    <p>Each: <b id="each">0</b></p>
+    <ul id="list"></ul>
+    <button id="add" type="button">Add</button>
+    <script>
+      const calc = () => (document.getElementById('each').textContent = (Number(cost.value) / Math.max(1, Number(people.value))).toFixed(2))
+      document.addEventListener('input', calc)
+      calc()
+      const draw = () => (document.getElementById('list').innerHTML = (cockpit.get('items') || []).map(x => '<li>' + x + '</li>').join(''))
+      document.getElementById('add').onclick = () => { cockpit.set('items', [...(cockpit.get('items') || []), 'Item ' + ((cockpit.get('items') || []).length + 1)]); draw() }
+      addEventListener('cockpit-ready', draw)
+    </script>`
+  const r = await agent('act', { steps: [{ ref: 'Board', action: 'addPage', args: ['Trip splitter', html] }] })
+  assert.notEqual(r.output?.ok, false, JSON.stringify(r).slice(0, 300))
+  const card = page.locator('.react-flow__node-item', { hasText: 'Trip splitter' })
+  assert.ok(await until(async () => (await card.count()) === 1, 10000), `the page is on the board; items: ${JSON.stringify(await page.locator('.react-flow__node-item').allInnerTexts()).slice(0, 400)}; shown: ${JSON.stringify((await api('/api/shown')).slice(0, 3).map(e => [e.title, e.path]))}; r: ${JSON.stringify(r).slice(0, 200)}`)
+  // (earlier tests leave cards about: bring it into view, alone)
+  await agent('act', { steps: [{ ref: 'Board', action: 'focusOn', args: [['Trip splitter']] }] })
+  await page.waitForTimeout(600)
+  const frame = card.frameLocator('iframe')
+  await frame.locator('#people').fill('4')
+  await frame.locator('#cost').fill('300')
+  await frame.locator('#paid').click()
+  await frame.locator('#add').click()
+  await frame.locator('#add').click()
+  assert.equal(await frame.locator('#each').innerText(), '75.00')
+  // kept by the board (a moment for the page to say so)
+  const entry = async () => (await api('/api/shown')).find(e => e.title === 'Trip splitter')
+  assert.ok(
+    await until(async () => {
+      const st = (await entry())?.pageState
+      return st?.fields?.['#cost'] === '300' && st?.fields?.['#paid'] === true && st?.data?.items?.length === 2
+    }, 5000),
+    'saved with the card',
+  )
+
+  await agent('act', { steps: [{ ref: 'Board', action: 'bringBack' }] })
+  await page.reload()
+  const again = page.locator('.react-flow__node-item', { hasText: 'Trip splitter' }).frameLocator('iframe')
+  assert.ok(await until(async () => (await again.locator('#cost').inputValue().catch(() => '')) === '300', 15000), 'the cost is back')
+  assert.equal(await again.locator('#people').inputValue(), '4')
+  assert.equal(await again.locator('#paid').isChecked(), true)
+  assert.equal(await again.locator('#each').innerText(), '75.00', 'and the page worked it out again')
+  assert.equal(await again.locator('#list li').count(), 2, 'what the page kept itself')
+
+  const read = await agent('act', { steps: [{ ref: 'Trip splitter', action: 'read' }] })
+  const typed = read.output?.steps?.[0]?.result?.typed
+  assert.equal(typed?.fields?.['#people'], '4', `Claude reads what's typed: ${JSON.stringify(read).slice(0, 300)}`)
+  assert.deepEqual(typed?.data?.items, ['Item 1', 'Item 2'])
 })
 
 // after the last: a card made and taken off (making one moves the view)

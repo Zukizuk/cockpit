@@ -5,6 +5,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 ## Coming next
 
 **New**
+- Pages that remember. A page on your board (one Claude makes for you, a drawing from a chat, or any HTML file) now keeps what you type, pick or tick in it: close Cockpit, come back, and it's all still filled in. Ask Claude for a checklist, a calculator or a trip splitter and it lands on your board as a card like that; Claude can read back what you've filled in.
 - The shelf, for what you won't come back to for a week or two. "Put away on the shelf…" on a card, several cards or a section takes it off the board and out of the tucked-away tabs. It waits on the shelf, a tab at the start of the tray, until you bring it back, or until a day you pick (tomorrow, next week, in two weeks, or a date). On its day it comes back into the tray at the top.
 
 **Improved**

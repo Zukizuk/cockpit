@@ -124,6 +124,13 @@ const boardPrimitive = definePrimitive({
       foldSection: (section: string, fold?: unknown) => call('onFoldSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section'), !(fold === false || words(fold).toLowerCase() === 'false')),
       // a section tucked away at the top with what's in it, or brought back (tuck false)
       tuckSection: (section: string, tuck?: unknown) => call('onTuckSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section'), !(tuck === false || words(tuck).toLowerCase() === 'false')),
+      // a small page (HTML) as a card that keeps what's typed in it: a checklist, a calculator, a form to fill in
+      addPage: async (title: string, html: unknown, s?: string) => {
+        const page = typeof html === 'string' ? html : ''
+        if (!page.trim()) throw new Error('Give the page its HTML (a string): a whole page, or just what goes in its body.')
+        const r = await post<{ path: string }>('/api/pages', { title: words(title) || 'Page', html: page })
+        await call('onShow')(r.path, into(s))
+      },
       addTable: (title: string, rows: unknown, s?: string) => {
         const fn = context.options().onAddTable
         if (typeof fn !== 'function') throw new Error('Tables are off. Ask the user to turn them on in Cockpit: Settings > Extras > Tables.')
@@ -132,7 +139,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection', 'foldSection', 'tuckSection', 'removeSection'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addPage', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection', 'foldSection', 'tuckSection', 'removeSection'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -170,6 +177,8 @@ export type CardContent = {
   url?: string
   /** a note: all its text (up to 20,000 characters); a file or link: the start of what it shows */
   text?: string
+  /** a page on the board: what's typed in it (its fields by id, name or place; data: what the page keeps itself) */
+  typed?: Record<string, unknown>
   /** a table: its rows, the first being the header (up to 200) */
   rows?: string[][]
   comments?: { by: string; text: string }[]
@@ -571,7 +580,8 @@ export function BoardAgent() {
       if (text === undefined) throw new Error('The note is still loading: read it again in a moment.')
       return { ...rest, text }
     }
-    return { ...rest, ...(peek ? { text: peek } : {}) }
+    const typed = c.type === 'item' ? board.items.find(x => x.id === c.ref)?.pageState : undefined
+    return { ...rest, ...(peek ? { text: peek } : {}), ...(typed && Object.keys(typed).length ? { typed } : {}) }
   }
   // a list (Today, Later, Snippets) is readable when its card is; with "everything", unless that card is private
   const listOpen = (type: string) => {

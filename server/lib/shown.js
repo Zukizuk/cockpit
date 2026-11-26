@@ -7,6 +7,7 @@ import crypto from 'node:crypto'
 import { DATA_DIR, UserError, within, writeFileAtomic } from './config.js'
 import { CONTENT_EXT, TEXT_FORMATS, detect, looksLikeText } from './files.js'
 import { readArticle } from './reader.js'
+import { cleanState } from './pages.js'
 
 export const FORMATS = ['markdown', 'html', 'code', 'text', 'diff', 'json', 'csv', 'mermaid']
 
@@ -255,6 +256,9 @@ export function updateShown(id, patch) {
     delete entry.autoTitle // named by hand: reading the page later keeps this name
   }
   if (Array.isArray(patch.tags)) entry.tags = cleanTags(patch.tags)
+  // what's typed in a page on the board (pages.js); null starts it over
+  if (patch.pageState === null) delete entry.pageState
+  else if (patch.pageState !== undefined) entry.pageState = cleanState(patch.pageState)
   // a note kept on Later is edited in place: its first line is its name
   if (typeof patch.text === 'string') {
     if (entry.kind !== 'content' || !entry.later) throw new UserError('Only notes kept on Later can be edited here')

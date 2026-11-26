@@ -399,6 +399,36 @@ export interface ViewerProps {
   onImageLoad?: (img: HTMLImageElement) => void
 }
 
+/**
+ * A page on the board that keeps what's typed in it. The page runs sealed off (no origin of its own); the server puts
+ * a small script in it (server/lib/pages.js) that says hello when it's loaded, gets back what was kept, and tells this
+ * frame what's in its fields as they change. This frame keeps that with the page's entry (pageState).
+ */
+function PageFrame({ id, src, title, state }: { id: string; src: string; title: string; state?: Record<string, unknown> }) {
+  const frame = useRef<HTMLIFrameElement>(null)
+  // the latest: what the page last said, else what the entry came with
+  const kept = useRef(state || {})
+  const saved = useRef(false)
+  useEffect(() => {
+    if (!saved.current) kept.current = state || {}
+  }, [state])
+  useEffect(() => {
+    const on = (m: MessageEvent) => {
+      const win = frame.current?.contentWindow
+      if (!win || m.source !== win || !m.data || typeof m.data !== 'object') return
+      if (m.data.cockpitPage === 'hello') win.postMessage({ cockpitPage: 'state', state: kept.current }, '*')
+      else if (m.data.cockpitPage === 'save' && m.data.state && typeof m.data.state === 'object') {
+        kept.current = m.data.state
+        saved.current = true
+        post(`/api/shown/${id}`, { pageState: m.data.state }).catch(() => {})
+      }
+    }
+    addEventListener('message', on)
+    return () => removeEventListener('message', on)
+  }, [id])
+  return <iframe ref={frame} className="frame white" src={src} title={title} />
+}
+
 export function Viewer({ read, compact, onOpenNative, onOpenPath, onReadAgain, onImageLoad }: ViewerProps) {
   const e = read.entry
   const text = read.text ?? ''
@@ -479,8 +509,8 @@ export function Viewer({ read, compact, onOpenNative, onOpenPath, onReadAgain, o
     case 'pdf':
       return <iframe className="frame" src={fileUrl} title={e.title} />
     case 'html':
-      // sandboxed by the server's CSP header: scripts run, Cockpit stays out of reach
-      return <iframe className="frame white" src={fileUrl} title={e.title} />
+      // sandboxed by the server's CSP header: scripts run, Cockpit stays out of reach; what's typed is kept
+      return <PageFrame id={e.id} src={fileUrl} title={e.title} state={e.pageState} />
     case 'video':
       return <video className="media" src={fileUrl} controls />
     case 'audio':

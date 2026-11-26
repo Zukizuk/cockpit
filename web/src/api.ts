@@ -84,6 +84,8 @@ export interface PinnedList {
 export type PinInput = { path?: string; url?: string; note?: string; title?: string; group?: string }
 
 export interface ShownEntry {
+  /** What's typed in a page on the board (fields and what the page keeps itself), kept by the board for it. */
+  pageState?: Record<string, unknown>
   id: string
   kind: 'file' | 'content' | 'link' | 'compare'
   path: string

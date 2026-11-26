@@ -21,6 +21,7 @@ import * as tasks from './lib/tasks.js'
 import * as comments from './lib/comments.js'
 import * as questions from './lib/questions.js'
 import * as tables from './lib/tables.js'
+import * as pages from './lib/pages.js'
 import * as dictionary from './lib/dictionary.js'
 import { applyFence, claudeLink, connectClaude, fenceRules, fenceState, settleFence } from './lib/claude-link.js'
 import * as folders from './lib/folders.js'
@@ -625,6 +626,16 @@ async function api(req, res, url) {
       // files run nothing even when opened on their own. PDF is left alone, as Chrome won't render it sandboxed.
       const ext = path.extname(file).toLowerCase()
       const sandbox = ext === '.pdf' ? {} : { 'Content-Security-Policy': ext === '.html' || ext === '.htm' ? 'sandbox allow-scripts allow-popups allow-forms allow-modals' : 'sandbox' }
+      // the page itself (not one it links to) keeps what's typed in it: served with the keeper in it (pages.js)
+      if ((ext === '.html' || ext === '.htm') && entry.path && path.resolve(file) === path.resolve(entry.path) && method === 'GET') {
+        let html
+        try {
+          html = fs.readFileSync(file, 'utf8')
+        } catch {
+          return json(res, 404, { error: 'That file is no longer there' })
+        }
+        return send(res, 200, pages.withKeeper(html), { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache', ...sandbox, 'Cross-Origin-Resource-Policy': 'cross-origin' })
+      }
       return sendFile(req, res, file, { ...sandbox, 'Cross-Origin-Resource-Policy': 'cross-origin' })
     }
   }
@@ -926,6 +937,14 @@ async function api(req, res, url) {
       counted('dictionary.lookup')
       return json(res, 200, r)
     }
+  }
+  // a page Claude writes for the board (a checklist, a calculator…): kept in the notes folder, then shown like a file
+  if (area === 'pages' && !a && method === 'POST') {
+    const body = await readBody(req)
+    const file = pages.savePage(cfg, body.title, body.html)
+    // kept under its title (showing it then finds this entry by its path)
+    shown.addShown({ path: file, title: String(body.title || '').trim().slice(0, 200) || undefined, from: 'Claude' })
+    return json(res, 200, { path: file })
   }
   if (area === 'tables') {
     if (!a && method === 'GET') return json(res, 200, tables.readTable(cfg, url.searchParams.get('p')))
