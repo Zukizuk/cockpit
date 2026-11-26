@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## 27 November 2026 (version 0.2.16)
+## 26 November 2026 (version 0.2.16)
 
 **New**
 - Draw on a picture. "Draw on it" on an image card (its menu, or the brush button on the card) opens it large with a pen, a highlighter, arrows, boxes, circles, text, blur (to hide a name or a number before you share it) and crop, in six colours, with undo. Save, and the card shows your marked-up picture.
