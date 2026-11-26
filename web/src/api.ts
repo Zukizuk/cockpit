@@ -86,6 +86,8 @@ export type PinInput = { path?: string; url?: string; note?: string; title?: str
 export interface ShownEntry {
   /** What's typed in a page on the board (fields and what the page keeps itself), kept by the board for it. */
   pageState?: Record<string, unknown>
+  /** An image drawn on: the image it started from (kept; one that lives in Cockpit is removed 30 days after the edit). */
+  original?: { path: string; cockpit?: boolean; at: string; editedAt: string }
   id: string
   kind: 'file' | 'content' | 'link' | 'compare'
   path: string

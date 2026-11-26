@@ -114,7 +114,13 @@ const BOARD_NOTE =
   'brings a tucked, shelved or folded section back first. When you ask a question, the Questions card comes out to ' +
   'where the user is looking, even if it was put away; focus() brings a put-away card back too. Listening for Tell ' +
   "Claude: the board has a Stop listening button; when the listener ends saying the user stopped it, don't start it " +
-  'again unless they ask.'
+  'again unless they ask. Pictures: an image card says image (and drawnOn once drawn on; the original is kept and ' +
+  "the user can go back to it). Its markUp(marks) draws on it, as the user's Draw on it does: marks is an array of " +
+  '{ shape: "arrow", from: [x, y], to: [x, y] }, { shape: "box" | "circle" | "blur", x, y, w, h } or { shape: "text", ' +
+  'x, y, text }, every place a fraction from 0 to 1 of the picture\'s width and height (0,0 its top-left), each with ' +
+  'an optional color (red, yellow, green, blue, white or black; red if not given). Look at the picture first (read() ' +
+  'gives its file path: open it with your Read tool) so the marks land on what you mean; blur hides a name, number ' +
+  'or face before the user shares it.'
 
 export const TOOLS = [
   {

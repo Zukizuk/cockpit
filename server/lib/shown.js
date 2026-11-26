@@ -282,6 +282,78 @@ export function updateShown(id, patch) {
   return save(entry)
 }
 
+// ---- images drawn on (marked up in Cockpit, or by Claude) ------------------------------------------------------
+// An edit is a new PNG in ~/.cockpit/pasted, and the card shows it. The image it started from stays as it was:
+// - a picture from your own folders is never touched (it's yours; other things may use it);
+// - one that lives in Cockpit (pasted or dropped in) is kept for ORIGINAL_DAYS, so "Back to the original" works,
+//   then removed by tidyOriginals() unless something else still shows it.
+// Only the first original and the latest edit are kept: an edit of an edit replaces the one before.
+
+export const ORIGINAL_DAYS = 30
+export const pastedDir = () => path.join(DATA_DIR, 'pasted')
+const ownedByCockpit = file => !!file && within(pastedDir(), file)
+const usedElsewhere = (file, id) => listShown({ includeHidden: true }).some(e => e.id !== id && (e.path === file || e.original?.path === file))
+const removeFile = file => {
+  try {
+    fs.unlinkSync(file)
+  } catch {
+    // gone already
+  }
+}
+
+/** Saves a marked-up image ({ data: base64 PNG }) for an image entry; the card shows it from now on. */
+export function saveImageEdit(id, { data }, now = new Date()) {
+  const entry = getShown(id)
+  if (entry.format !== 'image') throw new UserError('Only images can be drawn on')
+  const bytes = Buffer.from(String(data || ''), 'base64')
+  if (bytes.length < 8 || bytes.readUInt32BE(0) !== 0x89504e47) throw new UserError('That edit was not a PNG image')
+  if (bytes.length > 40 * 1024 * 1024) throw new UserError('That image is over 40 MB')
+  fs.mkdirSync(pastedDir(), { recursive: true })
+  const base = path.basename(entry.original?.path || entry.path).replace(/\.[a-z0-9]+$/i, '').replace(/ \(edited[^)]*\)$/, '').slice(0, 80) || 'Image'
+  const stamp = now.toISOString().slice(0, 19).replace('T', ' ').replace(/:/g, '.')
+  let file = path.join(pastedDir(), `${base} (edited ${stamp}).png`)
+  for (let i = 2; fs.existsSync(file); i++) file = path.join(pastedDir(), `${base} (edited ${stamp}) ${i}.png`)
+  writeFileAtomic(file, bytes)
+  const before = entry.path
+  const original = entry.original?.path || before
+  // the edit before this one (made here, not the original): replaced
+  if (entry.original && before !== original && ownedByCockpit(before) && !usedElsewhere(before, id)) removeFile(before)
+  entry.path = file
+  entry.original = { path: original, ...(ownedByCockpit(original) ? { cockpit: true } : {}), at: entry.original?.at || now.toISOString(), editedAt: now.toISOString() }
+  return save(entry)
+}
+
+/** Shows the image as it was before any edit; the edit goes. */
+export function restoreOriginal(id) {
+  const entry = getShown(id)
+  if (!entry.original) throw new UserError('This image has not been edited')
+  if (!fs.existsSync(entry.original.path)) throw new UserError('The original is gone (an original kept in Cockpit is removed 30 days after the edit)')
+  const edit = entry.path
+  entry.path = entry.original.path
+  delete entry.original
+  if (edit !== entry.path && ownedByCockpit(edit) && !usedElsewhere(edit, id)) removeFile(edit)
+  return save(entry)
+}
+
+/**
+ * Originals kept in Cockpit, ORIGINAL_DAYS after their image was edited: removed (unless something else still shows
+ * them), and the entry no longer offers to go back. A picture from your own folders is never removed.
+ */
+export function tidyOriginals(now = Date.now()) {
+  let removed = 0
+  for (const e of listShown({ includeHidden: true })) {
+    const o = e.original
+    if (!o || !o.cockpit || now - Date.parse(o.editedAt || o.at) < ORIGINAL_DAYS * 86_400_000) continue
+    if (ownedByCockpit(o.path) && !usedElsewhere(o.path, e.id)) {
+      removeFile(o.path)
+      removed++
+    }
+    const { original: _o, ...rest } = e
+    save(rest)
+  }
+  return removed
+}
+
 /** Reads a link again (it failed before, or the page changed). */
 export async function refreshLink(id, fetchImpl) {
   const entry = getShown(id)

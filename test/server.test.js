@@ -1429,3 +1429,51 @@ test('comments: a thread per card, yours and Claude\'s; one can be deleted', asy
   assert.deepEqual(c.listComments().cards['later-1'].map(x => x.id), [claude.id])
   assert.throws(() => c.removeComment(mine.id), /gone/)
 })
+
+test('images drawn on: the edit shown, the first original kept, an edit of an edit replaced, back to the original, originals kept in Cockpit tidied after 30 days, yours never', () => {
+  // a tiny PNG (1x1)
+  const PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  const pasted = shown.pastedDir()
+  fs.mkdirSync(pasted, { recursive: true })
+  // one pasted into Cockpit, one from "your own folder"
+  const mine = path.join(pasted, 'Pasted shot.png')
+  fs.writeFileSync(mine, Buffer.from(PNG, 'base64'))
+  const yoursDir = path.join(T, 'Pictures')
+  fs.mkdirSync(yoursDir, { recursive: true })
+  const yours = path.join(yoursDir, 'holiday.png')
+  fs.writeFileSync(yours, Buffer.from(PNG, 'base64'))
+  const a = shown.addShown({ path: mine })
+  const b = shown.addShown({ path: yours })
+  assert.equal(a.format, 'image')
+
+  assert.throws(() => shown.saveImageEdit(a.id, { data: Buffer.from('not a png').toString('base64') }), /PNG/)
+  const e1 = shown.saveImageEdit(a.id, { data: PNG }, new Date('2026-10-01T10:00:00Z'))
+  assert.notEqual(e1.path, mine, 'the card shows the edit')
+  assert.ok(e1.path.startsWith(pasted) && fs.existsSync(e1.path), 'kept in Cockpit')
+  assert.equal(e1.original.path, mine)
+  assert.equal(e1.original.cockpit, true, 'the original lives in Cockpit')
+  assert.ok(fs.existsSync(mine), 'and is kept')
+
+  const e2 = shown.saveImageEdit(a.id, { data: PNG }, new Date('2026-10-02T10:00:00Z'))
+  assert.equal(e2.original.path, mine, 'still the first original')
+  assert.ok(!fs.existsSync(e1.path), 'the edit before it is replaced')
+
+  const back = shown.restoreOriginal(a.id)
+  assert.equal(back.path, mine)
+  assert.equal(back.original, undefined)
+  assert.ok(!fs.existsSync(e2.path), 'the edit goes')
+  assert.throws(() => shown.restoreOriginal(a.id), /not been edited/)
+
+  // drawn on again, and one of yours: 31 days on, the Cockpit original goes, yours stays
+  const e3 = shown.saveImageEdit(a.id, { data: PNG }, new Date('2026-10-01T10:00:00Z'))
+  const y1 = shown.saveImageEdit(b.id, { data: PNG }, new Date('2026-10-01T10:00:00Z'))
+  assert.equal(y1.original.cockpit, undefined, 'a picture from your own folder')
+  assert.equal(shown.tidyOriginals(Date.parse('2026-10-20T10:00:00Z')), 0, 'not yet: under 30 days')
+  assert.ok(shown.getShown(a.id).original)
+  assert.equal(shown.tidyOriginals(Date.parse('2026-11-01T10:00:00Z')), 1)
+  assert.ok(!fs.existsSync(mine), "Cockpit's original removed")
+  assert.equal(shown.getShown(a.id).original, undefined, 'no going back offered')
+  assert.ok(fs.existsSync(e3.path), 'the edit stays')
+  assert.ok(fs.existsSync(yours), 'yours never removed')
+  assert.ok(shown.getShown(b.id).original, 'and still offered')
+})

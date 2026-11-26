@@ -2,6 +2,13 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**New**
+- Draw on a picture. "Draw on it" on an image card (its menu, or the brush button on the card) opens it large with a pen, a highlighter, arrows, boxes, circles, text, blur (to hide a name or a number before you share it) and crop, in six colours, with undo. Save, and the card shows your marked-up picture.
+- The picture you started from is kept: "Back to the original" (under More on the card's menu) returns to it. A picture from your own folders is never changed or removed. One pasted into Cockpit keeps its original for 30 days after the edit, then Cockpit removes it so edits don't pile up.
+- Claude can draw on a picture on your board too: circle what it means, point an arrow at it, add a label, or blur something out.
+
 ## 26 November 2026 (version 0.2.15)
 
 **Improved**

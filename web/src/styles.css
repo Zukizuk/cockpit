@@ -2380,7 +2380,6 @@ button.space-switch:active {
 .image-view.fit img {
   max-width: 100%;
   max-height: 100%;
-  object-fit: contain;
 }
 
 .image-view img,
@@ -4309,4 +4308,145 @@ body.col-resizing .reader-divider::after {
   .reader-divider {
     display: none;
   }
+}
+
+/* ---- drawing on an image (views/ImageEditor) ------------------------------------------------------------------ */
+.img-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  padding: 14px 16px 18px;
+  background: oklch(0.12 0 0 / 0.92);
+  animation: reader-in 180ms var(--ease-out);
+}
+.img-editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: center;
+  max-width: 100%;
+  padding: 6px 8px;
+  border-radius: 14px;
+  flex-wrap: wrap;
+}
+.img-editor-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.img-editor-sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: oklch(1 0 0 / 0.12);
+}
+.img-editor-fill {
+  flex: 1;
+  min-width: 12px;
+}
+.img-tool {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--muted-foreground);
+  transition-property: background-color, color, scale;
+  transition-duration: 150ms;
+}
+.img-tool:hover:not(:disabled) {
+  color: var(--foreground);
+  background: oklch(1 0 0 / 0.08);
+}
+.img-tool.is-on {
+  color: var(--foreground);
+  background: oklch(1 0 0 / 0.14);
+}
+.img-tool:active:not(:disabled) {
+  scale: 0.96;
+}
+.img-tool:disabled {
+  opacity: 0.35;
+}
+.img-swatch {
+  width: 20px;
+  height: 20px;
+  margin: 0 2px;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.25);
+  transition-property: scale, box-shadow;
+  transition-duration: 150ms;
+}
+.img-swatch.is-on {
+  box-shadow: 0 0 0 2px oklch(0.15 0 0), 0 0 0 4px oklch(1 0 0 / 0.85);
+}
+.img-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  color: var(--foreground);
+  background: oklch(1 0 0 / 0.06);
+  transition-property: background-color, scale;
+  transition-duration: 150ms;
+}
+.img-btn:hover:not(:disabled) {
+  background: oklch(1 0 0 / 0.12);
+}
+.img-btn:active:not(:disabled) {
+  scale: 0.96;
+}
+.img-btn.is-primary {
+  color: var(--agent-ink, #111);
+  background: var(--agent, oklch(0.72 0.14 45));
+  font-weight: 600;
+}
+.img-btn:disabled {
+  opacity: 0.45;
+}
+.img-editor-stage {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+.img-editor-frame {
+  position: relative;
+}
+.img-editor-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  outline: 1px solid oklch(1 0 0 / 0.1);
+  touch-action: none;
+  cursor: crosshair;
+}
+.img-editor-canvas.tool-text {
+  cursor: text;
+}
+.img-crop {
+  position: absolute;
+  pointer-events: none;
+  outline: 2px dashed oklch(1 0 0 / 0.9);
+  box-shadow: 0 0 0 9999px oklch(0 0 0 / 0.55);
+}
+.img-text-input {
+  position: absolute;
+  min-width: 180px;
+  min-height: 34px;
+  padding: 2px 4px;
+  font: 600 18px system-ui, 'Segoe UI', sans-serif;
+  background: oklch(0 0 0 / 0.55);
+  border-radius: 4px;
+  outline: 1px dashed oklch(1 0 0 / 0.6);
+  resize: both;
+}
+.img-editor-frame {
+  overflow: hidden;
 }

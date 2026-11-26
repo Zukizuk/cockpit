@@ -405,6 +405,20 @@ function startUpdateChecks() {
   setInterval(tick, 60 * 60_000).unref()
 }
 
+/** Originals of edited images kept in Cockpit: removed 30 days after the edit (shown.tidyOriginals), daily. */
+function startImageTidy() {
+  const tick = () => {
+    try {
+      const n = shown.tidyOriginals()
+      if (n) log(`images: removed ${n} original(s) 30 days after their edit`)
+    } catch (e) {
+      log(String(e?.message || e))
+    }
+  }
+  setTimeout(tick, 3 * 60_000).unref()
+  setInterval(tick, 24 * 3600_000).unref()
+}
+
 function startTelemetry() {
   const tick = () => telemetry.sendDue().then(r => r.sent && log(`telemetry: sent ${r.sent} day(s)`), e => log(String(e.message || e)))
   setTimeout(tick, 2 * 60_000).unref()
@@ -634,6 +648,17 @@ async function api(req, res, url) {
     }
     if (a && !b && method === 'POST') return json(res, 200, shown.updateShown(a, await readBody(req)))
     if (a && b === 'refresh' && method === 'POST') return json(res, 200, await shown.refreshLink(a))
+    // an image drawn on: the marked-up PNG, and going back to the image as it was
+    if (a && b === 'edit' && method === 'POST') {
+      const e = shown.saveImageEdit(a, await readBody(req, 60 * 1024 * 1024))
+      broadcast('shown', { id: e.id })
+      return json(res, 200, e)
+    }
+    if (a && b === 'original' && method === 'POST') {
+      const e = shown.restoreOriginal(a)
+      broadcast('shown', { id: e.id })
+      return json(res, 200, e)
+    }
     if (a && b === 'meta' && method === 'GET') return json(res, 200, shown.entryState(shown.getShown(a)))
     if (a && b === 'files') {
       const entry = shown.getShown(a)
@@ -1091,6 +1116,7 @@ export function start() {
   startJournalSync()
   startTelemetry()
   startUpdateChecks()
+  startImageTidy()
   // secrets: unlock their key in the background now, so the first copy is instant; drop expired ones hourly
   snippets.warmKey().catch(e => log(`snippets: ${e.message}`))
   setInterval(() => {

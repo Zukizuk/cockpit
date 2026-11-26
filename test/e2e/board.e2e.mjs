@@ -1094,6 +1094,64 @@ test('a question comes out of a tucked section; moving into a tucked section bri
   await clearSelection()
 })
 
+test('a picture: Claude draws on it, the user draws on it and saves, and goes back to the original', async () => {
+  await clearSelection()
+  // a picture pasted into Cockpit (made here: a grey square with a dark band)
+  const data = await page.evaluate(() => {
+    const c = document.createElement('canvas')
+    c.width = 400
+    c.height = 240
+    const x = c.getContext('2d')
+    x.fillStyle = '#888'
+    x.fillRect(0, 0, 400, 240)
+    x.fillStyle = '#222'
+    x.fillRect(0, 100, 400, 40)
+    return c.toDataURL('image/png').split(',')[1]
+  })
+  const made = await api('/api/shown/image', { method: 'POST', body: JSON.stringify({ data, type: 'image/png', name: 'Shot' }) })
+  const shot = await agent('act', { steps: [{ ref: 'Board', action: 'show', args: [made.path] }] })
+  assert.notEqual(shot.output?.ok, false, JSON.stringify(shot).slice(0, 300))
+  const card = async () => {
+    const o = (await agent('snapshot')).output
+    return (Array.isArray(o) ? o : []).find(c => c.label === 'Shot')
+  }
+  assert.ok(await until(async () => (await card())?.value?.image === true, 8000), 'Claude sees a picture')
+  const entry = async () => (await api(`/api/shown/${made.id}`)).entry
+
+  // Claude draws a box and an arrow on it
+  const m = await agent('act', { steps: [{ ref: 'Shot', action: 'markUp', args: [[{ shape: 'box', x: 0.1, y: 0.35, w: 0.8, h: 0.3 }, { shape: 'arrow', from: [0.9, 0.1], to: [0.6, 0.4], color: 'yellow' }, { shape: 'text', x: 0.05, y: 0.05, text: 'here' }]] }] })
+  assert.notEqual(m.output?.ok, false, JSON.stringify(m).slice(0, 300))
+  assert.ok(await until(async () => (await entry()).original?.path === made.path), 'the edit is shown, the original kept')
+  const firstEdit = (await entry()).path
+  assert.ok(await until(async () => (await card())?.value?.drawnOn === true), 'Claude sees it was drawn on')
+  const bad = await agent('act', { steps: [{ ref: 'Shot', action: 'markUp', args: [[{ shape: 'box', x: 2, y: 0, w: 1, h: 1 }]] }] })
+  assert.equal(bad.output?.ok, false, 'a place outside the picture is refused')
+
+  // the user draws on it: Draw on it, a box, Save
+  const node = page.locator('.react-flow__node-item', { hasText: 'Shot' })
+  await node.getByRole('button', { name: 'Draw on it' }).click()
+  const editor = page.getByRole('dialog', { name: 'Draw on Shot' })
+  assert.ok(await until(() => editor.isVisible()), 'the editor opens')
+  await editor.getByRole('button', { name: 'Box' }).click()
+  const box = await editor.locator('canvas').boundingBox()
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.2)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.6, { steps: 6 })
+  await page.mouse.up()
+  // (SHOT=<file.png>: a picture of the editor, for a look)
+  if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT })
+  await editor.getByRole('button', { name: 'Save' }).click()
+  assert.ok(await until(async () => { const e = await entry(); return e.path !== firstEdit && e.original?.path === made.path }), 'saved: a new edit, the same original')
+  assert.ok(await until(async () => !(await editor.count())), 'the editor closes')
+
+  // back to the original, from the card's menu (under More)
+  await node.click({ button: 'right', position: { x: 60, y: 12 } })
+  await page.getByRole('menuitem', { name: 'More' }).hover()
+  await page.getByRole('menuitem', { name: 'Back to the original' }).click()
+  assert.ok(await until(async () => { const e = await entry(); return e.path === made.path && !e.original }), 'the original again')
+  await clearSelection()
+})
+
 // after the last: a card made and taken off (making one moves the view)
 test("a card taken off isn't in what Claude sees any more", async () => {
   await clearSelection()

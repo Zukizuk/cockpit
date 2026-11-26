@@ -12,9 +12,10 @@ import { useReactFlow, useStore } from '@xyflow/react'
 import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
 import { contentsOf, foldNode, freeSpot, isSection, isSticky, sectionOf, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
-import { get, post, put, type Question, type Snippet, type StickyColor, type TableData } from '../api'
+import { get, post, put, type Question, type ShownRead, type Snippet, type StickyColor, type TableData } from '../api'
 import { newTable, rowsFromText } from '../cards/TableCard'
-import { onEvent, useData } from '../lib'
+import { emit, onEvent, useData } from '../lib'
+import { COLORS as INK, baseSize, exportPng, imageUrl, loadImage, type ColorName, type Mark, type Pt } from '../lib/markup'
 import { summary } from '../cards/OutputsCard'
 import { setVisible, useAgentView } from './view'
 import { touchCard } from './presence'
@@ -200,6 +201,9 @@ export type CardValue = {
   sticksOut?: boolean
   /** made by an agent ("Claude"): one of yours, from this chat or an earlier one */
   madeBy?: string
+  /** a picture (markUp draws on it); drawnOn: it has been drawn on, and the original is kept */
+  image?: boolean
+  drawnOn?: boolean
   /** arrows to and from the other cards you can see: "→ Title" points to it, "← Title" from it, a label after a colon */
   arrows?: string[]
 }
@@ -237,6 +241,8 @@ type CardOptions = {
   onRead?: () => CardContent
   onConnect?: (other: string, label: string) => void
   onMoveToSection?: (section: string) => void | Promise<void>
+  /** a picture: marks drawn on it (as the user's Draw on it) */
+  onMarkUp?: (marks: unknown) => Promise<void>
   /** the sections it can go into (for moveToSection) */
   sections?: string[]
   onDisconnect?: (other: string) => void
@@ -250,7 +256,7 @@ const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', 
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onShelf: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', onConnect: 'action', onDisconnect: 'action', onMoveToSection: 'action', sections: 'value', others: 'value' },
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onShelf: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', onConnect: 'action', onDisconnect: 'action', onMoveToSection: 'action', onMarkUp: 'action', sections: 'value', others: 'value' },
   // pending and error: a change that takes a moment (a note, a table) reports how it went; UI SDK's act waits on them
   // (any error that isn't null counts as a failure, an empty one too)
   state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' }, pending: false, error: null as string | null }),
@@ -316,6 +322,8 @@ const cardPrimitive = definePrimitive({
       // into a section (a titled area): beside what's in it, the section growing to hold it
       moveToSection: (section: string) => call('onMoveToSection')(pick(context.options().sections || [], section, x => x, x => x, 'section')),
       disconnect: (other: string) => call('onDisconnect')(pick(context.options().others || [], other, x => x, x => x, 'card')),
+      // a picture: arrows, boxes, circles, labels and blurs drawn on it (places as fractions of its width and height)
+      markUp: (marks: unknown) => track(call('onMarkUp')(marks)),
     }
     // only what this kind of card does: an agent sees a note's, a table's or a sticky note's own actions, not all of
     // them on every card (UI SDK lists each function the api has)
@@ -325,12 +333,13 @@ const cardPrimitive = definePrimitive({
       [!!o.onWrite, ['append', 'setText']],
       [!!o.onColor, ['setColor']],
       [!!o.onRename, ['rename']],
+      [!!o.onMarkUp, ['markUp']],
     ]
     for (const [has, names] of only) if (!has) for (const n of names) delete (api as Partial<typeof api>)[n]
     return api
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'putOnShelf', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'moveToSection', 'remove'] },
+  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'putOnShelf', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'moveToSection', 'markUp', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -509,8 +518,10 @@ export function BoardAgent() {
       let file: string | undefined
       let url: string | undefined
       let peek: string | undefined
+      let picture: '' | 'image' | 'drawn' = ''
       if (type === 'item') {
         const e = board.items.find(x => x.id === ref)
+        if (e?.format === 'image') picture = e.original ? 'drawn' : 'image'
         title = e?.title || 'File'
         if (e?.url) url = e.url
         else if (e?.path && e.kind === 'file') file = e.path
@@ -552,6 +563,8 @@ export function BoardAgent() {
         ...(held === 'folded' ? { inFoldedSection: true } : {}),
         ...(shelf >= 0 ? { onShelf: backWhen(shelf) } : {}),
         ...(madeBy ? { madeBy } : {}),
+        ...(picture ? { image: true } : {}),
+        ...(picture === 'drawn' ? { drawnOn: true } : {}),
         ...(veiled ? { hidden: true } : {}),
         ...(sticky ? { color: color === 'ink' || !color ? 'charcoal' : color } : {}),
         ...(mark === 'shared' ? { shared: true } : {}),
@@ -962,6 +975,49 @@ export function BoardAgent() {
     said(`Claude put ${plain(title)} ${side === 'right' || side === 'left' ? `to the ${side} of` : side} ${plain(otherTitle)}`)
   }
 
+  /**
+   * Claude's marks on a picture, drawn as the user's "Draw on it" draws them, then saved the same way (the original
+   * kept). Places are fractions of the picture's width and height (0 to 1), so Claude needn't know its size:
+   * { shape: 'arrow', from: [x, y], to: [x, y] }, { shape: 'box' | 'circle' | 'blur', x, y, w, h },
+   * { shape: 'text', x, y, text }; each may give color (red, yellow, green, blue, white, black; red if not).
+   */
+  const markUp = async (ref: string, title: string, raw: unknown) => {
+    const list = Array.isArray(raw) ? raw : raw && typeof raw === 'object' ? [raw] : []
+    if (!list.length) throw new Error('Give the marks: an array like [{ shape: "arrow", from: [0.2, 0.3], to: [0.5, 0.5] }, { shape: "box", x: 0.1, y: 0.1, w: 0.3, h: 0.2 }].')
+    const r = await get<ShownRead>(`/api/shown/${ref}`)
+    if (r.entry.format !== 'image') throw new Error('Only a picture can be drawn on.')
+    const img = await loadImage(imageUrl(r.entry.id, r.entry.path, r.mtime))
+    const W = img.naturalWidth
+    const H = img.naturalHeight
+    const size = baseSize(W, H)
+    const frac = (v: unknown, what: string) => {
+      const n = Number(v)
+      if (!Number.isFinite(n) || n < 0 || n > 1) throw new Error(`${what} must be a fraction from 0 to 1 of the picture's size.`)
+      return n
+    }
+    const pt = (p: unknown, what: string): Pt => {
+      if (!Array.isArray(p) || p.length < 2) throw new Error(`${what} is [x, y], each from 0 to 1.`)
+      return [frac(p[0], what) * W, frac(p[1], what) * H]
+    }
+    const marks: Mark[] = list.map((m: any, i) => {
+      const color = INK[String(m?.color || 'red').toLowerCase() as ColorName] ?? INK.red
+      const shape = String(m?.shape || '').toLowerCase()
+      const at = `Mark ${i + 1}`
+      if (shape === 'arrow') return { tool: 'arrow', color, size, from: pt(m.from, `${at}'s from`), to: pt(m.to, `${at}'s to`) }
+      if (shape === 'box' || shape === 'circle' || shape === 'blur')
+        return { tool: shape, color, size, x: frac(m.x, `${at}'s x`) * W, y: frac(m.y, `${at}'s y`) * H, w: frac(m.w, `${at}'s w`) * W, h: frac(m.h, `${at}'s h`) * H }
+      if (shape === 'text') {
+        const text = words(m.text)
+        if (!text) throw new Error(`${at} needs its text.`)
+        return { tool: 'text', color, size, x: frac(m.x, `${at}'s x`) * W, y: frac(m.y, `${at}'s y`) * H, text: text.slice(0, 200) }
+      }
+      throw new Error(`${at}: a shape is arrow, box, circle, text or blur.`)
+    })
+    await post(`/api/shown/${ref}/edit`, { data: exportPng(img, marks, null) })
+    emit('image-edited', { id: ref })
+    said(`Claude drew on ${title}`)
+  }
+
   // into view: tucked away, on the shelf or in a folded or tucked section, it comes back first (with its section)
   const focus = (id: string) => {
     const n = rf.getNode(id)
@@ -1111,6 +1167,9 @@ export function BoardAgent() {
       {cards.map(c => (
         <div key={c.id} {...(visibleIds.has(c.id) ? {} : { 'data-agent-hidden': '' })}>
           <CardRoot
+            // what a card can do is settled when it's made: a picture is known once its item has loaded, so it's made
+            // again then, with markUp
+            key={c.value.image ? 'picture' : 'card'}
             aria-label={c.title}
             className="sr-only"
             value={values.get(c.id) ?? c.value}
@@ -1151,6 +1210,7 @@ export function BoardAgent() {
             onWrite={c.type === 'note' ? ch => (touchCard(c.id, 'writing'), writeNote(c.ref, c.title, ch)) : undefined}
             others={titlesBut(c.id)}
             onPlaceNextTo={(other, side) => (touchCard(c.id, 'arranging'), placeNextTo(c.id, c.title, other, side))}
+            onMarkUp={c.value.image ? marks => (touchCard(c.id, 'writing'), markUp(c.ref, c.title, marks)) : undefined}
           />
         </div>
       ))}

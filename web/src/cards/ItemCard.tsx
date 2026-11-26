@@ -1,9 +1,10 @@
 // A file or link on the board, drawn in place. Expand for full screen; everything else is one click away.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
-import { Bookmark, Check, Code2, Copy, ExternalLink, PenLine, FolderOpen, Globe, Maximize2, Pin, RefreshCw, X } from 'lucide-react'
+import { Bookmark, Brush, Check, Code2, Copy, ExternalLink, PenLine, FolderOpen, Globe, Maximize2, Pin, RefreshCw, Undo2, X } from 'lucide-react'
 import { get, openOutside, post, type ShownEntry, type ShownRead } from '../api'
-import { ago } from '../lib'
+import { ago, emit, onEvent } from '../lib'
+import { editImage } from '../views/ImageEditor'
 import { SIZES, useBoard, type CardNode } from '../board'
 import { Viewer, basename, iconFor, kindLabel, placeOf } from '../components/Viewer'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -41,11 +42,26 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
       board.toast(err.message)
     }
   }, [e, board, reload])
+  // drawn on (here or by Claude) or put back to the original: the picture again
+  useEffect(() => onEvent('image-edited', (d: { id?: string }) => d.id && d.id === e?.id && reload()), [e?.id, reload])
+  const backToOriginal = useCallback(async () => {
+    if (!e) return
+    try {
+      await post(`/api/shown/${e.id}/original`)
+      emit('image-edited', { id: e.id })
+      board.toast('Back to the original')
+    } catch (err: any) {
+      board.toast(err.message)
+    }
+  }, [e, board])
   const textual = !!e && ['markdown', 'code', 'text', 'json', 'csv', 'diff', 'html', 'mermaid'].includes(e.format)
   const canCopyText = !!e && !!read?.text && (e.kind === 'content' || textual)
   const actions: CardAction[] = e
     ? [
+        // an image: draw on it (arrows, boxes, text, blur, crop); and, once drawn on, back to how it was
+        { label: 'Draw on it', icon: Brush, run: () => editImage(e.id), hidden: e.format !== 'image' },
         { label: e.kind === 'link' ? 'Open in the browser' : 'Open in its own program', icon: ExternalLink, run: () => native('default') },
+        { label: 'Back to the original', icon: Undo2, run: backToOriginal, hidden: e.format !== 'image' || !e.original, more: true },
         { label: 'Show in folder', icon: FolderOpen, run: () => native('reveal'), hidden: e.kind === 'link', more: true },
         {
           label: editorLabel(board.prefs.editor),
@@ -170,6 +186,7 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
             ) : (
               <IconButton icon={ExternalLink} label={e.kind === 'link' ? 'Open in the browser' : 'Open in its own program'} onClick={() => native('default')} />
             )}
+            {e.format === 'image' && <IconButton icon={Brush} label="Draw on it" onClick={() => editImage(e.id)} />}
             <IconButton icon={Maximize2} label="Open full screen" onClick={() => board.expand({ type: 'item', ref: data.ref })} />
           </>
         )

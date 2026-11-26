@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils'
 import { SpaceSwitcher } from './views/SpaceSwitcher'
 import { TuckedTray } from './views/TuckedTray'
 import { PutAwayDialog, ShelfClock, ShelfCorner } from './views/Shelf'
+import { ImageEditor } from './views/ImageEditor'
 import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
 import { AgentFrames, AgentPill } from './agent/presence'
@@ -88,6 +89,7 @@ export function App() {
           <SpaceSwitcher />
           <TuckedTray />
           <PutAwayDialog />
+          <ImageEditor />
           <ShelfClock />
           <ShelfCorner />
           {createPortal(<BoardAgent />, agentHost())}
