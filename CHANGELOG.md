@@ -6,6 +6,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 **Improved**
 - The Add box (Ctrl+K) no longer lists your whole history at once. It shows a few recent files, links, notes and tables, with "Show more" under each for the rest, and searching still looks through everything you've kept. It opens fast however much you keep.
+- Tucked-away cards no longer run off the top of the screen. As many tabs as fit show, and the rest are under "N more", a list you can search and bring them back from. Before, only 12 showed and the others couldn't be reached.
 
 ## 26 November 2026 (version 0.2.13)
 

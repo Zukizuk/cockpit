@@ -1,11 +1,17 @@
 // Cards tucked away: small tabs hanging from the top edge of the screen, each with its card's title (a sticky note's
-// in its paper). A click brings the card back to where it was. Only this space's.
+// in its paper). A click brings the card back to where it was. Only this space's. As many tabs as fit across the top
+// show; the rest are under "N more", a list to search and bring back from, so none is ever out of reach.
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '@xyflow/react'
 import { useBoard, spaceOf, type CardNode } from '../board'
-import { SquareDashed } from 'lucide-react'
+import { ChevronDown, SquareDashed, StickyNote } from 'lucide-react'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 
-const MAX = 12
+/** Room kept on the right of the tabs for the "N more" button. */
+const MORE_W = 104
+/** The tray leaves this much of the window free (the space switcher on the left, the pill and window buttons right). */
+const SIDES = 340
 
 export function TuckedTray() {
   const board = useBoard()
@@ -18,6 +24,33 @@ export function TuckedTray() {
     ),
   )
   const tucked = JSON.parse(key) as [string, string, string, string][]
+  const tray = useRef<HTMLDivElement>(null)
+  const [fit, setFit] = useState(tucked.length)
+  const [winW, setWinW] = useState(innerWidth)
+  const [open, setOpen] = useState(false)
+  const [q, setQ] = useState('')
+  useLayoutEffect(() => {
+    const on = () => setWinW(innerWidth)
+    addEventListener('resize', on)
+    return () => removeEventListener('resize', on)
+  }, [])
+  // how many tabs fit across: each tab is measured (the ones over are laid out unseen, so they keep their width)
+  useLayoutEffect(() => {
+    const el = tray.current
+    if (!el) return
+    const tabs = [...el.querySelectorAll<HTMLElement>('.tuck-tab')]
+    const room = winW - SIDES
+    let used = 0
+    let n = 0
+    for (const t of tabs) {
+      const w = t.offsetWidth + 6
+      const left = tabs.length - n - 1
+      if (used + w > room - (left > 0 ? MORE_W : 0)) break
+      used += w
+      n++
+    }
+    setFit(n)
+  }, [key, winW])
   if (!tucked.length) return null
 
   const titleOf = (type: string, ref: string) => {
@@ -34,8 +67,8 @@ export function TuckedTray() {
   }
 
   return (
-    <div className="tuck-tray" role="toolbar" aria-label="Tucked away cards">
-      {tucked.slice(0, MAX).map(([id, type, ref, color]) => {
+    <div className="tuck-tray" role="toolbar" aria-label="Tucked away cards" ref={tray}>
+      {tucked.map(([id, type, ref, color], i) => {
         const sticky = type === 'note' && !/^(journal|drafts)\//.test(ref)
         const title = titleOf(type, ref)
         // a section's tab is dashed, like the area it stands for, with its mark
@@ -43,8 +76,10 @@ export function TuckedTray() {
           <button
             key={id}
             type="button"
-            className={cn('tuck-tab', sticky && `is-paper paper-${color || board.prefs.stickyColor}`, type === 'section' && 'is-section', type === 'section' && color && `paper-${color}`)}
+            className={cn('tuck-tab', i >= fit && 'is-over', sticky && `is-paper paper-${color || board.prefs.stickyColor}`, type === 'section' && 'is-section', type === 'section' && color && `paper-${color}`)}
             onClick={() => board.untuck(id)}
+            tabIndex={i >= fit ? -1 : undefined}
+            aria-hidden={i >= fit || undefined}
             title={type === 'section' ? `The section "${title}", with what's in it: click to bring it back` : `${title}: click to bring it back`}
           >
             {type === 'section' && <SquareDashed className="size-3 shrink-0" strokeWidth={2} />}
@@ -52,7 +87,57 @@ export function TuckedTray() {
           </button>
         )
       })}
-      {tucked.length > MAX && <span className="tuck-more">+{tucked.length - MAX}</span>}
+      {fit < tucked.length && (
+        <Popover
+          open={open}
+          onOpenChange={o => {
+            setOpen(o)
+            if (!o) setQ('')
+          }}
+        >
+          <PopoverTrigger asChild>
+            <button type="button" className="tuck-tab tuck-more" title="The rest of what's tucked away">
+              {tucked.length - fit} more
+              <ChevronDown className="size-3 shrink-0" strokeWidth={2} />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="tuck-list w-72 p-1.5">
+            {tucked.length - fit > 7 && (
+              <input className="tuck-search" autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Find a tucked card…" aria-label="Find a tucked card" onKeyDown={e => e.stopPropagation()} />
+            )}
+            <div className="tuck-rows">
+              {tucked
+                .slice(fit)
+                .map(([id, type, ref, color]) => ({ id, type, ref, color, title: titleOf(type, ref) }))
+                .filter(t => !q.trim() || t.title.toLowerCase().includes(q.trim().toLowerCase()))
+                .map(t => {
+                  const sticky = t.type === 'note' && !/^(journal|drafts)\//.test(t.ref)
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className="tuck-row"
+                      onClick={() => {
+                        board.untuck(t.id)
+                        if (tucked.length - fit <= 1) setOpen(false)
+                      }}
+                      title="Bring it back"
+                    >
+                      {t.type === 'section' ? (
+                        <SquareDashed className="size-3.5 shrink-0" strokeWidth={1.75} />
+                      ) : sticky ? (
+                        <span className={cn('tuck-dot', `paper-${t.color || board.prefs.stickyColor}`)} />
+                      ) : (
+                        <StickyNote className="size-3.5 shrink-0 opacity-0" />
+                      )}
+                      <span className="truncate">{t.title}</span>
+                    </button>
+                  )
+                })}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
     </div>
   )
 }

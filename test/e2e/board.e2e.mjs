@@ -785,6 +785,43 @@ test('Ctrl+K shows a few recent things, Show more opens up the rest, and typing 
   await page.keyboard.press('Escape')
 })
 
+test('many tucked cards: as many tabs as fit, the rest under "N more", found and brought back from its list', async () => {
+  await clearSelection()
+  for (let i = 1; i <= 16; i++) await agent('act', { steps: [{ ref: 'Board', action: 'addSticky', args: [`Parked idea ${i}
+
+for later`] }] })
+  let lastTuck
+  for (let i = 1; i <= 16; i++) {
+    let r
+    for (let k = 0; k < 20; k++) {
+      r = await agent('act', { steps: [{ ref: `Parked idea ${i}`, action: 'tuck' }] })
+      if (r.output?.ok !== false) break
+      await new Promise(res => setTimeout(res, 150))
+    }
+    lastTuck = r
+  }
+  const shown = page.locator('.tuck-tray .tuck-tab:not(.is-over):not(.tuck-more)')
+  const more = page.locator('.tuck-tray .tuck-more')
+  assert.ok(await until(async () => (await more.count()) === 1, 8000), `an N more tab; tabs: ${await page.locator('.tuck-tray .tuck-tab').count()}, notes: ${await page.locator('.react-flow__node-note').count()}, last: ${JSON.stringify(lastTuck).slice(0, 300)}`)
+  const n = await shown.count()
+  assert.ok(n > 0 && n < 16, `some tabs fit across, not all (${n})`)
+  const right = await page.evaluate(() => Math.max(...[...document.querySelectorAll('.tuck-tray .tuck-tab:not(.is-over)')].map(t => t.getBoundingClientRect().right)))
+  assert.ok(right <= 1400, 'nothing runs off the screen')
+  assert.match(await more.innerText(), new RegExp(`${16 - n} more`))
+
+  await more.click()
+  const rows = page.locator('.tuck-row')
+  assert.equal(await rows.count(), 16 - n, 'the rest, listed')
+  // a long list has a search box
+  if (16 - n > 7) {
+    await page.locator('.tuck-search').fill('idea 16')
+    assert.ok(await until(async () => (await rows.count()) === 1), 'found by its title')
+  }
+  await rows.filter({ hasText: 'Parked idea 16' }).click()
+  assert.ok(await until(async () => (await page.locator('.react-flow__node-note', { hasText: 'Parked idea 16' }).count()) === 1), 'brought back to the board')
+  await page.keyboard.press('Escape')
+})
+
 // after the last: a card made and taken off (making one moves the view)
 test("a card taken off isn't in what Claude sees any more", async () => {
   await clearSelection()
