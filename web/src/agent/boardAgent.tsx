@@ -194,6 +194,8 @@ type CardOptions = {
   onColor?: (color: StickyColor) => void
   onRemove?: () => void
   onTuck?: (tuck: boolean) => void
+  /** put away on the shelf, for that many days (none: until the user brings it back) */
+  onShelf?: (days?: number) => void
   onVeil?: (veil: boolean) => void
   onTable?: (change: TableChange) => Promise<void>
   onPlaceNextTo?: (other: string, side: Side) => void
@@ -214,7 +216,7 @@ const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', 
 
 const cardPrimitive = definePrimitive({
   name: 'card',
-  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', onConnect: 'action', onDisconnect: 'action', onMoveToSection: 'action', sections: 'value', others: 'value' },
+  options: { value: 'value', spaces: 'value', onComment: 'action', onFold: 'action', onFocus: 'action', onMoveToSpace: 'action', onRename: 'action', onColor: 'action', onRemove: 'action', onTuck: 'action', onShelf: 'action', onVeil: 'action', onTable: 'action', onPlaceNextTo: 'action', onWrite: 'action', onRead: 'action', onConnect: 'action', onDisconnect: 'action', onMoveToSection: 'action', sections: 'value', others: 'value' },
   // pending and error: a change that takes a moment (a note, a table) reports how it went; UI SDK's act waits on them
   // (any error that isn't null counts as a failure, an empty one too)
   state: (options: CardOptions) => ({ value: options.value ?? { kind: 'card', space: 'Main' }, pending: false, error: null as string | null }),
@@ -255,6 +257,11 @@ const cardPrimitive = definePrimitive({
       remove: () => call('onRemove')(),
       tuck: () => call('onTuck')(true),
       bringBack: () => call('onTuck')(false),
+      // put away on the shelf (out of the tray at the top too): back in the tray after `days`, or when brought back
+      putOnShelf: (days?: unknown) => {
+        const d = Math.round(Number(days))
+        call('onShelf')(Number.isFinite(d) && d > 0 ? Math.min(d, 365) : undefined)
+      },
       hideContents: () => call('onVeil')(true),
       showContents: () => call('onVeil')(false),
       setCell: (row: unknown, column: unknown, text: string) => track(call('onTable')({ setCell: [row, column, String(text ?? '')] })),
@@ -289,7 +296,7 @@ const cardPrimitive = definePrimitive({
     return api
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'moveToSection', 'remove'] },
+  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'putOnShelf', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'moveToSection', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -952,6 +959,12 @@ export function BoardAgent() {
             onColor={c.value.kind === 'sticky note' ? color => (touchCard(c.id, 'arranging'), board.setColor(c.id, color)) : undefined}
             onRemove={() => board.removeCard(c.id)}
             onTuck={t => (t ? board.tuck([c.id]) : board.untuck(c.id))}
+            onShelf={days => {
+              const back = new Date()
+              back.setHours(8, 0, 0, 0)
+              board.tuck([c.id], { until: days ? back.getTime() + days * 86_400_000 : undefined })
+              said(`Claude put ${c.title} on the shelf${days ? ` for ${days} day${days === 1 ? '' : 's'}` : ''}`)
+            }}
             onVeil={v => board.setVeiled([c.id], v)}
             onTable={c.type === 'table' ? ch => (touchCard(c.id, 'writing'), changeTable(c.ref, c.title, ch)) : undefined}
             onWrite={c.type === 'note' ? ch => (touchCard(c.id, 'writing'), writeNote(c.ref, c.title, ch)) : undefined}

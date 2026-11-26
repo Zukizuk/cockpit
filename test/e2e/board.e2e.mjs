@@ -168,7 +168,7 @@ test("a card's menu: what it does first, then view, lock, agents, spaces, and Re
   assert.deepEqual(await wrapped(), [], 'no item wraps onto a second line')
   await page.keyboard.press('Escape')
   const at = l => labels.findIndex(x => x.startsWith(l))
-  const order = ['Open full screen', 'Comment', 'Roll up into its strip', 'Lock in place', 'Stop sharing with agents', 'Move to Work', 'Remove from board']
+  const order = ['Open full screen', 'Comment', 'Roll up into its strip', 'Stop sharing with agents', 'Move to Work', 'More', 'Remove from board']
   for (const l of order) assert.ok(at(l) >= 0, `${l} is in the menu`)
   assert.deepEqual([...order].sort((a, b) => at(a) - at(b)), order, 'in this order')
   assert.equal(labels.at(-1), 'Remove from board')
@@ -850,7 +850,7 @@ test('put away on the shelf: until when, off the board and the tray, listed with
 
   // its day comes (the clock moved on 15 days): back in the tray at the top, off the shelf
   await page.evaluate(() => {
-    const real = Date.now
+    const real = (window.__realNow = Date.now)
     Date.now = () => real() + 15 * 86_400_000
     dispatchEvent(new Event('focus'))
   })
@@ -876,6 +876,18 @@ test('put away on the shelf: until when, off the board and the tray, listed with
   // the saved board keeps it as it is now: on the board, not on the shelf
   const saved = (await api('/api/board')).cards.find(c => c.type === 'note' && /team-call|Team call/i.test(c.ref + (c.title || '')))
   assert.ok(!saved || !saved.shelf, 'not on the shelf in the saved board')
+
+  // Claude puts it on the shelf for three days, and brings it back
+  await page.evaluate(() => {
+    Date.now = window.__realNow
+    dispatchEvent(new Event('focus'))
+  })
+  const r1 = await agent('act', { steps: [{ ref: 'Team call notes', action: 'putOnShelf', args: [3] }] })
+  assert.notEqual(r1.output?.ok, false, JSON.stringify(r1).slice(0, 200))
+  assert.ok(await until(async () => (await shelfTab.count()) === 1 && (await card.isHidden())), 'Claude put it on the shelf')
+  assert.ok(await until(async () => (await api('/api/board')).cards.find(c => c.shelf)?.shelf?.until > Date.now() + 2 * 86_400_000), 'back in about three days')
+  await agent('act', { steps: [{ ref: 'Team call notes', action: 'bringBack' }] })
+  assert.ok(await until(async () => await card.isVisible()), 'and brought back')
 })
 
 test('a page Claude makes keeps what is typed and ticked in it, after the board reloads; Claude reads it back', async () => {

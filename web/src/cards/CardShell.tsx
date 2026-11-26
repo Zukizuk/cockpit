@@ -3,20 +3,20 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Handle, NodeResizer, Position, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
-import { Archive, Package, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, SquareDashed, X } from 'lucide-react'
+import { Archive, Ellipsis, Package, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, SquareDashed, X } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, isSticky, minSize, resizingRef, useBoard, type CardNode } from '../board'
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { CardComments } from './CardComments'
 import { emit } from '../lib'
 import { askPutAway } from '../views/Shelf'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 const SIDE_POS = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left } as const
 
-export type CardAction = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean; hidden?: boolean; keys?: string; /** only in the right-click menu (about what was right-clicked) */ context?: boolean }
+export type CardAction = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean; hidden?: boolean; keys?: string; /** only in the right-click menu (about what was right-clicked) */ context?: boolean; /** under More, a side menu: used now and then */ more?: boolean }
 
 /** A menu's groups as one list: a line between groups; inside one, a card's own items keep the lines they draw
  * between theirs (its copy items, say). */
@@ -282,10 +282,11 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
           board.persist()
         },
         hidden: !autoHeight || fits || folded,
+        more: true,
       },
     ],
     [
-      { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
+      { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L', more: !locked },
       { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },
     ],
     ...agentAndSpaceActions(board, markIds, nodeId, mark),
@@ -306,7 +307,38 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     Sep: typeof ContextMenuSeparator | typeof DropdownMenuSeparator,
     Keys: typeof ContextMenuShortcut | typeof DropdownMenuShortcut,
     context = false,
-  ) => (
+  ) => {
+    const Sub = context ? ContextMenuSub : DropdownMenuSub
+    const SubTrigger = context ? ContextMenuSubTrigger : DropdownMenuSubTrigger
+    const SubContent = context ? ContextMenuSubContent : DropdownMenuSubContent
+    const list = shown.filter(a => context || !a.context)
+    const main = list.filter(a => !a.more)
+    const extra = list.filter(a => a.more)
+    // the side menu goes just before taking the card off the board (or last, when there's nothing to take it off)
+    const at = main.findIndex(isEnd)
+    const row = (a: CardAction, i: number, inMore = false) => (
+      <Fragment key={a.label}>
+        {a.gap && i > 0 && <Sep />}
+        <Item variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
+          <a.icon strokeWidth={1.75} />
+          {a.label}
+          {a.keys && !inMore && <Keys>{a.keys}</Keys>}
+        </Item>
+      </Fragment>
+    )
+    const more = extra.length > 0 && (
+      <Fragment key="__more">
+        <Sep />
+        <Sub>
+          <SubTrigger>
+            <Ellipsis strokeWidth={1.75} />
+            More
+          </SubTrigger>
+          <SubContent className="min-w-52">{extra.map((a, i) => row({ ...a, gap: false }, i, true))}</SubContent>
+        </Sub>
+      </Fragment>
+    )
+    return (
     <>
       {sticky && (!many || allSticky) && (
         <>
@@ -324,18 +356,16 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
           <Sep />
         </>
       )}
-      {shown.filter(a => context || !a.context).map(a => (
+      {main.map((a, i) => (
         <Fragment key={a.label}>
-          {a.gap && <Sep />}
-          <Item variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
-            <a.icon strokeWidth={1.75} />
-            {a.label}
-            {a.keys && <Keys>{a.keys}</Keys>}
-          </Item>
+          {i === at && more}
+          {row(a, i)}
         </Fragment>
       ))}
+      {at < 0 && more}
     </>
-  )
+    )
+  }
 
   const menu = (
     <DropdownMenu>

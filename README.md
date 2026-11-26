@@ -67,6 +67,10 @@ Windows may warn that the installer is from an unknown publisher: the release is
   for heads, dashes and which way it points.
 - **Sections**: a titled area that the cards in it move with. Right-click the board for one, or select cards and
   press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>G</kbd>.
+- **Tuck away and the shelf**: tuck a card or section away as a tab at the top for now, or put it on the shelf
+  (bottom-left corner) for a week or two, until a day you pick: on that day it comes back to the tabs at the top.
+- **Pages that remember**: a page on the board (one Claude makes, a drawing from a chat, any HTML file) keeps what
+  you type, pick or tick in it. Ask Claude for a checklist, a calculator or a planner and it lands as one.
 - **The board**: drag, resize, fold, lock in place (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd>), tidy
   (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd>), undo (<kbd>Ctrl</kbd> <kbd>Z</kbd>). Right-click the board for
   the rest, <kbd>Ctrl</kbd> <kbd>K</kbd> to add or find anything, <kbd>?</kbd> for every shortcut.

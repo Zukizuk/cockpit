@@ -93,7 +93,11 @@ const BOARD_NOTE =
   'contenteditable keep their values by themselves (give each an id); for anything else the page keeps itself, call ' +
   "window.cockpit.set(key, value) and read it back with window.cockpit.get(key) inside a 'cockpit-ready' listener. " +
   "The page's card read() gives what's typed in it as typed. Pages run sealed off from Cockpit: no network to the " +
-  'board, no localStorage; style it for a dark board.'
+  'board, no localStorage; style it for a dark board. Anything you would draw for the user to use or fill in (a chart ' +
+  'with inputs, a calculator, a tracker), when they want it on their board, make with addPage: it lands there and ' +
+  "keeps what they type. A card's putOnShelf(days?) puts it away on the shelf (bottom-left corner) for things the " +
+  'user will not need for a while: back in the tray at the top after that many days, or when brought back with ' +
+  'bringBack(); a card on the shelf reads as tucked.'
 
 export const TOOLS = [
   {

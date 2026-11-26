@@ -46,14 +46,15 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
   const actions: CardAction[] = e
     ? [
         { label: e.kind === 'link' ? 'Open in the browser' : 'Open in its own program', icon: ExternalLink, run: () => native('default') },
-        { label: 'Show in folder', icon: FolderOpen, run: () => native('reveal'), hidden: e.kind === 'link' },
+        { label: 'Show in folder', icon: FolderOpen, run: () => native('reveal'), hidden: e.kind === 'link', more: true },
         {
           label: editorLabel(board.prefs.editor),
           icon: board.prefs.editor === 'vscode' ? Code2 : PenLine,
           run: () => native('editor'),
           hidden: !textual || e.kind !== 'file' || board.prefs.editor === 'default',
+          more: true,
         },
-        { label: 'Read the page again', icon: RefreshCw, run: readAgain, hidden: e.kind !== 'link' },
+        { label: 'Read the page again', icon: RefreshCw, run: readAgain, hidden: e.kind !== 'link', more: true },
         // Later is a list of the same kept things: the card stays on the board either way
         {
           label: 'Keep on Later',
@@ -62,8 +63,8 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
           hidden: (e.kind !== 'link' && e.kind !== 'file') || (!!e.later && e.later !== 'done'),
         },
         { label: 'Done reading', icon: Check, run: () => board.setLater(e.id, 'done').then(() => (reload(), board.toast('Done, on Later'))), hidden: !e.later || e.later === 'done' },
-        { label: 'Pin to Quick access', icon: Pin, run: () => board.pin(e.kind === 'link' ? { url: e.url, title: e.title } : { path: e.path, title: e.title }), hidden: e.kind !== 'link' && e.kind !== 'file' },
-        { label: e.kind === 'link' ? 'Copy link' : 'Copy path', icon: Copy, run: () => board.copy(e.kind === 'link' ? e.url || '' : e.path, e.kind === 'link' ? 'Link copied' : 'Path copied'), gap: true, hidden: e.kind === 'content' },
+        { label: 'Pin to Quick access', icon: Pin, run: () => board.pin(e.kind === 'link' ? { url: e.url, title: e.title } : { path: e.path, title: e.title }), hidden: e.kind !== 'link' && e.kind !== 'file', more: true },
+        { label: e.kind === 'link' ? 'Copy link' : 'Copy path', icon: Copy, run: () => board.copy(e.kind === 'link' ? e.url || '' : e.path, e.kind === 'link' ? 'Link copied' : 'Path copied'), gap: true, hidden: e.kind === 'content', more: e.kind !== 'link' },
         // written content (a draft Claude made, a note kept): its words are what you came for
         { label: 'Copy the text', icon: Copy, run: () => board.copy(read?.text || '', 'Copied'), gap: e.kind === 'content', hidden: !canCopyText },
       ]
