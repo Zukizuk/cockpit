@@ -778,7 +778,7 @@ test('Ctrl+K shows a few recent things, Show more opens up the rest, and typing 
 
   // the oldest one is far past what is shown, and typing finds it
   const input = box.locator('[cmdk-input]')
-  assert.ok(await input.evaluate(el => el === document.activeElement), 'the search box keeps the keys after Show more')
+  assert.ok(await until(() => input.evaluate(el => el === document.activeElement), 2000), 'the search box keeps the keys after Show more')
   await page.keyboard.type('zebra')
   const found = await until(async () => (await rows()) === 1 && /Kept page 01 zebra/.test(await group.innerText()))
   assert.ok(found, `found by searching all of them; typed "${await input.inputValue()}", shown: ${(await box.innerText()).slice(0, 300)}`)

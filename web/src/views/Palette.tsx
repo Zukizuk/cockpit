@@ -70,7 +70,9 @@ export function Palette() {
   const more = (g: keyof typeof limits) => {
     setLimits(l => ({ ...l, [g]: l[g] + MORE }))
     // a click on Show more takes the keys from the search box: give them back, so typing goes on searching
-    requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[cmdk-input]')?.focus())
+    const back = () => document.querySelector<HTMLInputElement>('[cmdk-input]')?.focus()
+    requestAnimationFrame(back)
+    setTimeout(back, 80)
   }
   const kept = capped(board.items, e => [e.title, e.path, e.url, e.siteName, ...(e.tags || [])].join(' '), words, base + limits.items)
   const notes = capped(allNotes, n => `${n.title} ${n.path} ${n.excerpt}`, words, base + limits.notes)
