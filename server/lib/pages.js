@@ -47,6 +47,7 @@ const KEEPER = `(function () {
   var editable = function (e) { return !('value' in e) || e.tagName === 'LI' }
   function read() {
     var out = {}
+    for (var p in pending) out[p] = pending[p]
     fields().forEach(function (e, i) {
       var t = (e.type || '').toLowerCase()
       out[key(e, i)] = t === 'checkbox' || t === 'radio' ? e.checked : e.isContentEditable && editable(e) ? e.innerHTML : e.value
@@ -54,17 +55,21 @@ const KEEPER = `(function () {
     return out
   }
   function fire(e, name) { e.dispatchEvent(new Event(name, { bubbles: true })) }
+  // what was kept for fields not there yet (a page that draws some later): put in as they appear, once each
+  var pending = {}
   function apply(f) {
     fields().forEach(function (e, i) {
       var k = key(e, i)
       if (!(k in f)) return
+      var v = f[k]
+      delete pending[k]
       var t = (e.type || '').toLowerCase()
       if (t === 'checkbox' || t === 'radio') {
-        if (e.checked !== !!f[k]) { e.checked = !!f[k]; fire(e, 'input'); fire(e, 'change') }
+        if (e.checked !== !!v) { e.checked = !!v; fire(e, 'input'); fire(e, 'change') }
       } else if (e.isContentEditable && editable(e)) {
-        if (e.innerHTML !== f[k]) { e.innerHTML = f[k]; fire(e, 'input') }
-      } else if (e.value !== f[k]) {
-        e.value = f[k]; fire(e, 'input'); fire(e, 'change')
+        if (e.innerHTML !== v) { e.innerHTML = v; fire(e, 'input') }
+      } else if (e.value !== v) {
+        e.value = v; fire(e, 'input'); fire(e, 'change')
       }
     })
   }
@@ -89,7 +94,17 @@ const KEEPER = `(function () {
   addEventListener('message', function (e) {
     if (e.source !== parent || !e.data || e.data.cockpitPage !== 'state' || ready) return
     state = e.data.state && typeof e.data.state === 'object' ? e.data.state : {}
-    if (state.fields) apply(state.fields)
+    if (state.fields) {
+      for (var k in state.fields) pending[k] = state.fields[k]
+      apply(state.fields)
+      if (window.MutationObserver) {
+        var seen = new MutationObserver(function () {
+          if (!Object.keys(pending).length) return seen.disconnect()
+          apply(pending)
+        })
+        seen.observe(document.documentElement, { childList: true, subtree: true })
+      }
+    }
     ready = true
     readyFns.splice(0).forEach(function (fn) { try { fn() } catch (err) {} })
     dispatchEvent(new Event('cockpit-ready'))

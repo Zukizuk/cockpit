@@ -891,7 +891,7 @@ test('a page Claude makes keeps what is typed and ticked in it, after the board 
       const calc = () => (document.getElementById('each').textContent = (Number(cost.value) / Math.max(1, Number(people.value))).toFixed(2))
       document.addEventListener('input', calc)
       calc()
-      const draw = () => (document.getElementById('list').innerHTML = (cockpit.get('items') || []).map(x => '<li>' + x + '</li>').join(''))
+      const draw = () => (document.getElementById('list').innerHTML = (cockpit.get('items') || []).map((x, i) => '<li><input type="checkbox" id="it-' + i + '"> ' + x + '</li>').join(''))
       document.getElementById('add').onclick = () => { cockpit.set('items', [...(cockpit.get('items') || []), 'Item ' + ((cockpit.get('items') || []).length + 1)]); draw() }
       addEventListener('cockpit-ready', draw)
     </script>`
@@ -908,13 +908,15 @@ test('a page Claude makes keeps what is typed and ticked in it, after the board 
   await frame.locator('#paid').click()
   await frame.locator('#add').click()
   await frame.locator('#add').click()
+  // a checkbox the page drew itself, after it loaded
+  await frame.locator('#it-1').click()
   assert.equal(await frame.locator('#each').innerText(), '75.00')
   // kept by the board (a moment for the page to say so)
   const entry = async () => (await api('/api/shown')).find(e => e.title === 'Trip splitter')
   assert.ok(
     await until(async () => {
       const st = (await entry())?.pageState
-      return st?.fields?.['#cost'] === '300' && st?.fields?.['#paid'] === true && st?.data?.items?.length === 2
+      return st?.fields?.['#cost'] === '300' && st?.fields?.['#paid'] === true && st?.data?.items?.length === 2 && st?.fields?.['#it-1'] === true
     }, 5000),
     'saved with the card',
   )
@@ -927,6 +929,8 @@ test('a page Claude makes keeps what is typed and ticked in it, after the board 
   assert.equal(await again.locator('#paid').isChecked(), true)
   assert.equal(await again.locator('#each').innerText(), '75.00', 'and the page worked it out again')
   assert.equal(await again.locator('#list li').count(), 2, 'what the page kept itself')
+  assert.ok(await until(async () => await again.locator('#it-1').isChecked()), 'a field drawn later gets its tick back too')
+  assert.equal(await again.locator('#it-0').isChecked(), false)
 
   const read = await agent('act', { steps: [{ ref: 'Trip splitter', action: 'read' }] })
   const typed = read.output?.steps?.[0]?.result?.typed
