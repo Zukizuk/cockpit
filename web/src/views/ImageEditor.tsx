@@ -42,6 +42,15 @@ export function ImageEditor() {
   const [saving, setSaving] = useState(false)
   const canvas = useRef<HTMLCanvasElement>(null)
   const start = useRef<Pt | null>(null)
+  // the text box: focused once it's there, and not closed by a blur in its first moment
+  const textBox = useRef<HTMLTextAreaElement>(null)
+  const opened = useRef(0)
+  const typingAt = typing ? `${typing.x},${typing.y}` : ''
+  useEffect(() => {
+    if (!typingAt) return
+    const t = setTimeout(() => textBox.current?.focus(), 0)
+    return () => clearTimeout(t)
+  }, [typingAt])
   // the picture as big as fits the screen, its own shape kept (never bigger than it is)
   const [stage, setStage] = useState<HTMLDivElement | null>(null)
   const [room, setRoom] = useState({ w: 800, h: 600 })
@@ -157,7 +166,10 @@ export function ImageEditor() {
     if (e.button !== 0) return
     const p = at(e)
     if (tool === 'text') {
+      // (the press would otherwise move the focus off the text box the moment it appears, closing it empty)
+      e.preventDefault()
       if (typing?.text.trim()) commitText()
+      opened.current = Date.now()
       setTyping({ x: p[0], y: p[1], text: '' })
       return
     }
@@ -199,6 +211,8 @@ export function ImageEditor() {
   }
 
   const crop = cropDraft ?? state.crop
+  // how big the picture is shown, against its own size
+  const shown = Math.min(1, room.w / img.naturalWidth, room.h / img.naturalHeight)
   const pct = (r: Rect) => ({ left: `${(r.x / img.naturalWidth) * 100}%`, top: `${(r.y / img.naturalHeight) * 100}%`, width: `${(r.w / img.naturalWidth) * 100}%`, height: `${(r.h / img.naturalHeight) * 100}%` })
 
   return (
@@ -244,9 +258,11 @@ export function ImageEditor() {
           {crop && crop.w > 0 && <div className="img-crop" style={pct(crop)} />}
           {typing && (
             <textarea
+              ref={textBox}
               autoFocus
               className="img-text-input"
-              style={{ left: `${(typing.x / img.naturalWidth) * 100}%`, top: `${(typing.y / img.naturalHeight) * 100}%`, color: hex }}
+              // the size the words will be on the picture, as it's shown here
+              style={{ left: `${(typing.x / img.naturalWidth) * 100}%`, top: `${(typing.y / img.naturalHeight) * 100}%`, color: hex, fontSize: Math.max(12, Math.round(size * 7 * shown)) }}
               value={typing.text}
               placeholder="Type, then Enter"
               aria-label="Text to add"
@@ -259,7 +275,7 @@ export function ImageEditor() {
                   commitText()
                 }
               }}
-              onBlur={commitText}
+              onBlur={() => Date.now() - opened.current > 300 && commitText()}
             />
           )}
         </div>
