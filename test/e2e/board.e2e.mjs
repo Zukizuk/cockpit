@@ -60,6 +60,8 @@ function seed() {
     space: 'main',
   }
   fs.writeFileSync(path.join(data, 'board.json'), JSON.stringify(board))
+  // tables on (an extra): a table Claude fills in
+  fs.writeFileSync(path.join(data, 'config.json'), JSON.stringify({ extras: { tables: true } }))
 }
 
 before(async () => {
@@ -948,6 +950,38 @@ test('a page Claude makes keeps what is typed and ticked in it, after the board 
   const typed = read.output?.steps?.[0]?.result?.typed
   assert.equal(typed?.fields?.['#people'], '4', `Claude reads what's typed: ${JSON.stringify(read).slice(0, 300)}`)
   assert.deepEqual(typed?.data?.items, ['Item 1', 'Item 2'])
+})
+
+test('a table tucked away: Claude adds to it and fills a cell, each once, answered at once', async () => {
+  await clearSelection()
+  const made = await agent('act', { steps: [{ ref: 'Board', action: 'addTable', args: ['Roadmap test', [['Feature', 'Status'], ['Arrows', 'Done']]] }] })
+  assert.notEqual(made.output?.ok, false, JSON.stringify(made).slice(0, 300))
+  assert.ok(await until(async () => (await page.locator('.react-flow__node-table', { hasText: 'Roadmap test' }).count()) === 1, 8000), 'the table')
+  // in a section, and the section tucked away (as the user had it)
+  const sec = await agent('act', { steps: [{ ref: 'Board', action: 'addSection', args: ['Roadmap', ['Roadmap test']] }] })
+  assert.notEqual(sec.output?.ok, false, JSON.stringify(sec).slice(0, 300))
+  const tuck = await agent('act', { steps: [{ ref: 'Board', action: 'tuckSection', args: ['Roadmap', true] }] })
+  assert.notEqual(tuck.output?.ok, false, JSON.stringify(tuck).slice(0, 300))
+  // the window minimised: the page hidden, and its timers slowed right down, as the browser does to a hidden page
+  await page.evaluate(() => {
+    const st = window.setTimeout
+    window.__fastSetTimeout = st
+    window.setTimeout = (f, ms, ...a) => st(f, Math.max(Number(ms) || 0, 20000), ...a)
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true })
+  })
+  const t0 = Date.now()
+  const r = await agent('act', { steps: [{ ref: 'Roadmap test', action: 'addRows', args: [[['Shelf', 'Done']]] }, { ref: 'Roadmap test', action: 'setCell', args: ['Arrows', 'Status', 'Done · 0.2.9'] }] })
+  const took = Date.now() - t0
+  assert.notEqual(r.output?.ok, false, JSON.stringify(r).slice(0, 300))
+  assert.ok(took < 8000, `answered at once, though hidden (took ${took} ms)`)
+  // and the page's own timers back once it's answered
+  assert.ok(await page.evaluate(() => String(window.setTimeout).includes('20000')), "the page's timers are its own again")
+  await page.evaluate(() => {
+    window.setTimeout = window.__fastSetTimeout
+    delete document.hidden
+  })
+  const read = await agent('act', { steps: [{ ref: 'Roadmap test', action: 'read' }] })
+  assert.deepEqual(read.output?.steps?.[0]?.result?.rows, [['Feature', 'Status'], ['Arrows', 'Done · 0.2.9'], ['Shelf', 'Done']], 'each change made once')
 })
 
 // after the last: a card made and taken off (making one moves the view)

@@ -192,7 +192,13 @@ function callBoard(tool, input, { agent = 'other', label = '' } = {}) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       agentCalls.delete(id)
-      reject(new UserError('Cockpit did not answer in time. Is its window open?'))
+      reject(
+        new UserError(
+          tool === 'act'
+            ? "Cockpit didn't answer in time. The change may still have gone through: look (snapshot or read) before trying again, so nothing is done twice."
+            : "Cockpit didn't answer in time. Is its window open?",
+        ),
+      )
     }, wait)
     agentCalls.set(id, { resolve, timer })
     agentCallInfo.set(id, { agent: name, tool })

@@ -8,6 +8,7 @@ import { createAgent } from '@ui-sdk/react/agent'
 import { post, type AgentAccess } from '../api'
 import { agentView, setAgentAccess } from './view'
 import { emit, lastEvent, onEvent } from '../lib'
+import { awake } from './awake'
 
 type Call = { id: string; client: number; tool: 'snapshot' | 'act' | 'query'; input?: unknown; access?: AgentAccess; agent?: string }
 /** Puts a question to the person (a toast with a button); true when they press it. */
@@ -127,8 +128,12 @@ export function startAgentBridge(ask: Ask) {
   addEventListener('focus', here)
   document.addEventListener('visibilitychange', here)
 
-  onEvent('agent-call', async (c: Call) => {
+  onEvent('agent-call', (c: Call) => {
     if (!me || c.client !== me) return
+    // minimised or behind other windows: the call keeps its pace all the same (agent/awake.ts)
+    void awake(() => answer(c))
+  })
+  const answer = async (c: Call) => {
     let output: unknown
     // for the log (Settings > Agents): what it asked, and the cards it could see then (titles only)
     let what = ''
@@ -159,5 +164,5 @@ export function startAgentBridge(ask: Ask) {
     }
     emit('agent-busy', { on: false })
     post('/api/agent/result', { id: c.id, output, what, saw }).catch(() => {})
-  })
+  }
 }

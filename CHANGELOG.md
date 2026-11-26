@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Fixed**
+- Claude's changes to your board no longer stall while Cockpit's window is minimised or behind other windows. Before, a change could take minutes, Claude gave up waiting, and the change went through later anyway (so a retry did it twice). If Cockpit is ever slow to answer, Claude is now told the change may have gone through and to look before trying again.
+
 ## 26 November 2026 (version 0.2.14)
 
 **New**
