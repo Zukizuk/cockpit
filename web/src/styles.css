@@ -3474,30 +3474,39 @@ table.data tbody tr:hover td {
   background: oklch(var(--contrast) / 0.18);
 }
 
-/* the shelf: a tab at the start of the tray, set apart from the tucked cards' tabs */
-.tuck-shelf {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 5px;
-  height: 30px;
-  margin-right: 6px;
-  padding: 6px 12px 6px;
-  border-radius: 0 0 10px 10px;
-  font-size: 12px;
-  font-weight: 600;
+/* the shelf: bottom-left, across from the zoom buttons */
+.shelf-corner {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 20;
+  gap: 7px;
+  padding: 0 14px 0 13px;
+  font-size: 13px;
+  font-weight: 500;
+  color: color-mix(in oklab, var(--foreground) 85%, transparent);
+  transition-property: scale, color;
+  transition-duration: 150ms;
+}
+
+.shelf-corner:hover {
   color: var(--foreground);
-  background: color-mix(in oklab, var(--card) 85%, var(--foreground) 15%);
-  box-shadow: 0 4px 12px oklch(0 0 0 / 0.22);
-  transition: translate 150ms ease-out;
 }
 
-.tuck-shelf:hover {
-  translate: 0 2px;
-}
-
-.tuck-shelf:active {
+.shelf-corner:active {
   scale: 0.96;
+}
+
+.shelf-count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: oklch(var(--contrast) / 0.1);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 .shelf-head {

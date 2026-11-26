@@ -72,11 +72,11 @@ export function SectionMenuItems({ id, Item, Separator }: { id: string; Item: Co
       </Item>
       <Item onSelect={() => board.tuck([id])}>
         <ArrowUpToLine strokeWidth={1.75} />
-        {count ? "Tuck it away at the top, with what's in it" : 'Tuck it away at the top'}
+        Tuck away
       </Item>
       <Item onSelect={() => askPutAway([id])}>
         <Package strokeWidth={1.75} />
-        {count ? "Put it away on the shelf, with what's in it…" : 'Put it away on the shelf…'}
+        Put on the shelf…
       </Item>
       <Separator />
       <Item onSelect={fit} disabled={!count || folded}>

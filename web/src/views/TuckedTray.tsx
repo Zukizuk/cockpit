@@ -7,12 +7,25 @@ import { useBoard, spaceOf, type CardNode } from '../board'
 import { ChevronDown, SquareDashed, StickyNote } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { ShelfTab, useShelf } from './Shelf'
 
 /** Room kept on the right of the tabs for the "N more" button. */
 const MORE_W = 104
 /** The tray leaves this much of the window free (the space switcher on the left, the pill and window buttons right). */
 const SIDES = 340
+
+/** What a tucked card or section is called on its tab (and in the shelf's list). */
+export function tuckedTitle(board: ReturnType<typeof useBoard>, type: string, ref: string) {
+  if (type === 'section') return ref
+  if (type === 'item') return board.items.find(x => x.id === ref)?.title || 'File'
+  if (type === 'note') {
+    if (/^journal\//.test(ref)) return `Journal ${ref.slice(8, 18)}`
+    const n = board.notes?.notes.find(x => x.path === ref)
+    return n?.title || n?.excerpt?.split('\n')[0] || 'Sticky note'
+  }
+  if (type === 'folder') return ref.split(/[\\/]/).filter(Boolean).pop() || 'Folder'
+  if (type === 'table') return ref.split('/').pop()?.replace(/\.csv$/i, '') || 'Table'
+  return { tasks: 'Today', later: 'Later', snippets: 'Snippets', outputs: 'Outputs', tracker: `Tracker: ${ref}`, command: 'Command' }[type] || 'Card'
+}
 
 export function TuckedTray() {
   const board = useBoard()
@@ -30,7 +43,6 @@ export function TuckedTray() {
   const [winW, setWinW] = useState(innerWidth)
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
-  const shelved = useShelf().length
   useLayoutEffect(() => {
     const on = () => setWinW(innerWidth)
     addEventListener('resize', on)
@@ -41,7 +53,7 @@ export function TuckedTray() {
     const el = tray.current
     if (!el) return
     const tabs = [...el.querySelectorAll<HTMLElement>('.tuck-tab')]
-    const room = winW - SIDES - ((el.querySelector<HTMLElement>('.tuck-shelf')?.offsetWidth ?? -6) + 6)
+    const room = winW - SIDES
     let used = 0
     let n = 0
     for (const t of tabs) {
@@ -52,25 +64,14 @@ export function TuckedTray() {
       n++
     }
     setFit(n)
-  }, [key, winW, shelved])
-  if (!tucked.length && !shelved) return null
+  }, [key, winW])
+  if (!tucked.length) return null
 
-  const titleOf = (type: string, ref: string) => {
-    if (type === 'section') return ref
-    if (type === 'item') return board.items.find(x => x.id === ref)?.title || 'File'
-    if (type === 'note') {
-      if (/^journal\//.test(ref)) return `Journal ${ref.slice(8, 18)}`
-      const n = board.notes?.notes.find(x => x.path === ref)
-      return n?.title || n?.excerpt?.split('\n')[0] || 'Sticky note'
-    }
-    if (type === 'folder') return ref.split(/[\\/]/).filter(Boolean).pop() || 'Folder'
-    if (type === 'table') return ref.split('/').pop()?.replace(/\.csv$/i, '') || 'Table'
-    return { tasks: 'Today', later: 'Later', snippets: 'Snippets', outputs: 'Outputs', tracker: `Tracker: ${ref}`, command: 'Command' }[type] || 'Card'
-  }
+  const titleOf = (type: string, ref: string) => tuckedTitle(board, type, ref)
+
 
   return (
     <div className="tuck-tray" role="toolbar" aria-label="Tucked away cards" ref={tray}>
-      <ShelfTab titleOf={titleOf} />
       {tucked.map(([id, type, ref, color], i) => {
         const sticky = type === 'note' && !/^(journal|drafts)\//.test(ref)
         const title = titleOf(type, ref)

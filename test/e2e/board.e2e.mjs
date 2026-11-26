@@ -202,7 +202,7 @@ test('full screen has the menu too (⋮ and a right-click on its bar), with only
   await bar.click({ button: 'right', position: { x: 60, y: 20 } })
   assert.deepEqual(await labels(), viaButton, 'right-click on the bar: the same menu')
   for (const l of ['Copy the text', 'Comment', 'Share with agents', 'Move to Work', 'Archive note', 'Remove from board']) assert.ok(viaButton.includes(l), `${l} is in it`)
-  for (const l of ['Open full screen', 'Roll up into its strip', 'Focus on this card', 'Tuck away at the top', 'Lock in place', 'Hide its contents']) assert.ok(!viaButton.includes(l), `${l} is not`)
+  for (const l of ['Open full screen', 'Roll up into its strip', 'Focus on this card', 'Tuck away', 'Lock in place', 'Hide its contents']) assert.ok(!viaButton.includes(l), `${l} is not`)
   assert.equal(viaButton.at(-1), 'Remove from board')
   assert.ok(await bar.isVisible(), 'Esc on the menu left full screen open')
   await page.keyboard.press('Escape')
@@ -372,7 +372,7 @@ test('with several cards selected, a card menu acts on all of them, and leaves o
   const menu = page.locator('[role=menu]').last()
   await menu.waitFor()
   const labels = (await menu.locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
-  for (const l of ['Fold these 2', 'Tuck these 2 away at the top', 'Lock these 2 in place', 'Hide their contents', 'Archive these 2 notes', 'Remove these 2 from board'])
+  for (const l of ['Fold these 2', 'Tuck these 2 away', 'Lock these 2 in place', 'Hide their contents', 'Archive these 2 notes', 'Remove these 2 from board'])
     assert.ok(labels.includes(l), `${l} is in it`)
   for (const l of ['Open full screen', 'Rename', 'Add a title', 'Copy the text', 'Comment']) assert.ok(!labels.includes(l), `${l} is not`)
   await menu.getByRole('menuitem', { name: 'Remove these 2 from board' }).click()
@@ -526,7 +526,7 @@ test('a section folds to its bar and opens, tucks away with its cards, and goes 
 
   // tucked from its menu: one tab, the cards with it
   await title.click({ button: 'right' })
-  await page.getByRole('menuitem', { name: /^Tuck it away at the top, with what/ }).click()
+  await page.getByRole('menuitem', { name: 'Tuck away', exact: true }).click()
   assert.ok(await until(async () => (await plan()).tucked && (await heldIds()).join() === inIt.join()), 'tucked with what was in it')
   const tabs = page.locator('.tuck-tab')
   assert.deepEqual(await tabs.allInnerTexts(), ['Plan'], 'one tab, the section')
@@ -829,12 +829,19 @@ test('put away on the shelf: until when, off the board and the tray, listed with
   assert.ok(await until(async () => (await card.count()) === 1, 8000), 'the card')
   await agent('act', { steps: [{ ref: 'Team call notes', action: 'focus' }] })
   await page.waitForTimeout(500)
+  // (it may sit partly above the window: bring it down)
+  const box = await card.boundingBox()
+  if (box && box.y < 80) {
+    await page.mouse.move(700, 600)
+    await page.mouse.wheel(0, box.y - 160)
+    await page.waitForTimeout(400)
+  }
   await card.click({ button: 'right', position: { x: 60, y: 14 } })
-  await page.getByRole('menuitem', { name: 'Put away on the shelf…' }).click()
+  await page.getByRole('menuitem', { name: 'Put on the shelf…' }).click()
   await page.getByRole('button', { name: /^In two weeks/ }).click()
   assert.ok(await until(async () => (await card.isHidden())), 'off the board')
-  const shelfTab = page.locator('.tuck-shelf')
-  assert.ok(await until(async () => /Shelf · 1/.test(await shelfTab.innerText().catch(() => ''))), 'the shelf tab counts it')
+  const shelfTab = page.locator('.shelf-corner')
+  assert.ok(await until(async () => /Shelf\s*1/.test(await shelfTab.innerText().catch(() => ''))), 'the shelf tab counts it')
   assert.equal(await page.locator('.tuck-tray .tuck-tab', { hasText: 'Team call notes' }).count(), 0, 'not among the tucked tabs')
   await shelfTab.click()
   const row = page.locator('.shelf-row', { hasText: 'Team call notes' })
@@ -860,7 +867,7 @@ test('put away on the shelf: until when, off the board and the tray, listed with
 
   // put away with no day, and brought back from the shelf's list
   await card.click({ button: 'right', position: { x: 60, y: 14 } })
-  await page.getByRole('menuitem', { name: 'Put away on the shelf…' }).click()
+  await page.getByRole('menuitem', { name: 'Put on the shelf…' }).click()
   await page.getByRole('button', { name: 'Until I bring it back' }).click()
   await until(async () => (await shelfTab.count()) === 1)
   await shelfTab.click()

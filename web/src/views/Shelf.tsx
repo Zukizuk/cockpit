@@ -1,6 +1,6 @@
 // The shelf: for what you won't come back to for a week or two. "Put away…" on a card or a section asks until when
-// (until you bring it back, or a day); it leaves the board and the tray at the top, and waits on the shelf, a tab at
-// the start of the tray that lists what's on it, newest first, with when it was put away and when it comes back. On
+// (until you bring it back, or a day); it leaves the board and the tray at the top, and waits on the shelf, a button
+// in the bottom-left corner that lists what's on it, newest first, with when it was put away and when it comes back. On
 // its day it comes back into the tray at the top, with a word that it's back. Only this space's.
 import { useEffect, useState } from 'react'
 import { useStore } from '@xyflow/react'
@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { tuckedTitle } from './TuckedTray'
 
 /** Asks until when, then puts these cards away on the shelf. */
 export const askPutAway = (ids: string[]) => ids.length && emit('shelf-ask', { ids })
@@ -142,15 +143,15 @@ export function ShelfClock() {
   return null
 }
 
-/** The shelf's tab, at the start of the tray: how many are on it, and the list to bring them back from. */
-export function ShelfTab({ titleOf }: { titleOf: (type: string, ref: string) => string }) {
+/** The shelf, in the bottom-left corner: how many are on it, and the list to bring them back from. */
+export function ShelfCorner() {
   const board = useBoard()
   const rows = useShelf()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
   if (!rows.length) return null
   const words = q.trim().toLowerCase()
-  const shown = rows.map(r => ({ ...r, title: titleOf(r.type, r.ref) })).filter(r => !words || r.title.toLowerCase().includes(words))
+  const shown = rows.map(r => ({ ...r, title: tuckedTitle(board, r.type, r.ref) })).filter(r => !words || r.title.toLowerCase().includes(words))
   return (
     <Popover
       open={open}
@@ -160,12 +161,13 @@ export function ShelfTab({ titleOf }: { titleOf: (type: string, ref: string) => 
       }}
     >
       <PopoverTrigger asChild>
-        <button type="button" className="tuck-shelf" title="The shelf: what you've put away for later">
-          <Package className="size-3 shrink-0" strokeWidth={2} />
-          Shelf · {rows.length}
+        <button type="button" className="shelf-corner corner-pill glass" title="The shelf: what you've put away for later">
+          <Package className="size-[16px] shrink-0" strokeWidth={1.75} />
+          Shelf
+          <span className="shelf-count">{rows.length}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="tuck-list w-80 p-1.5">
+      <PopoverContent side="top" align="start" sideOffset={8} className="tuck-list w-80 p-1.5">
         <div className="shelf-head">On the shelf</div>
         {rows.length > 7 && (
           <input className="tuck-search" autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Find something put away…" aria-label="Find something on the shelf" onKeyDown={e => e.stopPropagation()} />
