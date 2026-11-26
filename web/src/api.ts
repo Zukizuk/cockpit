@@ -432,6 +432,9 @@ export interface FolderList {
   more: number
 }
 
+/** On the shelf since `at`; back in the tray on `until` (ms), if set. */
+export type Shelf = { at: number; until?: number }
+
 export interface BoardCard {
   id: string
   type: CardType
@@ -453,6 +456,8 @@ export interface BoardCard {
   space?: string
   /** Tucked away: a tab at the top edge of the screen until brought back to where it was. */
   tucked?: boolean
+  /** Put away on the shelf (tucked, listed on the shelf, not at the top): when, and the day it comes back if set. */
+  shelf?: Shelf
   /** Held by a section that's folded or tucked away (its id): hidden where it was until the section opens again. */
   inside?: string
   /** Its contents hidden (blurred), as when sharing the screen. */

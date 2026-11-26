@@ -4,6 +4,9 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 ## Coming next
 
+**New**
+- The shelf, for what you won't come back to for a week or two. "Put away on the shelf…" on a card, several cards or a section takes it off the board and out of the tucked-away tabs. It waits on the shelf, a tab at the start of the tray, until you bring it back, or until a day you pick (tomorrow, next week, in two weeks, or a date). On its day it comes back into the tray at the top.
+
 **Improved**
 - The Add box (Ctrl+K) no longer lists your whole history at once. It shows a few recent files, links, notes and tables, with "Show more" under each for the rest, and searching still looks through everything you've kept. It opens fast however much you keep.
 - Tucked-away cards no longer run off the top of the screen. As many tabs as fit show, and the rest are under "N more", a list you can search and bring them back from. Before, only 12 showed and the others couldn't be reached.

@@ -7,7 +7,7 @@ import { startAgentBridge } from './agent/bridge'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReactFlow, useStore, type Edge, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
-import { get, post, put, track, type Board, type BoardCard, type BoardLink, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
+import { get, post, put, track, type Board, type BoardCard, type BoardLink, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Shelf, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
 import { pack } from './layout'
 import { useData, useEvent } from './lib'
 
@@ -54,7 +54,7 @@ export const SECTION_FOLDED_H = 44
 export const foldedH = (type: string | undefined, ref: string) => (type === 'section' ? SECTION_FOLDED_H : isSticky(type, ref) ? STICKY_FOLDED_H : FOLDED_H)
 
 /** openH: the height a folded card goes back to when it's unfolded. */
-export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; veiled?: boolean; agents?: AgentMark; title?: string; inside?: string }
+export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; shelf?: Shelf; veiled?: boolean; agents?: AgentMark; title?: string; inside?: string }
 export type CardNode = Node<CardData, CardType>
 
 /** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
@@ -72,7 +72,7 @@ export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}), ...(c.title ? { title: c.title } : {}), ...(c.inside ? { inside: c.inside } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.tucked && c.shelf ? { shelf: c.shelf } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}), ...(c.title ? { title: c.title } : {}), ...(c.inside ? { inside: c.inside } : {}) },
   width: HUGS.has(c.type) ? undefined : c.w,
   height: c.folded ? foldedH(c.type, c.ref) : HUGS.has(c.type) || (AUTO_HEIGHT.has(c.type) && !keepsSize(c)) ? undefined : c.h,
   dragHandle: '.card-drag',
@@ -94,6 +94,7 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.sized ? { sized: true } : {}),
   ...(n.data.space && n.data.space !== 'main' ? { space: n.data.space } : {}),
   ...(n.data.tucked ? { tucked: true } : {}),
+  ...(n.data.tucked && n.data.shelf ? { shelf: n.data.shelf } : {}),
   ...(n.data.veiled ? { veiled: true } : {}),
   ...(n.data.agents ? { agents: n.data.agents } : {}),
   ...(n.type === 'section' && n.data.title ? { title: n.data.title } : {}),
@@ -385,7 +386,10 @@ interface Ctx {
   addComment: (card: string, text: string, by?: 'you' | 'Claude') => Promise<void>
   removeComment: (id: string) => Promise<void>
   /** Tucks cards away: tabs at the top edge of the screen, off the board, until brought back. */
-  tuck: (ids: string[]) => void
+  /** Tucks cards away at the top; with `shelf`, puts them away on the shelf instead (until a day, if given). */
+  tuck: (ids: string[], shelf?: { until?: number }) => void
+  /** Takes cards off the shelf into the tray at the top (their day came, or asked for). */
+  unshelf: (ids: string[], why?: 'due') => void
   /** Brings a tucked card back to where it was. */
   untuck: (id: string) => void
   /** Hides (blurs) cards' contents, or shows them again: for sharing the screen. */
@@ -619,10 +623,11 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
 
   // ---- tucked away, contents hidden ---------------------------------------------------------------------------
   const tuck = useCallback(
-    (ids: string[]) => {
+    (ids: string[], shelf?: { until?: number }) => {
       const set = new Set(ids)
       if (!set.size) return
       const here = rf.getNodes().filter(n => !n.hidden)
+      const shelved = shelf ? { at: Date.now(), ...(shelf.until ? { until: shelf.until } : {}) } : undefined
       // a section tucked takes what's in it along: one tab, and they come back with it
       const held = new Map<string, string>()
       const bySize = here.filter(isSection).sort((a, b) => boxOf(a).w * boxOf(a).h - boxOf(b).w * boxOf(b).h)
@@ -649,7 +654,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       rf.setNodes(ns =>
         ns.map(n =>
           set.has(n.id)
-            ? { ...n, hidden: true, selected: false, data: { ...n.data, tucked: true } }
+            ? { ...n, hidden: true, selected: false, data: { ...n.data, tucked: true, ...(shelved ? { shelf: shelved } : {}) } }
             : held.has(n.id)
             ? { ...n, hidden: true, selected: false, data: { ...n.data, inside: held.get(n.id) } }
             : n,
@@ -665,10 +670,29 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
           : set.size === 1
           ? 'Tucked away at the top'
           : `${set.size} tucked away at the top`
-      toast(words, { label: 'Undo', run: () => undoRef.current() })
+      const until = shelved?.until ? new Date(shelved.until).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : ''
+      const shelfWords = set.size === 1 ? `Put away on the shelf${until ? ` until ${until}` : ''}` : `${set.size} put away on the shelf${until ? ` until ${until}` : ''}`
+      toast(shelved ? shelfWords : words, { label: 'Undo', run: () => undoRef.current() })
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rf, remember, persist, toast],
+  )
+  const unshelf = useCallback(
+    (ids: string[], why?: 'due') => {
+      const set = new Set(ids.filter(id => rf.getNode(id)?.data.shelf))
+      if (!set.size) return
+      if (why !== 'due') remember()
+      rf.setNodes(ns =>
+        ns.map(n => {
+          if (!set.has(n.id)) return n
+          const { shelf: _s, ...data } = n.data
+          return { ...n, data }
+        }),
+      )
+      persist()
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf, remember, persist],
   )
   const untuck = useCallback(
     (id: string) => {
@@ -681,7 +705,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
         x = rf.getNode(x.data.inside)
         if (x) out.add(x.id)
       }
-      const { tucked: _t, ...data } = n.data
+      const { tucked: _t, shelf: _sh, ...data } = n.data
       rf.setNodes(ns =>
         settle(
           ns.map(x => {
@@ -1625,9 +1649,9 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
       showImage, items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
-      comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
+      comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removeCards, addSection, fitSection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, addSection, fitSection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

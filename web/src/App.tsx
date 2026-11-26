@@ -31,6 +31,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils'
 import { SpaceSwitcher } from './views/SpaceSwitcher'
 import { TuckedTray } from './views/TuckedTray'
+import { PutAwayDialog, ShelfClock } from './views/Shelf'
 import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
 import { AgentFrames, AgentPill } from './agent/presence'
@@ -68,6 +69,8 @@ export function App() {
           <CornerTools />
           <SpaceSwitcher />
           <TuckedTray />
+          <PutAwayDialog />
+          <ShelfClock />
           <BoardAgent />
           <AgentPill />
           <DictionaryExtra />

@@ -822,6 +822,53 @@ for later`] }] })
   await page.keyboard.press('Escape')
 })
 
+test('put away on the shelf: until when, off the board and the tray, listed with its day, back on its day or by hand', async () => {
+  await clearSelection()
+  await agent('act', { steps: [{ ref: 'Board', action: 'addSticky', args: ['Team call notes\n\nfor the 27th'] }] })
+  const card = note('Team call notes')
+  assert.ok(await until(async () => (await card.count()) === 1, 8000), 'the card')
+  await card.click({ button: 'right', position: { x: 60, y: 14 } })
+  await page.getByRole('menuitem', { name: 'Put away on the shelf…' }).click()
+  await page.getByRole('button', { name: /^In two weeks/ }).click()
+  assert.ok(await until(async () => (await card.isHidden())), 'off the board')
+  const shelfTab = page.locator('.tuck-shelf')
+  assert.ok(await until(async () => /Shelf · 1/.test(await shelfTab.innerText().catch(() => ''))), 'the shelf tab counts it')
+  assert.equal(await page.locator('.tuck-tray .tuck-tab', { hasText: 'Team call notes' }).count(), 0, 'not among the tucked tabs')
+  await shelfTab.click()
+  const row = page.locator('.shelf-row', { hasText: 'Team call notes' })
+  assert.match(await row.innerText(), /back /, 'says the day it comes back')
+  await page.keyboard.press('Escape')
+
+  // its day comes (the clock moved on 15 days): back in the tray at the top, off the shelf
+  await page.evaluate(() => {
+    const real = Date.now
+    Date.now = () => real() + 15 * 86_400_000
+    dispatchEvent(new Event('focus'))
+  })
+  assert.ok(await until(async () => (await page.locator('.tuck-tray .tuck-tab', { hasText: 'Team call notes' }).count()) === 1), 'back in the tray')
+  assert.equal(await shelfTab.count(), 0, 'the shelf is empty')
+  // (the tray may be full from the test before: then it's under N more)
+  const tab = page.locator('.tuck-tray .tuck-tab', { hasText: 'Team call notes' })
+  if (await tab.evaluate(el => el.classList.contains('is-over'))) {
+    await page.locator('.tuck-tray .tuck-more').click()
+    await page.locator('.tuck-row', { hasText: 'Team call notes' }).click()
+    await page.keyboard.press('Escape')
+  } else await tab.click()
+  assert.ok(await until(async () => (await card.isVisible())), 'and on the board again')
+
+  // put away with no day, and brought back from the shelf's list
+  await card.click({ button: 'right', position: { x: 60, y: 14 } })
+  await page.getByRole('menuitem', { name: 'Put away on the shelf…' }).click()
+  await page.getByRole('button', { name: 'Until I bring it back' }).click()
+  await until(async () => (await shelfTab.count()) === 1)
+  await shelfTab.click()
+  await page.locator('.shelf-row', { hasText: 'Team call notes' }).click()
+  assert.ok(await until(async () => (await card.isVisible())), 'brought back by hand')
+  // the saved board keeps it as it is now: on the board, not on the shelf
+  const saved = (await api('/api/board')).cards.find(c => c.type === 'note' && /team-call|Team call/i.test(c.ref + (c.title || '')))
+  assert.ok(!saved || !saved.shelf, 'not on the shelf in the saved board')
+})
+
 // after the last: a card made and taken off (making one moves the view)
 test("a card taken off isn't in what Claude sees any more", async () => {
   await clearSelection()

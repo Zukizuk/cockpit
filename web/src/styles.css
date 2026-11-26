@@ -3470,6 +3470,81 @@ table.data tbody tr:hover td {
   background: var(--paper);
 }
 
+.tuck-dot.is-plain {
+  background: oklch(var(--contrast) / 0.18);
+}
+
+/* the shelf: a tab at the start of the tray, set apart from the tucked cards' tabs */
+.tuck-shelf {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  margin-right: 6px;
+  padding: 6px 12px 6px;
+  border-radius: 0 0 10px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--card) 85%, var(--foreground) 15%);
+  box-shadow: 0 4px 12px oklch(0 0 0 / 0.22);
+  transition: translate 150ms ease-out;
+}
+
+.tuck-shelf:hover {
+  translate: 0 2px;
+}
+
+.tuck-shelf:active {
+  scale: 0.96;
+}
+
+.shelf-head {
+  padding: 6px 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.shelf-when {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.shelf-none {
+  padding: 10px 8px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.put-away-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.put-away-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid oklch(var(--contrast) / 0.08);
+}
+
+.put-away-date input {
+  flex: 1;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: oklch(var(--contrast) / 0.06);
+  font-size: 13px;
+  color-scheme: dark light;
+}
+
 /* the eye shows on a hovered card, or while its contents are hidden */
 .card:not(:hover) .veil-btn:not(.veil-on) {
   opacity: 0;

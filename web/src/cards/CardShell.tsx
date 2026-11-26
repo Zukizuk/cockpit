@@ -3,12 +3,13 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Handle, NodeResizer, Position, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
-import { Archive, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, SquareDashed, X } from 'lucide-react'
+import { Archive, Package, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, SquareDashed, X } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, isSticky, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { CardComments } from './CardComments'
 import { emit } from '../lib'
+import { askPutAway } from '../views/Shelf'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -234,6 +235,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
           keys: 'F',
         },
         { label: `Tuck these ${n} away at the top`, icon: ArrowUpToLine, run: () => board.tuck(pickedIds()) },
+        { label: `Put these ${n} away on the shelf…`, icon: Package, run: () => askPutAway(pickedIds()) },
       ],
       [
         { label: allLocked ? `Unlock these ${n}` : `Lock these ${n} in place`, icon: allLocked ? LockOpen : Lock, run: () => board.setLocked(pickedIds(), !allLocked), keys: 'Ctrl+Shift+L' },
@@ -270,6 +272,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
         keys: 'Space',
       },
       { label: 'Tuck away at the top', icon: ArrowUpToLine, run: () => nodeId && board.tuck([nodeId]) },
+      { label: 'Put away on the shelf…', icon: Package, run: () => nodeId && askPutAway([nodeId]) },
       {
         label: 'Fit to contents',
         icon: Shrink,

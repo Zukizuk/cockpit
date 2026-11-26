@@ -132,6 +132,10 @@ export function saveBoard(body) {
       ...(spaceId(c.space) !== 'main' ? { space: spaceId(c.space) } : {}),
       // tucked away at the top edge (off the board until brought back); its contents hidden (blurred) on the board
       ...(c.tucked === true ? { tucked: true } : {}),
+      // put away on the shelf (tucked, and listed there rather than at the top): when, and the day it comes back
+      ...(c.tucked === true && c.shelf && Number.isFinite(c.shelf.at)
+        ? { shelf: { at: Math.round(c.shelf.at), ...(Number.isFinite(c.shelf.until) ? { until: Math.round(c.shelf.until) } : {}) } }
+        : {}),
       ...(c.veiled === true ? { veiled: true } : {}),
       // shared with agents, or private (agents never see it)
       ...(AGENT_MARKS.has(c.agents) ? { agents: c.agents } : {}),

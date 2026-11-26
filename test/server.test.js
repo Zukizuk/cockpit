@@ -1373,6 +1373,21 @@ test('a folded or tucked section holds its cards; a card held by one gone or ope
   assert.deepEqual(by, { f: undefined, t: undefined, o: undefined, a: 'f', b: 't', c: undefined, d: undefined, e: undefined, g: undefined })
 })
 
+test('the shelf: kept on a tucked card with its days; dropped from one not tucked or not a time', async () => {
+  const { readBoard, saveBoard } = await import('../server/lib/board.js')
+  saveBoard({
+    cards: [
+      { id: 'a', type: 'note', ref: 'a.md', tucked: true, shelf: { at: 1000.4, until: 5000 } },
+      { id: 'b', type: 'note', ref: 'b.md', tucked: true, shelf: { at: 1000 } },
+      { id: 'c', type: 'note', ref: 'c.md', shelf: { at: 1000 } },
+      { id: 'd', type: 'note', ref: 'd.md', tucked: true, shelf: { at: 'soon', until: 5 } },
+    ],
+    viewport: null,
+  })
+  const by = Object.fromEntries(readBoard().cards.map(c => [c.id, c.shelf]))
+  assert.deepEqual(by, { a: { at: 1000, until: 5000 }, b: { at: 1000 }, c: undefined, d: undefined })
+})
+
 test('questions: asked with a guess, answered, the answer taken back, asked again, taken away', async () => {
   const q = await import('../server/lib/questions.js')
   const a = q.askQuestion({ question: ' How many are coming? ', guess: 'About 25', about: 'Launch plan', by: 'Claude' })

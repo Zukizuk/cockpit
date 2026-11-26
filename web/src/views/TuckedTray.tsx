@@ -7,6 +7,7 @@ import { useBoard, spaceOf, type CardNode } from '../board'
 import { ChevronDown, SquareDashed, StickyNote } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { ShelfTab, useShelf } from './Shelf'
 
 /** Room kept on the right of the tabs for the "N more" button. */
 const MORE_W = 104
@@ -18,7 +19,7 @@ export function TuckedTray() {
   const key = useStore(s =>
     JSON.stringify(
       s.nodes
-        .filter(n => (n.data as CardNode['data']).tucked && spaceOf(n as CardNode) === board.space)
+        .filter(n => (n.data as CardNode['data']).tucked && !(n.data as CardNode['data']).shelf && spaceOf(n as CardNode) === board.space)
         // a section by its title (what's in it went with it)
         .map(n => [n.id, n.type, n.type === 'section' ? (n.data as CardNode['data']).title || 'Section' : (n.data as CardNode['data']).ref, (n.data as CardNode['data']).color || '']),
     ),
@@ -29,6 +30,7 @@ export function TuckedTray() {
   const [winW, setWinW] = useState(innerWidth)
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const shelved = useShelf().length
   useLayoutEffect(() => {
     const on = () => setWinW(innerWidth)
     addEventListener('resize', on)
@@ -39,7 +41,7 @@ export function TuckedTray() {
     const el = tray.current
     if (!el) return
     const tabs = [...el.querySelectorAll<HTMLElement>('.tuck-tab')]
-    const room = winW - SIDES
+    const room = winW - SIDES - ((el.querySelector<HTMLElement>('.tuck-shelf')?.offsetWidth ?? -6) + 6)
     let used = 0
     let n = 0
     for (const t of tabs) {
@@ -50,8 +52,8 @@ export function TuckedTray() {
       n++
     }
     setFit(n)
-  }, [key, winW])
-  if (!tucked.length) return null
+  }, [key, winW, shelved])
+  if (!tucked.length && !shelved) return null
 
   const titleOf = (type: string, ref: string) => {
     if (type === 'section') return ref
@@ -68,6 +70,7 @@ export function TuckedTray() {
 
   return (
     <div className="tuck-tray" role="toolbar" aria-label="Tucked away cards" ref={tray}>
+      <ShelfTab titleOf={titleOf} />
       {tucked.map(([id, type, ref, color], i) => {
         const sticky = type === 'note' && !/^(journal|drafts)\//.test(ref)
         const title = titleOf(type, ref)

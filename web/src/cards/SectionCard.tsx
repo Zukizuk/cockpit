@@ -7,12 +7,13 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { emit, onEvent } from '../lib'
 import { NodeResizer, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
-import { ArrowUpToLine, BoxSelect, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Heading, Layers, Lock, LockOpen, Shrink, Trash2, X } from 'lucide-react'
+import { ArrowUpToLine, Package, BoxSelect, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Heading, Layers, Lock, LockOpen, Shrink, Trash2, X } from 'lucide-react'
 import { track, type StickyColor } from '../api'
 import { contentsOf, heldBy, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { STICKY_COLORS } from './CardShell'
 import { TitleInput } from './NoteCard'
+import { askPutAway } from '../views/Shelf'
 import { cn } from '@/lib/utils'
 
 /** How many cards are in a section, held ones too (for the menu's words and the folded bar). */
@@ -72,6 +73,10 @@ export function SectionMenuItems({ id, Item, Separator }: { id: string; Item: Co
       <Item onSelect={() => board.tuck([id])}>
         <ArrowUpToLine strokeWidth={1.75} />
         {count ? "Tuck it away at the top, with what's in it" : 'Tuck it away at the top'}
+      </Item>
+      <Item onSelect={() => askPutAway([id])}>
+        <Package strokeWidth={1.75} />
+        {count ? "Put it away on the shelf, with what's in it…" : 'Put it away on the shelf…'}
       </Item>
       <Separator />
       <Item onSelect={fit} disabled={!count || folded}>
