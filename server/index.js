@@ -34,6 +34,7 @@ import * as runs from './lib/runs.js'
 import { changesFor } from './lib/changes.js'
 import { pickFiles } from './lib/pick.js'
 import { clearAgentLog, logAgentCall, readAgentLog } from './lib/agent-log.js'
+import { flashWindow } from './lib/attention.js'
 
 const here = appPath('server')
 const DIST = appPath('web', 'dist')
@@ -187,8 +188,8 @@ function callBoard(tool, input, { agent = 'other', label = '' } = {}) {
   const target = windowForAgent()
   if (!target) throw new UserError('No Cockpit window is open. Ask the user to open Cockpit (Ctrl+Alt+K), then try again.')
   const id = Math.random().toString(36).slice(2, 12)
-  // an act can wait for the person to allow a step
-  const wait = tool === 'act' ? 45_000 : 10_000
+  // an act can wait for the person to allow a step (up to a minute while the window is out of sight)
+  const wait = tool === 'act' ? 90_000 : 10_000
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       agentCalls.delete(id)
@@ -538,6 +539,8 @@ async function api(req, res, url) {
       clearAgentLog()
       return json(res, 200, { ok: true })
     }
+    // an Allow waiting while the window is out of sight: its taskbar button flashes
+    if (a === 'attention') return json(res, 200, { flashed: flashWindow() })
     if (a === 'here') {
       const w = [...clients].find(c => c.cockpitClient === Number(body.client))
       if (w) agentWindow = w

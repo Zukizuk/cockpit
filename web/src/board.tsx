@@ -136,7 +136,7 @@ export const fromEdge = (e: Edge): BoardLink => {
 /** Below every card, selected or not (React Flow lifts a selected node by 1000). */
 export const SECTION_Z = -5000
 export const isSection = (n: { type?: string }) => n.type === 'section'
-const boxOf = (n: CardNode) => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.measured?.width ?? SIZES[n.type as CardType]?.w ?? 0, h: n.height ?? n.measured?.height ?? SIZES[n.type as CardType]?.h ?? 0 })
+export const boxOf = (n: CardNode) => ({ x: n.position.x, y: n.position.y, w: n.width ?? n.measured?.width ?? SIZES[n.type as CardType]?.w ?? 0, h: n.height ?? n.measured?.height ?? SIZES[n.type as CardType]?.h ?? 0 })
 /** Whether a card (or a smaller section) is in a section: its middle is inside it. */
 export function inSection(section: CardNode, n: CardNode) {
   if (n.id === section.id || n.hidden) return false
@@ -410,6 +410,8 @@ interface Ctx {
   setSectionTitle: (id: string, title: string) => void
   /** Makes a section just big enough for what's in it; false when it holds nothing. */
   fitSection: (id: string) => boolean
+  /** what's in a section laid out in rows, the section fitted round it; false when it holds nothing */
+  tidySection: (id: string) => boolean
   /** Folds a section to its bar (what's in it hidden, where it was) or opens it again. */
   foldSection: (id: string, fold: boolean) => void
   /** The sections these cards are in grow to hold them, with room round them (never shrink); true if one did. */
@@ -513,8 +515,23 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       (text, button = 'Allow') =>
         new Promise<boolean>(resolve => {
           let answered = false
-          toast(text, { label: button, ms: 20_000, run: () => ((answered = true), resolve(true)) })
-          setTimeout(() => !answered && resolve(false), 20_000)
+          // minimised or behind other windows: the person can't see the toast, so the taskbar button flashes and the
+          // window's title says what's waiting, and it waits longer (till they come back, up to a minute)
+          const away = document.hidden
+          const ms = away ? 60_000 : 20_000
+          const title = document.title
+          if (away) {
+            document.title = 'Claude is waiting for you · Cockpit'
+            post('/api/agent/attention').catch(() => {})
+          }
+          const done = (ok: boolean) => {
+            if (answered) return
+            answered = true
+            if (away) document.title = title
+            resolve(ok)
+          }
+          toast(text, { label: button, ms, run: () => done(true) })
+          setTimeout(() => done(false), ms)
         }),
     )
   }, [toast])
@@ -903,6 +920,72 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       return true
     },
     [rf, remember, persist],
+  )
+
+  /**
+   * What's in a section laid out in rows, in the order it's read (top to bottom, left to right), with a gap between
+   * cards, then the section fitted round it. Nothing is resized; a locked card stays where it is. Undo puts it back.
+   * False when it holds nothing.
+   */
+  const tidySection = useCallback(
+    (id: string) => {
+      const s = rf.getNode(id)
+      if (!s) return false
+      const all = rf.getNodes()
+      const cs = contentsOf(s, all).filter(n => !isSection(n) && !n.data.locked)
+      if (!cs.length) return false
+      const PAD = 40
+      const GAP = 28
+      // reading order: rows (cards whose tops are within half a card of each other), then left to right
+      const b = new Map(cs.map(n => [n.id, boxOf(n)]))
+      const order = [...cs].sort((p, q) => {
+        const a = b.get(p.id)!
+        const c = b.get(q.id)!
+        return Math.abs(a.y - c.y) > Math.min(a.h, c.h) / 2 ? a.y - c.y : a.x - c.x
+      })
+      // as many to a row as makes it about square: the widest row is that many cards' widths
+      const cols = Math.max(1, Math.ceil(Math.sqrt(order.length)))
+      const widths = order.map(n => b.get(n.id)!.w)
+      const rowW = Math.max(...widths, ...Array.from({ length: Math.ceil(order.length / cols) }, (_, r) => widths.slice(r * cols, r * cols + cols).reduce((t, w) => t + w + GAP, -GAP)))
+      const x0 = s.position.x + PAD
+      let x = x0
+      let y = s.position.y + PAD
+      let rowH = 0
+      const spots = new Map<string, { x: number; y: number }>()
+      for (const n of order) {
+        const { w, h } = b.get(n.id)!
+        if (x > x0 && x + w > x0 + rowW + 1) {
+          x = x0
+          y += rowH + GAP
+          rowH = 0
+        }
+        spots.set(n.id, { x, y })
+        x += w + GAP
+        rowH = Math.max(rowH, h)
+      }
+      const moved = [...spots].map(([nid, p]) => ({ ...b.get(nid)!, ...p }))
+      const kept = contentsOf(s, all).filter(n => !spots.has(n.id)).map(boxOf)
+      const every = [...moved, ...kept]
+      const sx0 = Math.min(...every.map(r => r.x)) - PAD
+      const sy0 = Math.min(...every.map(r => r.y)) - PAD
+      const sx1 = Math.max(...every.map(r => r.x + r.w)) + PAD
+      const sy1 = Math.max(...every.map(r => r.y + r.h)) + PAD
+      remember()
+      glide()
+      rf.setNodes(ns =>
+        ns.map(n =>
+          spots.has(n.id)
+            ? { ...n, position: spots.get(n.id)! }
+            : n.id === id
+            ? { ...n, position: { x: sx0, y: sy0 }, width: Math.round(sx1 - sx0), height: Math.round(sy1 - sy0) }
+            : n,
+        ),
+      )
+      persist()
+      return true
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rf, remember, persist, glide],
   )
 
   /**
@@ -1642,7 +1725,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
 
   const value = useMemo<Ctx>(
     () => ({
-      addCard, removeCard, removeCards, addSection, fitSection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
+      addCard, removeCard, removeCards, addSection, fitSection, tidySection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
       keysOpen, setKeysOpen, focusing, toggleFocus, compareCards, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
@@ -1651,7 +1734,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removeCards, addSection, fitSection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, addSection, fitSection, tidySection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

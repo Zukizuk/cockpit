@@ -694,7 +694,9 @@ test('Claude asks a question with its guess in grey and carries on; the person a
   const left = async () => (await api('/api/questions')).map(q => q.question)
   const refused = agent('act', { steps: two })
   assert.ok(await until(async () => /Claude wants to do 2 things/.test(await page.locator('body').innerText())), 'one question for both')
-  assert.equal((await refused).output.ok, false, 'not allowed (it timed out): nothing ran')
+  const no = (await refused).output
+  assert.equal(no.ok, false, 'not allowed (it timed out): nothing ran')
+  assert.match(no.error?.message || '', /Nobody pressed Allow/, 'Claude is told nobody answered, not only "refused"')
   assert.ok((await left()).includes('How many are coming?') && (await left()).includes('Which room?'))
   const both = agent('act', { steps: two })
   const all = page.getByRole('button', { name: 'Allow all' })
@@ -982,6 +984,61 @@ test('a table tucked away: Claude adds to it and fills a cell, each once, answer
   })
   const read = await agent('act', { steps: [{ ref: 'Roadmap test', action: 'read' }] })
   assert.deepEqual(read.output?.steps?.[0]?.result?.rows, [['Feature', 'Status'], ['Arrows', 'Done · 0.2.9'], ['Shelf', 'Done']], 'each change made once')
+})
+
+test('Claude sees cards on top of each other, a section lays them out, a whole section goes on the shelf in one step, and a dialog hides nothing', async () => {
+  await clearSelection()
+  const made = await agent('act', { steps: ['Lay A', 'Lay B', 'Lay C'].map(t => ({ ref: 'Board', action: 'addSticky', args: [t] })) })
+  assert.equal(made.output.ok, true, JSON.stringify(made).slice(0, 300))
+  // (just after a reload the window isn't answering yet: nothing)
+  const snap = async () => {
+    const o = (await agent('snapshot')).output
+    return Array.isArray(o) ? o : []
+  }
+  const boardOf = async () => (await snap()).find(c => c.component === 'board')?.value
+  const card = async t => (await snap()).find(c => c.label === t)?.value
+  assert.ok(await until(async () => !!(await card('Lay C'))), 'made')
+  await page.waitForTimeout(1500)
+
+  // two of them put on top of each other (as Claude's first layout left the user's board), the board reloaded
+  const b = await api('/api/board')
+  const notesNow = b.cards.filter(c => c.type === 'note').slice(-3)
+  const spots = [[5000, 5000], [5040, 5030], [5000, 5700]]
+  notesNow.forEach((c, i) => Object.assign(c, { x: spots[i][0], y: spots[i][1] }))
+  await api('/api/board', { method: 'PUT', body: JSON.stringify(b) })
+  await page.reload()
+  assert.ok(await until(async () => (await card('Lay B'))?.overlaps?.includes('Lay A'), 15000), 'a card says what it lies on top of')
+  assert.ok((await boardOf()).overlapping?.some(p => p.includes('"Lay A"') && p.includes('"Lay B"')), 'the board lists the pair')
+  assert.equal((await card('Lay C'))?.overlaps, undefined, 'one apart from them overlaps nothing')
+
+  // a section round them lays them out in rows: nothing on top of anything, nothing sticking out
+  const sec = await agent('act', { steps: [{ ref: 'Board', action: 'addSection', args: ['Lay out', ['Lay A', 'Lay B', 'Lay C']] }] })
+  assert.equal(sec.output.ok, true, JSON.stringify(sec).slice(0, 300))
+  assert.equal(sec.output.layout, undefined, `nothing overlaps once it's made: ${JSON.stringify(sec.output.layout)}`)
+  const v = await boardOf()
+  assert.ok(!v.overlapping?.some(p => p.includes('Lay ')) && !v.stickingOut?.some(p => p.includes('Lay ')), 'laid out inside it')
+
+  // the dialog the user opens (Settings) doesn't hide the board from Claude
+  await page.getByRole('button', { name: /^Settings/ }).click()
+  assert.ok(await until(async () => (await page.getByRole('dialog').count()) > 0), 'a dialog open')
+  const behind = await snap()
+  assert.ok(behind.some(c => c.component === 'board') && behind.some(c => c.label === 'Lay A'), 'Claude still sees the board behind it')
+  await page.keyboard.press('Escape')
+
+  // the whole section on the shelf, in one step: Claude sees it there, and its cards say so
+  const shelf = await agent('act', { steps: [{ ref: 'Board', action: 'putSectionOnShelf', args: ['Lay out', 3] }] })
+  assert.equal(shelf.output.ok, true, JSON.stringify(shelf).slice(0, 300))
+  assert.ok(await until(async () => /^Lay out \(until /.test((await boardOf())?.shelvedSections?.[0] || '')), 'the board lists it on the shelf, with its day')
+  assert.match((await card('Lay A'))?.onShelf || '', /^until /, 'its cards say they are on the shelf')
+  const saved = async () => (await api('/api/board')).cards.find(c => c.type === 'section' && c.title === 'Lay out')
+  assert.ok(await until(async () => { const s = await saved(); return s?.tucked && s?.shelf?.until > Date.now() }), 'kept on the shelf, with its day (once saved)')
+
+  // tidy(section) after it's back: the same rows
+  assert.equal((await agent('act', { steps: [{ ref: 'Board', action: 'tuckSection', args: ['Lay out', false] }] })).output.ok, true)
+  const t = await agent('act', { steps: [{ ref: 'Board', action: 'tidy', args: ['Lay out'] }] })
+  assert.equal(t.output.ok, true, JSON.stringify(t).slice(0, 300))
+  assert.equal(t.output.layout, undefined)
+  await clearSelection()
 })
 
 // after the last: a card made and taken off (making one moves the view)

@@ -37,7 +37,25 @@ function pick<T>(list: T[], which: unknown, id: (t: T) => string, name: (t: T) =
 
 // ---- the board -----------------------------------------------------------------------------------------------
 
-type BoardValue = { space: string; spaces: { name: string; cards: number }[]; sections?: string[]; foldedSections?: string[]; tuckedSections?: string[]; selected: string[]; inView: string[]; focus?: string[]; sharing?: string }
+type BoardValue = {
+  space: string
+  spaces: { name: string; cards: number }[]
+  sections?: string[]
+  foldedSections?: string[]
+  tuckedSections?: string[]
+  /** sections put away on the shelf, with when they come back */
+  shelvedSections?: string[]
+  /** how many of the cards you can see are on the shelf (each says onShelf) */
+  onShelf?: number
+  /** cards on the space shown that lie on top of each other ("A" and "B") */
+  overlapping?: string[]
+  /** cards on the space shown that stick out of the section they're in */
+  stickingOut?: string[]
+  selected: string[]
+  inView: string[]
+  focus?: string[]
+  sharing?: string
+}
 type BoardOptions = {
   value?: BoardValue
   onSwitchSpace?: (space: string) => void
@@ -47,7 +65,8 @@ type BoardOptions = {
   onJot?: (text: string) => void
   onShow?: (target: string, space?: string) => void
   onAddTable?: (title: string, rows: string[][], space?: string) => void
-  onTidy?: () => void
+  onTidy?: (section?: string) => void
+  onShelveSection?: (section: string, days?: number) => void
   onFocusOn?: (cards: string[]) => void
   onBringBack?: () => void
   onCompare?: (cards: string[]) => void
@@ -69,7 +88,7 @@ function rowsOf(rows: unknown): string[][] {
 
 const boardPrimitive = definePrimitive({
   name: 'board',
-  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action', onFitSection: 'action', onRemoveSection: 'action', onFoldSection: 'action', onTuckSection: 'action', sectionNames: 'value' },
+  options: { value: 'value', onSwitchSpace: 'action', onNewSpace: 'action', onRenameSpace: 'action', onAddSticky: 'action', onJot: 'action', onShow: 'action', onAddTable: 'action', onTidy: 'action', onShelveSection: 'action', onFocusOn: 'action', onBringBack: 'action', onCompare: 'action', onAddSection: 'action', onFitSection: 'action', onRemoveSection: 'action', onFoldSection: 'action', onTuckSection: 'action', sectionNames: 'value' },
   state: (options: BoardOptions) => ({ value: options.value ?? { space: 'Main', spaces: [], selected: [], inView: [] } }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -98,7 +117,14 @@ const boardPrimitive = definePrimitive({
         fn(text(t, 'thought'))
       },
       show: (target: string, s?: string) => call('onShow')(text(target, 'path or link'), into(s)),
-      tidy: () => call('onTidy')(),
+      // the loose cards packed round the sections; or, given a section, what's in it laid out in rows, the section
+      // fitted round it
+      tidy: (section?: unknown) => call('onTidy')(words(section) ? pick(context.options().sectionNames || [], section, x => x, x => x, 'section') : undefined),
+      // a whole section put away on the shelf with what's in it, for `days` (none: until the user brings it back)
+      putSectionOnShelf: (section: string, days?: unknown) => {
+        const d = Math.round(Number(days))
+        call('onShelveSection')(pick(context.options().sectionNames || [], section, x => x, x => x, 'section'), Number.isFinite(d) && d > 0 ? Math.min(d, 365) : undefined)
+      },
       focusOn: (...cards: unknown[]) => {
         const list = cards.flat().map(words).filter(Boolean)
         if (!list.length) throw new Error('Name the card or cards to focus on.')
@@ -139,7 +165,7 @@ const boardPrimitive = definePrimitive({
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addPage', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection', 'foldSection', 'tuckSection', 'removeSection'] },
+  agent: { actions: ['switchSpace', 'newSpace', 'renameSpace', 'addSticky', 'jot', 'show', 'addPage', 'addTable', 'tidy', 'focusOn', 'bringBack', 'compare', 'addSection', 'fitSection', 'foldSection', 'tuckSection', 'putSectionOnShelf', 'removeSection'] },
 })
 const { Root: BoardRoot } = createParts(boardPrimitive, { root: 'div' })
 
@@ -166,6 +192,12 @@ export type CardValue = {
   section?: string
   /** out of sight in a folded section (the section's foldSection(name, false) opens it; its bringBack does too) */
   inFoldedSection?: boolean
+  /** put away on the shelf (on its own or with its section): when it comes back */
+  onShelf?: string
+  /** the cards it lies on top of (on the board, where the user sees them overlap) */
+  overlaps?: string[]
+  /** it sticks out of the section it's in */
+  sticksOut?: boolean
   /** arrows to and from the other cards you can see: "→ Title" points to it, "← Title" from it, a label after a colon */
   arrows?: string[]
 }
@@ -420,7 +452,18 @@ const heldState = (n: CardNode, all: CardNode[]): '' | 'folded' | 'tucked' => {
   }
   return 'folded'
 }
-type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string, section: string, held: '' | 'folded' | 'tucked']
+/** On the shelf (itself, or a section holding it): when it comes back (0: when brought back), or -1 for not shelved. */
+const shelfOf = (n: CardNode, all: CardNode[]): number => {
+  for (let x: CardNode | undefined = n, i = 0; x && i < 7; i++) {
+    if (x.data.shelf) return x.data.shelf.until ?? 0
+    x = x.data.inside ? all.find(y => y.id === x!.data.inside) : undefined
+  }
+  return -1
+}
+/** When a shelved card comes back, in words. */
+const backWhen = (until: number) =>
+  until > 0 ? `until ${new Date(until).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'until the user brings it back'
+type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string, section: string, held: '' | 'folded' | 'tucked', shelf: number]
 type Built = { id: string; type: string; ref: string; title: string; value: CardValue; content: Omit<CardContent, 'text'> & { peek?: string }; mark: string; spaceId: string }
 
 export function BoardAgent() {
@@ -439,7 +482,7 @@ export function BoardAgent() {
         const w = n.measured?.width ?? n.width ?? 0
         const h = n.measured?.height ?? n.height ?? 0
         const seen = !n.hidden && n.position.x < view.x1 && n.position.x + w > view.x0 && n.position.y < view.y1 && n.position.y + h > view.y0
-        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || '', sectionTitle(n, all), heldState(n, all)] as Row
+        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || '', sectionTitle(n, all), heldState(n, all), shelfOf(n, all)] as Row
       }),
     )
   })
@@ -459,7 +502,7 @@ export function BoardAgent() {
 
   const cards: Built[] = useMemo(() => {
     const spaceOfId = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
-    const built = (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section, held]) => {
+    const built = (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section, held, shelf]) => {
       let title = KIND[type] ?? type
       let file: string | undefined
       let url: string | undefined
@@ -505,6 +548,7 @@ export function BoardAgent() {
         ...(folded ? { folded: true } : {}),
         ...(tucked || held === 'tucked' ? { tucked: true } : {}),
         ...(held === 'folded' ? { inFoldedSection: true } : {}),
+        ...(shelf >= 0 ? { onShelf: backWhen(shelf) } : {}),
         ...(veiled ? { hidden: true } : {}),
         ...(sticky ? { color: color === 'ink' || !color ? 'charcoal' : color } : {}),
         ...(mark === 'shared' ? { shared: true } : {}),
@@ -598,18 +642,58 @@ export function BoardAgent() {
   }
 
   // the sections in the spaces it may see, by title ("Section" for one with none; a second of one name "… (2)")
-  const sectionsKey = useStore(s => JSON.stringify((s.nodes as CardNode[]).filter(isSection).map(n => [n.id, n.data.title || 'Section', spaceOf(n), n.data.folded ? 'folded' : n.data.tucked || n.data.inside ? 'tucked' : ''])))
+  const sectionsKey = useStore(s => {
+    const all = s.nodes as CardNode[]
+    return JSON.stringify(all.filter(isSection).map(n => [n.id, n.data.title || 'Section', spaceOf(n), n.data.folded ? 'folded' : n.data.tucked || n.data.inside ? 'tucked' : '', shelfOf(n, all)]))
+  })
   const sectionList = useMemo(() => {
     const open = new Set(openSpaces.map(s => s.id))
     const seen = new Map<string, number>()
-    return (JSON.parse(sectionsKey) as [string, string, string, string][])
+    return (JSON.parse(sectionsKey) as [string, string, string, string, number][])
       .filter(([, , sp]) => open.has(sp))
-      .map(([id, t, sp, state]) => {
+      .map(([id, t, sp, state, shelf]) => {
         const k = (seen.get(t) ?? 0) + 1
         seen.set(t, k)
-        return { id, name: k === 1 ? t : `${t} (${k})`, spaceId: sp, state }
+        return { id, name: k === 1 ? t : `${t} (${k})`, spaceId: sp, state, shelf }
       })
   }, [sectionsKey, openSpaces])
+  // Where things lie on the space shown, so an agent can tell what the user sees: cards on top of each other, and cards
+  // sticking out of their section. (Boxes rounded, so this only changes when something really moves.)
+  const boxesKey = useStore(s =>
+    JSON.stringify(
+      (s.nodes as CardNode[])
+        .filter(n => !n.hidden)
+        .map(n => [n.id, Math.round(n.position.x), Math.round(n.position.y), Math.round(n.measured?.width ?? n.width ?? 0), Math.round(n.measured?.height ?? n.height ?? 0), isSection(n) ? 1 : 0]),
+    ),
+  )
+  const layout = useMemo(() => {
+    type B = { id: string; x: number; y: number; w: number; h: number; section: boolean }
+    const boxes: B[] = (JSON.parse(boxesKey) as [string, number, number, number, number, number][]).map(([id, x, y, w, h, s]) => ({ id, x, y, w, h, section: !!s }))
+    const plain = boxes.filter(b => !b.section && b.w > 0 && b.h > 0)
+    const secs = boxes.filter(b => b.section)
+    const overlaps = new Map<string, string[]>()
+    // by more than a sliver (a shadow's width): that's what the user sees as on top of each other
+    const MIN = 12
+    for (let i = 0; i < plain.length; i++)
+      for (let j = i + 1; j < plain.length; j++) {
+        const a = plain[i]
+        const b = plain[j]
+        const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)
+        const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)
+        if (w <= MIN || h <= MIN) continue
+        overlaps.set(a.id, [...(overlaps.get(a.id) || []), b.id])
+        overlaps.set(b.id, [...(overlaps.get(b.id) || []), a.id])
+      }
+    // in a section (its middle inside the smallest one round it) but not wholly inside
+    const out = new Set<string>()
+    for (const c of plain) {
+      const mx = c.x + c.w / 2
+      const my = c.y + c.h / 2
+      const s = secs.filter(x => mx > x.x && mx < x.x + x.w && my > x.y && my < x.y + x.h).sort((p, q) => p.w * p.h - q.w * q.h)[0]
+      if (s && (c.x < s.x - 2 || c.y < s.y - 2 || c.x + c.w > s.x + s.w + 2 || c.y + c.h > s.y + s.h + 2)) out.add(c.id)
+    }
+    return { overlaps, out }
+  }, [boxesKey])
   const sectionNames = useMemo(() => sectionList.map(s => s.name), [sectionList])
   const sectionListRef = useRef(sectionList)
   sectionListRef.current = sectionList
@@ -622,6 +706,17 @@ export function BoardAgent() {
       // folded to a bar, or tucked away at the top with what's in them
       ...(sectionList.some(s => s.spaceId === board.space && s.state === 'folded') ? { foldedSections: sectionList.filter(s => s.spaceId === board.space && s.state === 'folded').map(s => s.name) } : {}),
       ...(sectionList.some(s => s.spaceId === board.space && s.state === 'tucked') ? { tuckedSections: sectionList.filter(s => s.spaceId === board.space && s.state === 'tucked').map(s => s.name) } : {}),
+      // on the shelf: out of sight, not gone (each comes back on its day, or when brought back)
+      ...(sectionList.some(s => s.shelf >= 0) ? { shelvedSections: sectionList.filter(s => s.shelf >= 0).map(s => `${s.name} (${backWhen(s.shelf)})`) } : {}),
+      ...(visible.some(c => c.value.onShelf) ? { onShelf: visible.filter(c => c.value.onShelf).length } : {}),
+      ...(() => {
+        const titleOf = new Map(visible.map(c => [c.id, c.title]))
+        const pairs: string[] = []
+        for (const [id, others] of layout.overlaps)
+          for (const o of others) if (id < o && titleOf.has(id) && titleOf.has(o)) pairs.push(`"${titleOf.get(id)}" and "${titleOf.get(o)}"`)
+        const out = [...layout.out].filter(id => titleOf.has(id)).map(id => `"${titleOf.get(id)}"`)
+        return { ...(pairs.length ? { overlapping: pairs.slice(0, 20) } : {}), ...(out.length ? { stickingOut: out.slice(0, 20) } : {}) }
+      })(),
       selected: visible.filter(c => c.value.selected).map(c => c.title),
       inView: visible.filter(c => c.value.inView).map(c => c.title),
       ...(board.focusing ? { focus: visible.filter(c => c.value.selected).map(c => c.title) } : {}),
@@ -630,7 +725,7 @@ export function BoardAgent() {
         : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visible, openSpaces, sectionList, board.space, board.focusing, access],
+    [visible, openSpaces, sectionList, board.space, board.focusing, access, layout],
   )
   // the arrows between the cards it can see, on each card's value: "→ Title" it points to, "← Title" from
   const edgesKey = useStore(s => s.edges.map(e => [e.id, e.source, e.target, (e.data as LinkData | undefined)?.label || ''].join('|')).join(';'))
@@ -646,9 +741,19 @@ export function BoardAgent() {
       add(e.source, `→ "${to}"${label ? `: ${label}` : ''}`)
       add(e.target, `← "${from}"${label ? `: ${label}` : ''}`)
     }
-    return new Map(cards.map(c => [c.id, arrows.has(c.id) ? { ...c.value, arrows: arrows.get(c.id) } : c.value]))
+    return new Map(
+      cards.map(c => {
+        const on = (layout.overlaps.get(c.id) || []).map(id => titleOf.get(id)).filter((t): t is string => !!t)
+        const extra = {
+          ...(arrows.has(c.id) ? { arrows: arrows.get(c.id) } : {}),
+          ...(on.length ? { overlaps: on } : {}),
+          ...(layout.out.has(c.id) ? { sticksOut: true } : {}),
+        }
+        return [c.id, Object.keys(extra).length ? { ...c.value, ...extra } : c.value]
+      }),
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cards, visible, edgesKey])
+  }, [cards, visible, edgesKey, layout])
   const between = (a: string, b: string) => rf.getEdges().filter(e => (e.source === a && e.target === b) || (e.source === b && e.target === a))
   const connect = (c: Built, otherTitle: string, label: string) => {
     const other = visible.find(x => x.title === otherTitle && x.id !== c.id)
@@ -860,7 +965,29 @@ export function BoardAgent() {
         // what Claude makes doesn't take the person's view to it (agent/presence.tsx glides there if it's out of sight)
         onAddSticky={(t, s) => void board.newSticky(t, { quiet: true }).then(id => place(id, s))}
         onJot={board.prefs.extras.journal ? t => post('/api/notes/thought', { text: t }).then(() => said("Claude added to today's journal"), (e: Error) => said(e.message)) : undefined}
-        onTidy={() => board.tidy()}
+        onTidy={name => {
+          if (!name) return board.tidy()
+          const s = sectionList.find(x => x.name === name)
+          if (!s || s.state) throw new Error(s ? `The section "${name}" is ${s.state === 'folded' ? 'folded' : 'tucked away'}: bring it back first.` : `No section "${name}".`)
+          if (!board.tidySection(s.id)) throw new Error(`The section "${name}" has nothing in it to tidy.`)
+          touchCard(s.id, 'arranging')
+          said(`Claude tidied the section "${name}"`)
+        }}
+        onShelveSection={(name, days) => {
+          const s = sectionList.find(x => x.name === name)
+          if (!s || !rf.getNode(s.id)) throw new Error(`No section "${name}".`)
+          if (s.shelf >= 0) return
+          // a tucked one goes from the tray to the shelf; one on the board goes there with what's in it
+          const back = new Date()
+          back.setHours(8, 0, 0, 0)
+          const until = days ? back.getTime() + days * 86_400_000 : undefined
+          if (s.state === 'tucked') {
+            board.remember()
+            rf.setNodes(ns => ns.map(n => (n.id === s.id ? { ...n, data: { ...n.data, shelf: { at: Date.now(), ...(until ? { until } : {}) } } } : n)))
+            board.persist()
+          } else board.tuck([s.id], { until })
+          said(`Claude put the section "${name}" on the shelf${days ? ` for ${days} day${days === 1 ? '' : 's'}` : ''}`)
+        }}
         onFocusOn={titles => {
           // in the order named, side by side; a focus already on is put back first
           const ids = titles.map(t => pick(visible, t, c => c.id, c => c.title, 'card').id)
@@ -882,7 +1009,11 @@ export function BoardAgent() {
           const named = titles.map(t => pick(visible, t, c => c.id, c => c.title, 'card'))
           const away = named.filter(c => c.spaceId !== board.space)
           if (away.length) throw new Error(`${away.map(c => `"${c.title}"`).join(', ')} ${away.length === 1 ? 'is' : 'are'} in another space: switchSpace there first, or moveToSpace them here.`)
-          touchCard(board.addSection({ around: named.map(c => c.id), title }), 'made')
+          const id = board.addSection({ around: named.map(c => c.id), title })
+          touchCard(id, 'made')
+          // the cards it was put round may lie anywhere, on top of each other too: laid out in rows inside it (once
+          // React Flow has it, a moment later)
+          if (id) setTimeout(() => board.tidySection(id), 60)
           said(`Claude put ${named.length === 1 ? 'a card' : `${named.length} cards`} in the section "${title}"`)
         }}
         sectionNames={sectionNames}

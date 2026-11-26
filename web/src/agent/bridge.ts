@@ -71,9 +71,23 @@ let me = 0
 /** The steps of the call running now that the person has already allowed, all at once: how many of each action. */
 let allowed = new Map<string, number>()
 
-export function startAgentBridge(ask: Ask) {
+/** The last Allow nobody pressed: whether Cockpit's window was out of sight while it waited (for what Claude is told). */
+let unanswered: { away: boolean } | null = null
+
+export function startAgentBridge(asker: Ask) {
   if (started) return
   started = true
+  const ask: Ask = async (text, button) => {
+    const away = document.hidden
+    const ok = await asker(text, button)
+    if (!ok) unanswered = { away: away || document.hidden }
+    return ok
+  }
+  /** What Claude is told when an Allow went unanswered: why, and what to do. */
+  const noAllow = () =>
+    unanswered?.away
+      ? "Nobody pressed Allow: Cockpit's window was minimised or behind others, so the user likely didn't see it (its taskbar button flashed). Nothing was changed. Ask the user in the chat to bring Cockpit up, then try again."
+      : 'Nobody pressed Allow in Cockpit within 20 seconds, so nothing was changed. Ask the user in the chat whether they want it, then try again while they watch the board.'
   const agent = createAgent({
     allow: ({ component, action, args, label }) => {
       if (!WHERE[component]) return false
@@ -90,6 +104,38 @@ export function startAgentBridge(ask: Ask) {
       return ask(`Claude wants to ${what}`)
     },
   })
+
+  /** A step the app refused because nobody pressed Allow: says so, and why, instead of only "refused". */
+  const explainRefusal = (out: unknown) => {
+    const o = out as { ok?: boolean; error?: { message?: string } } | null
+    if (!o || o.ok !== false || !unanswered || !o.error?.message || !/refused/i.test(o.error.message)) return out
+    return { ...o, error: { ...o.error, message: `${o.error.message} ${noAllow()}` } }
+  }
+  /**
+   * After a change: what the user now sees that may need fixing, cards on top of each other or sticking out of their
+   * section (from the board's own value), so the agent needn't ask the user to look.
+   */
+  const ARRANGING = new Set(['addSection', 'tidy', 'placeNextTo', 'moveToSection', 'fitSection', 'addTable', 'addSticky', 'show', 'addPage', 'bringBack', 'unfold', 'tuckSection', 'foldSection', 'setRows', 'addRows'])
+  const withLayout = async (out: unknown, steps: unknown) => {
+    const acts = Array.isArray(steps) ? steps.map(s => String((s as { action?: unknown })?.action ?? '')) : []
+    if (!acts.some(a => ARRANGING.has(a))) return out
+    // what moved settles first (a new section lays its cards out a moment after it's made; a card is measured once drawn)
+    await new Promise(r => setTimeout(r, 300))
+    try {
+      const b = (agent.snapshot() as { component?: string; value?: { overlapping?: string[]; stickingOut?: string[] } }[]).find(c => c.component === 'board')?.value
+      if (!b?.overlapping?.length && !b?.stickingOut?.length) return out
+      return {
+        ...(out as object),
+        layout: {
+          ...(b.overlapping?.length ? { overlapping: b.overlapping } : {}),
+          ...(b.stickingOut?.length ? { stickingOut: b.stickingOut } : {}),
+          fix: 'tidy(section) lays out what is in a section in rows and fits it; placeNextTo moves one card; tidy() packs the loose cards.',
+        },
+      }
+    } catch {
+      return out
+    }
+  }
 
   /**
    * Several steps of one call that would each wait for the person: one question for all of them, before any runs
@@ -150,11 +196,17 @@ export function startAgentBridge(ask: Ask) {
         what = steps.map(s => `${String(s.action ?? '')} on ${String(s.ref ?? '')}`).join(', ')
         saw = []
       }
-      if (c.tool === 'snapshot') output = onPage(agent.snapshot())
+      if (c.tool === 'snapshot') {
+        output = onPage(agent.snapshot())
+        // the board itself always answers; nothing at all means the page couldn't be read, not an empty board
+        if (Array.isArray(output) && !output.some(x => (x as { component?: string })?.component === 'board'))
+          output = [{ component: 'note', text: "Cockpit's board couldn't be read just now (the page may be reloading). Nothing is lost: look again in a moment, and don't take this for an empty board." }, ...output]
+      }
       else if (c.tool === 'act') {
         const steps = (c.input as { steps?: { ref?: unknown; action?: unknown; args?: unknown[] }[] })?.steps
-        if (Array.isArray(steps) && !(await askAllAtOnce(steps))) output = { ok: false, error: { message: 'The user did not allow these changes, so none of the steps ran.' }, steps: [] }
-        else output = trimAct(await agent.act(c.input as Parameters<typeof agent.act>[0]))
+        unanswered = null
+        if (Array.isArray(steps) && !(await askAllAtOnce(steps))) output = { ok: false, error: { message: `The user did not allow these changes, so none of the steps ran. ${noAllow()}` }, steps: [] }
+        else output = await withLayout(explainRefusal(trimAct(await agent.act(c.input as Parameters<typeof agent.act>[0]))), steps)
         allowed = new Map()
       }
       else if (c.tool === 'query') output = onPage(await agent.query((c.input || {}) as Parameters<typeof agent.query>[0]))

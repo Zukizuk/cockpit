@@ -4,7 +4,14 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 ## Coming next
 
+**Improved**
+- Claude now knows when cards on your board lie on top of each other or stick out of their section, and fixes it before saying the board is tidy. Before, it couldn't tell and asked you to look.
+- When Claude puts cards in a section, it lays them out in rows inside it, and "tidy" on a section does the same.
+- Claude can put a whole section on the shelf in one step, instead of shelving its cards one by one, and it can see what's on the shelf and when it comes back.
+- When Claude needs your Allow while Cockpit is minimised or behind other windows, Cockpit's taskbar button flashes and it waits up to a minute for you. If nobody presses Allow, Claude is told why and asks you in the chat.
+
 **Fixed**
+- Claude no longer sees an empty board while a Cockpit dialog is open (the shelf's "Put away", Settings). Before, it took that for Cockpit having stopped.
 - Claude's changes to your board no longer stall while Cockpit's window is minimised or behind other windows. Before, a change could take minutes, Claude gave up waiting, and the change went through later anyway (so a retry did it twice). If Cockpit is ever slow to answer, Claude is now told the change may have gone through and to look before trying again.
 
 ## 26 November 2026 (version 0.2.14)

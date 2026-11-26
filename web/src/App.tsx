@@ -1,6 +1,7 @@
 // Cockpit: a free-form board. Paste a link or path anywhere (or press +) and it lands as a card you can read,
 // move, resize and put beside anything else. A small dock is the only chrome.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStore, useStoreApi, type EdgeChange, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
 import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
@@ -41,6 +42,23 @@ import { Arrow } from './cards/Arrow'
 import { SectionCard, SectionMenuItems } from './cards/SectionCard'
 import { QuestionsCard } from './cards/QuestionsCard'
 
+/**
+ * Where the board's agent components live: a place of their own at the end of the page. A dialog that's open (the
+ * shelf's "Put away", Settings) marks the rest of the page hidden from screen readers, and an agent skips what's hidden,
+ * so with the components inside the app an agent saw an empty board while one was open. A live region is left out of
+ * that marking (aria-hidden spares them), so the components stay in reach; "off" announces nothing.
+ */
+function agentHost() {
+  let el = document.getElementById('agent-host')
+  if (!el) {
+    el = document.createElement('div')
+    el.id = 'agent-host'
+    el.setAttribute('aria-live', 'off')
+    document.body.appendChild(el)
+  }
+  return el
+}
+
 const nodeTypes = { item: ItemCard, note: NoteCard, outputs: OutputsCard, tasks: TasksCard, tracker: TrackerCard, command: CommandCard, later: LaterCard, snippets: SnippetsCard, folder: FolderCard, table: TableCard, section: SectionCard, questions: QuestionsCard }
 const edgeTypes = { arrow: Arrow }
 
@@ -72,7 +90,7 @@ export function App() {
           <PutAwayDialog />
           <ShelfClock />
           <ShelfCorner />
-          <BoardAgent />
+          {createPortal(<BoardAgent />, agentHost())}
           <AgentPill />
           <DictionaryExtra />
           <Toast />

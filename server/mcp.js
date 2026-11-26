@@ -36,16 +36,19 @@ const BOARD_NOTE =
   'is "… (2)"); ' +
   "actions switchSpace(space), newSpace(name), renameSpace(space, name), addSticky(text, space?), jot(text) into today's " +
   'journal (an extra the user turns on in Settings > Extras; if jot says it is off, use addSticky), show(pathOrUrl, space?) to put a file or link on the board; give space to put it in another space ' +
-  'without moving the user there (make the space first with newSpace if it is new); tidy() lines the cards up, as the ' +
-  "user's Ctrl+Alt+T does; focusOn(cards) puts one card or several (an array of titles, side by side in that order) " +
+  'without moving the user there (make the space first with newSpace if it is new); tidy() packs the loose cards round ' +
+  "the sections, as the user's Ctrl+Alt+T does, and tidy(section) lays out what is in a section in rows (in reading " +
+  "order, a gap between cards) and fits the section round them; focusOn(cards) puts one card or several (an array of titles, side by side in that order) " +
   "in focus, every other card folded into a column on the left, and bringBack() puts everything back where it was " +
   "(the board's focus lists the cards in focus); compare(cardA, cardB) opens two files, pages or notes full screen " +
   "side by side (cardA on the left) for the user to read and compare, notes still editable; addSection(title, cards) " +
   'puts a section (a titled area, which the cards in it move with) around the cards named, an array of titles in the ' +
-  'space shown; fitSection(section) makes a section just big enough for what is in it; foldSection(section, fold?) ' +
+  'space shown, and lays them out in rows inside it; fitSection(section) makes a section just big enough for what is in it; foldSection(section, fold?) ' +
   "folds it to a bar, what is in it out of sight where it was (fold false opens it; the board's foldedSections lists " +
   'them; a card in one says inFoldedSection); tuckSection(section, tuck?) tucks it away at the top with what is in it ' +
-  "(tuck false brings it back; the board's tuckedSections lists them); removeSection(section, " +
+  "(tuck false brings it back; the board's tuckedSections lists them); putSectionOnShelf(section, days?) puts a whole " +
+  "section on the shelf with what is in it (the board's shelvedSections lists them; bringBack() on any card in it, or " +
+  'tuckSection(section, false), brings it back); removeSection(section, ' +
   'withCards?) takes a section off (its cards stay, unless withCards is true; it waits for Allow). Each card is a component ' +
   '(card) named by its title ' +
   "(the cards of the lists are 'Today card', 'Later card', 'Snippets card' and 'Questions card'): " +
@@ -97,7 +100,15 @@ const BOARD_NOTE =
   'with inputs, a calculator, a tracker), when they want it on their board, make with addPage: it lands there and ' +
   "keeps what they type. A card's putOnShelf(days?) puts it away on the shelf (bottom-left corner) for things the " +
   'user will not need for a while: back in the tray at the top after that many days, or when brought back with ' +
-  'bringBack(); a card on the shelf reads as tucked.'
+  "bringBack(); a card on the shelf says onShelf (when it comes back), and the board how many are there: out of " +
+  'sight, not gone. Several cards to move, tuck or shelve together: put them in one section (addSection, or ' +
+  'moveToSection) and act on the section (tuckSection, putSectionOnShelf, foldSection), one step, not one per card. ' +
+  "Layout: you can't see the board, but it tells you what the user sees: a card's overlaps lists the cards it lies on " +
+  "top of and sticksOut says it pokes out of its section; the board's overlapping and stickingOut list them; and a " +
+  'board_act that moved things adds layout when something now overlaps or sticks out. Fix that (tidy(section), ' +
+  'placeNextTo) before you say the board is tidy; with no layout in the answer, nothing overlaps. If a step comes back ' +
+  "refused because nobody pressed Allow, its message says why (the window may be minimised): ask the user in the chat, " +
+  "don't go around it."
 
 export const TOOLS = [
   {
@@ -184,7 +195,7 @@ function postJson(p, body) {
   const data = JSON.stringify(body)
   return new Promise((resolve, reject) => {
     const req = http.request(
-      { host: HOST, port: PORT, path: p, method: 'POST', timeout: 60_000, headers: { host: `${HOST}:${PORT}`, 'content-type': 'application/json', 'x-cockpit': '1', 'content-length': Buffer.byteLength(data) } },
+      { host: HOST, port: PORT, path: p, method: 'POST', timeout: 120_000, headers: { host: `${HOST}:${PORT}`, 'content-type': 'application/json', 'x-cockpit': '1', 'content-length': Buffer.byteLength(data) } },
       res => {
         let s = ''
         res.setEncoding('utf8')
