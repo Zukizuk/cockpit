@@ -758,6 +758,33 @@ test('pasting: a link becomes a card, Ctrl+Shift+V keeps one on Later, a short p
   assert.ok(secret, 'kept in Snippets as a secret')
 })
 
+test('Ctrl+K shows a few recent things, Show more opens up the rest, and typing searches all of them', async () => {
+  await clearSelection()
+  // a long history: 30 kept links, the oldest first
+  for (let i = 1; i <= 30; i++) {
+    await api('/api/shown', { method: 'POST', body: JSON.stringify({ url: `${base}/api/health?kept${i}`, title: `Kept page ${String(i).padStart(2, '0')}${i === 1 ? ' zebra' : ''}` }) })
+    await new Promise(r => setTimeout(r, 15))
+  }
+  const box = page.locator('[cmdk-root]')
+  const group = box.locator('[cmdk-group]', { hasText: /^Kept/ })
+  const rows = () => group.locator('[cmdk-item]:not([data-value^="__more"])').count()
+  const moreRow = group.locator('[cmdk-item][data-value^="__more"]')
+  await until(async () => (await api('/api/shown')).length >= 30)
+  await page.keyboard.press('Control+KeyK')
+  assert.ok(await until(async () => (await rows()) === 6, 8000), 'six recent kept things, not the whole history')
+  assert.match(await moreRow.innerText(), /Show 20 more/)
+  await moreRow.click()
+  assert.ok(await until(async () => (await rows()) === 26), 'twenty more after Show more')
+
+  // the oldest one is far past what is shown, and typing finds it
+  const input = box.locator('[cmdk-input]')
+  assert.ok(await input.evaluate(el => el === document.activeElement), 'the search box keeps the keys after Show more')
+  await page.keyboard.type('zebra')
+  const found = await until(async () => (await rows()) === 1 && /Kept page 01 zebra/.test(await group.innerText()))
+  assert.ok(found, `found by searching all of them; typed "${await input.inputValue()}", shown: ${(await box.innerText()).slice(0, 300)}`)
+  await page.keyboard.press('Escape')
+})
+
 // after the last: a card made and taken off (making one moves the view)
 test("a card taken off isn't in what Claude sees any more", async () => {
   await clearSelection()

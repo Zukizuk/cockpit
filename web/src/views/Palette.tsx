@@ -1,7 +1,7 @@
 // The + box: paste a link or path to open it, type to jot a thought (today's journal with the Journal extra on, else a
 // sticky note), or find anything kept and put it on the board.
 import { useEffect, useMemo, useState } from 'react'
-import { BookA, BookOpenText, Bookmark, Table2, ClipboardList, FileText, FolderOpen, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
+import { BookA, BookOpenText, Bookmark, ChevronDown, Table2, ClipboardList, FileText, FolderOpen, Keyboard, LayoutGrid, Globe, MessageSquare, ListChecks, ListTodo, NotebookPen, NotebookText, Pin, Settings2, Sparkles, StickyNote } from 'lucide-react'
 import { get, post } from '../api'
 import { ago, useData } from '../lib'
 import { useBoard } from '../board'
@@ -11,6 +11,37 @@ import { isPath, isUrl, unquote } from './paste'
 import { openDictionary } from './Dictionary'
 import { looksTabular, newTable, rowsFromText } from '../cards/TableCard'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/components/ui/command'
+
+// How many kept things, notes and tables show at a time: a few recent ones when nothing is typed, more when searching,
+// and "Show more" for the rest. Searching looks through all of them, not only the ones shown, so the list stays short
+// however long the history grows.
+const FEW = 6
+const SEARCHED = 12
+const MORE = 20
+
+/** Every word typed appears somewhere in what the thing is known by. */
+const matches = (words: string[], hay: string) => {
+  const h = hay.toLowerCase()
+  return words.every(w => h.includes(w))
+}
+
+/** The things to show of one group, at most `limit`, and how many more match. */
+function capped<T>(list: T[], hay: (t: T) => string, words: string[], limit: number) {
+  const found = words.length ? list.filter(t => matches(words, hay(t))) : list
+  return { shown: found.slice(0, limit), more: Math.max(0, found.length - limit) }
+}
+
+/** The "Show more" row under a group, kept whatever is typed. */
+function ShowMore({ group, more, onMore }: { group: string; more: number; onMore: () => void }) {
+  if (!more) return null
+  return (
+    <CommandItem forceMount value={`__more ${group}`} onSelect={onMore} className="text-muted-foreground">
+      <ChevronDown strokeWidth={1.5} />
+      Show {Math.min(more, MORE)} more
+      <CommandShortcut>{more} in all</CommandShortcut>
+    </CommandItem>
+  )
+}
 
 export function Palette() {
   const board = useBoard()
@@ -29,7 +60,21 @@ export function Palette() {
     [board.prefs.extras.tables],
     { refreshOn: ['tables'] },
   )
-  const noteItems = useMemo(() => (board.notes?.notes || []).filter(n => n.excerpt).slice(0, 60), [board.notes])
+  const allNotes = useMemo(() => (board.notes?.notes || []).filter(n => n.excerpt), [board.notes])
+
+  // how far each group is opened up; back to a few each time the box opens or the words change
+  const [limits, setLimits] = useState({ items: 0, notes: 0, tables: 0 })
+  useEffect(() => setLimits({ items: 0, notes: 0, tables: 0 }), [board.palette, value])
+  const words = kind === 'text' ? value.toLowerCase().split(/\s+/).filter(Boolean) : []
+  const base = words.length ? SEARCHED : FEW
+  const more = (g: keyof typeof limits) => {
+    setLimits(l => ({ ...l, [g]: l[g] + MORE }))
+    // a click on Show more takes the keys from the search box: give them back, so typing goes on searching
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[cmdk-input]')?.focus())
+  }
+  const kept = capped(board.items, e => [e.title, e.path, e.url, e.siteName, ...(e.tags || [])].join(' '), words, base + limits.items)
+  const notes = capped(allNotes, n => `${n.title} ${n.path} ${n.excerpt}`, words, base + limits.notes)
+  const tableList = capped(tables.data || [], t => `${t.title} ${t.columns.join(' ')}`, words, base + limits.tables)
 
   const journal = async () => {
     close()
@@ -231,11 +276,11 @@ export function Palette() {
                 Settings
               </CommandItem>
             </CommandGroup>
-            {(tables.data?.length ?? 0) > 0 && (
+            {tableList.shown.length > 0 && (
               <>
                 <CommandSeparator />
                 <CommandGroup heading="Tables">
-                  {tables.data!.slice(0, 30).map(t => (
+                  {tableList.shown.map(t => (
                     <CommandItem key={t.path} value={`table ${t.title} ${t.columns.join(' ')}`} onSelect={() => (close(), board.addCard('table', t.path))}>
                       <Table2 strokeWidth={1.5} />
                       <span className="truncate">{t.title}</span>
@@ -244,6 +289,7 @@ export function Palette() {
                       </CommandShortcut>
                     </CommandItem>
                   ))}
+                  <ShowMore group="tables" more={tableList.more} onMore={() => more('tables')} />
                 </CommandGroup>
               </>
             )}
@@ -263,11 +309,11 @@ export function Palette() {
                 </CommandGroup>
               </>
             )}
-            {board.items.length > 0 && (
+            {kept.shown.length > 0 && (
               <>
                 <CommandSeparator />
-                <CommandGroup heading="Kept">
-                  {board.items.slice(0, 80).map(e => {
+                <CommandGroup heading={words.length ? 'Kept' : 'Kept · recent'}>
+                  {kept.shown.map(e => {
                     const Icon = iconFor(e)
                     return (
                       <CommandItem
@@ -284,20 +330,22 @@ export function Palette() {
                       </CommandItem>
                     )
                   })}
+                  <ShowMore group="items" more={kept.more} onMore={() => more('items')} />
                 </CommandGroup>
               </>
             )}
-            {noteItems.length > 0 && (
+            {notes.shown.length > 0 && (
               <>
                 <CommandSeparator />
-                <CommandGroup heading="Notes">
-                  {noteItems.map(n => (
+                <CommandGroup heading={words.length ? 'Notes' : 'Notes · recent'}>
+                  {notes.shown.map(n => (
                     <CommandItem key={n.path} value={`note ${n.path} ${n.title}`} keywords={[n.excerpt || '']} onSelect={() => (close(), board.addCard('note', n.path))}>
                       {n.folder === 'journal' ? <BookOpenText strokeWidth={1.5} /> : <NotebookPen strokeWidth={1.5} />}
                       <span className="truncate">{n.title}</span>
                       <CommandShortcut>{ago(n.mtime)}</CommandShortcut>
                     </CommandItem>
                   ))}
+                  <ShowMore group="notes" more={notes.more} onMore={() => more('notes')} />
                 </CommandGroup>
               </>
             )}

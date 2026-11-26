@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Improved**
+- The Add box (Ctrl+K) no longer lists your whole history at once. It shows a few recent files, links, notes and tables, with "Show more" under each for the rest, and searching still looks through everything you've kept. It opens fast however much you keep.
+
 ## 26 November 2026 (version 0.2.13)
 
 **Improved**
