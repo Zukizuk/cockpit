@@ -1038,6 +1038,59 @@ test('Claude sees cards on top of each other, a section lays them out, a whole s
   const t = await agent('act', { steps: [{ ref: 'Board', action: 'tidy', args: ['Lay out'] }] })
   assert.equal(t.output.ok, true, JSON.stringify(t).slice(0, 300))
   assert.equal(t.output.layout, undefined)
+
+  // the user's own: "Tidy what's in it" on the section's menu
+  const lay = page.locator('.react-flow__node-section', { hasText: 'Lay out' }).locator('.section-title')
+  await lay.click({ button: 'right' })
+  await page.getByRole('menuitem', { name: "Tidy what's in it" }).click()
+  assert.ok(await until(async () => /Tidied/.test(await page.locator('.toast').innerText())), 'tidied, with Undo')
+  assert.ok(!(await boardOf()).overlapping?.some(p => p.includes('Lay ')), 'nothing on top of anything')
+  await clearSelection()
+})
+
+test('a question comes out of a tucked section; moving into a tucked section brings it back; a ref names the other card; made by Claude; Stop listening', async () => {
+  await clearSelection()
+  const snap = async () => {
+    const o = (await agent('snapshot')).output
+    return Array.isArray(o) ? o : []
+  }
+  const card = async t => (await snap()).find(c => c.label === t)
+  const ok = async steps => {
+    const r = await agent('act', { steps })
+    assert.notEqual(r.output?.ok, false, JSON.stringify(r).slice(0, 400))
+    return r.output
+  }
+  await ok([{ ref: 'Board', action: 'addSticky', args: ['Hold me'] }, { ref: 'Board', action: 'addSticky', args: ['Join later'] }])
+  assert.ok(await until(async () => !!(await card('Join later'))), 'made')
+  assert.equal((await card('Hold me')).value.madeBy, 'Claude', 'a card Claude made says so')
+  assert.ok(await until(async () => !!(await card('Questions card'))), 'the Questions card is on the board')
+
+  // the Questions card put away in a tucked section, as the user had it
+  await ok([{ ref: 'Board', action: 'addSection', args: ['Hide here', ['Questions card', 'Hold me']] }])
+  await ok([{ ref: 'Board', action: 'tuckSection', args: ['Hide here', true] }])
+  const qCard = async () => (await api('/api/board')).cards.find(c => c.type === 'questions')
+  assert.ok(await until(async () => !!(await qCard())?.inside), 'held by the tucked section')
+  await ok([{ ref: 'Questions list', action: 'ask', args: ['Seen now?', 'Yes'] }])
+  assert.ok(await until(async () => { const q = await qCard(); return q && !q.inside && !q.tucked }), 'the Questions card came out of the section')
+  assert.ok(await until(() => page.getByRole('textbox', { name: 'Answer: Seen now?' }).isVisible()), 'and the question shows on the board (opened, not folded)')
+
+  // into the tucked section: it comes back first, and the card goes in
+  await ok([{ ref: 'Join later', action: 'moveToSection', args: ['Hide here'] }])
+  const sec = async () => (await api('/api/board')).cards.find(c => c.type === 'section' && c.title === 'Hide here')
+  assert.ok(await until(async () => !(await sec())?.tucked), 'the section is back')
+  assert.equal((await card('Join later')).value.section, 'Hide here', 'and the card is in it')
+
+  // another card named by its ref, where a title is wanted
+  const ref = (await card('Hold me')).ref
+  await ok([{ ref: 'Join later', action: 'placeNextTo', args: [ref, 'below'] }])
+
+  // Stop listening, from the board: the listening chat is let go
+  const waiting = api('/api/agent/wait?label=' + encodeURIComponent('Claude · e2e'))
+  const stop = page.getByRole('button', { name: 'Stop listening' })
+  assert.ok(await until(async () => (await stop.count()) === 1), 'Stop listening shows while a chat listens')
+  await stop.click()
+  assert.deepEqual(await waiting, { stopped: true }, 'the listener is told the user stopped it')
+  assert.ok(await until(async () => (await stop.count()) === 0), 'and the button goes')
   await clearSelection()
 })
 

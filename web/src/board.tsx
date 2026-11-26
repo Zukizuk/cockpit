@@ -54,7 +54,7 @@ export const SECTION_FOLDED_H = 44
 export const foldedH = (type: string | undefined, ref: string) => (type === 'section' ? SECTION_FOLDED_H : isSticky(type, ref) ? STICKY_FOLDED_H : FOLDED_H)
 
 /** openH: the height a folded card goes back to when it's unfolded. */
-export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; shelf?: Shelf; veiled?: boolean; agents?: AgentMark; title?: string; inside?: string }
+export type CardData = { ref: string; pulse?: number; born?: number; folded?: boolean; openH?: number; locked?: boolean; color?: StickyColor; sized?: boolean; space?: string; tucked?: boolean; shelf?: Shelf; veiled?: boolean; agents?: AgentMark; madeBy?: string; title?: string; inside?: string }
 export type CardNode = Node<CardData, CardType>
 
 /** Cards as tall as what's in them (up to a limit, then they scroll), until a height is dragged by hand (sized). */
@@ -72,7 +72,7 @@ export const toNode = (c: BoardCard): CardNode => ({
   id: c.id,
   type: c.type,
   position: { x: c.x, y: c.y },
-  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.tucked && c.shelf ? { shelf: c.shelf } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}), ...(c.title ? { title: c.title } : {}), ...(c.inside ? { inside: c.inside } : {}) },
+  data: { ref: c.ref, ...(c.folded ? { folded: true, openH: c.h } : {}), ...(c.locked ? { locked: true } : {}), ...(c.color ? { color: c.color } : {}), ...(keepsSize(c) ? { sized: true } : {}), ...(c.space && c.space !== 'main' ? { space: c.space } : {}), ...(c.tucked ? { tucked: true } : {}), ...(c.tucked && c.shelf ? { shelf: c.shelf } : {}), ...(c.veiled ? { veiled: true } : {}), ...(c.agents ? { agents: c.agents } : {}), ...(c.madeBy ? { madeBy: c.madeBy } : {}), ...(c.title ? { title: c.title } : {}), ...(c.inside ? { inside: c.inside } : {}) },
   width: HUGS.has(c.type) ? undefined : c.w,
   height: c.folded ? foldedH(c.type, c.ref) : HUGS.has(c.type) || (AUTO_HEIGHT.has(c.type) && !keepsSize(c)) ? undefined : c.h,
   dragHandle: '.card-drag',
@@ -97,6 +97,7 @@ export const fromNode = (n: CardNode): BoardCard => ({
   ...(n.data.tucked && n.data.shelf ? { shelf: n.data.shelf } : {}),
   ...(n.data.veiled ? { veiled: true } : {}),
   ...(n.data.agents ? { agents: n.data.agents } : {}),
+  ...(n.data.madeBy ? { madeBy: n.data.madeBy } : {}),
   ...(n.type === 'section' && n.data.title ? { title: n.data.title } : {}),
   ...(n.data.inside ? { inside: n.data.inside } : {}),
 })

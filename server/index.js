@@ -546,6 +546,13 @@ async function api(req, res, url) {
       if (w) agentWindow = w
       return json(res, 200, { ok: true })
     }
+    // the user's Stop listening: every listening chat is let go, and told not to start again unasked
+    if (a === 'stop-listening') {
+      const stopped = [...pingWaiters].map(w => w.label)
+      for (const w of [...pingWaiters]) answerWaiter(w, { stopped: true })
+      logAgentCall({ agent: 'You', tool: 'ping', what: `stopped ${stopped.join(', ') || 'no one'} listening` })
+      return json(res, 200, { stopped })
+    }
     // the user's Tell Claude: to every agent listening (the board shows who that is)
     if (a === 'ping') {
       const text = String(body.text ?? '').trim().slice(0, 2000)

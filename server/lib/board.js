@@ -139,6 +139,8 @@ export function saveBoard(body) {
       ...(c.veiled === true ? { veiled: true } : {}),
       // shared with agents, or private (agents never see it)
       ...(AGENT_MARKS.has(c.agents) ? { agents: c.agents } : {}),
+      // made by an agent (its name): so a later chat knows which cards are its own
+      ...(typeof c.madeBy === 'string' && c.madeBy.trim() ? { madeBy: c.madeBy.trim().slice(0, 40) } : {}),
       // a section's title
       ...(c.type === 'section' && typeof c.title === 'string' && c.title.trim() ? { title: c.title.trim().slice(0, 80) } : {}),
       // held by a section that's folded or tucked away (hidden where it was, until the section opens or comes back)

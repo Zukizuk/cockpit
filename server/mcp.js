@@ -108,7 +108,13 @@ const BOARD_NOTE =
   'board_act that moved things adds layout when something now overlaps or sticks out. Fix that (tidy(section), ' +
   'placeNextTo) before you say the board is tidy; with no layout in the answer, nothing overlaps. If a step comes back ' +
   "refused because nobody pressed Allow, its message says why (the window may be minimised): ask the user in the chat, " +
-  "don't go around it."
+  "don't go around it. A card you (or an earlier chat) made says madeBy: \"Claude\"; one without it is the user's. " +
+  "A card's ref (c12) stays the same when its title changes (setText or rename can change a note's title): keep using " +
+  'the ref, and a ref works wherever a card is named (placeNextTo, connectTo, focusOn, addSection). moveToSection ' +
+  'brings a tucked, shelved or folded section back first. When you ask a question, the Questions card comes out to ' +
+  'where the user is looking, even if it was put away; focus() brings a put-away card back too. Listening for Tell ' +
+  "Claude: the board has a Stop listening button; when the listener ends saying the user stopped it, don't start it " +
+  'again unless they ask.'
 
 export const TOOLS = [
   {

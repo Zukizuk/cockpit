@@ -170,6 +170,12 @@ export function AgentPill() {
       <span className="agent-pill-dot" aria-hidden />
       <span>{text}</span>
       {listening.length > 0 && s.phase !== 'busy' && <TellClaude who={listening} />}
+      {/* the chat stops listening (it's told not to start again unasked) */}
+      {listening.length > 0 && s.phase !== 'busy' && (
+        <button type="button" className="tell-btn tell-stop" title={`${nameOf(listening[0])} stops listening for the board`} onClick={() => post('/api/agent/stop-listening').catch(() => {})}>
+          Stop listening
+        </button>
+      )}
     </div>
   )
 }

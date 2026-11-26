@@ -7,7 +7,7 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import { emit, onEvent } from '../lib'
 import { NodeResizer, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
-import { ArrowUpToLine, Package, BoxSelect, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Heading, Layers, Lock, LockOpen, Shrink, Trash2, X } from 'lucide-react'
+import { ArrowUpToLine, Package, BoxSelect, ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Heading, Layers, LayoutGrid, Lock, LockOpen, Shrink, Trash2, X } from 'lucide-react'
 import { track, type StickyColor } from '../api'
 import { contentsOf, heldBy, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -79,6 +79,18 @@ export function SectionMenuItems({ id, Item, Separator }: { id: string; Item: Co
         Put on the shelf…
       </Item>
       <Separator />
+      {/* what's in it laid out in rows, nothing on top of anything, the section fitted round it (Undo puts it back) */}
+      <Item
+        onSelect={() => {
+          if (!board.tidySection(id)) return board.toast('Nothing in it yet: drop cards in it')
+          track('section.tidy')
+          board.toast('Tidied', { label: 'Undo', run: () => board.undo() })
+        }}
+        disabled={!count || folded || locked}
+      >
+        <LayoutGrid strokeWidth={1.75} />
+        Tidy what's in it
+      </Item>
       <Item onSelect={fit} disabled={!count || folded}>
         <Shrink strokeWidth={1.75} />
         Fit it to what's in it

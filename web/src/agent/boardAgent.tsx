@@ -198,6 +198,8 @@ export type CardValue = {
   overlaps?: string[]
   /** it sticks out of the section it's in */
   sticksOut?: boolean
+  /** made by an agent ("Claude"): one of yours, from this chat or an earlier one */
+  madeBy?: string
   /** arrows to and from the other cards you can see: "→ Title" points to it, "← Title" from it, a label after a colon */
   arrows?: string[]
 }
@@ -234,7 +236,7 @@ type CardOptions = {
   onWrite?: (change: { text: string; append: boolean }) => Promise<void>
   onRead?: () => CardContent
   onConnect?: (other: string, label: string) => void
-  onMoveToSection?: (section: string) => void
+  onMoveToSection?: (section: string) => void | Promise<void>
   /** the sections it can go into (for moveToSection) */
   sections?: string[]
   onDisconnect?: (other: string) => void
@@ -463,7 +465,7 @@ const shelfOf = (n: CardNode, all: CardNode[]): number => {
 /** When a shelved card comes back, in words. */
 const backWhen = (until: number) =>
   until > 0 ? `until ${new Date(until).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}` : 'until the user brings it back'
-type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string, section: string, held: '' | 'folded' | 'tucked', shelf: number]
+type Row = [id: string, type: string, ref: string, space: string, folded: boolean, selected: boolean, inView: boolean, color: string, tucked: boolean, veiled: boolean, mark: string, section: string, held: '' | 'folded' | 'tucked', shelf: number, madeBy: string]
 type Built = { id: string; type: string; ref: string; title: string; value: CardValue; content: Omit<CardContent, 'text'> & { peek?: string }; mark: string; spaceId: string }
 
 export function BoardAgent() {
@@ -482,7 +484,7 @@ export function BoardAgent() {
         const w = n.measured?.width ?? n.width ?? 0
         const h = n.measured?.height ?? n.height ?? 0
         const seen = !n.hidden && n.position.x < view.x1 && n.position.x + w > view.x0 && n.position.y < view.y1 && n.position.y + h > view.y0
-        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || '', sectionTitle(n, all), heldState(n, all), shelfOf(n, all)] as Row
+        return [n.id, n.type, d.ref, spaceOf(n as CardNode), !!d.folded, !!n.selected, seen, d.color || '', !!d.tucked, !!d.veiled, d.agents || '', sectionTitle(n, all), heldState(n, all), shelfOf(n, all), d.madeBy || ''] as Row
       }),
     )
   })
@@ -502,7 +504,7 @@ export function BoardAgent() {
 
   const cards: Built[] = useMemo(() => {
     const spaceOfId = (id: string) => board.spaces.find(s => s.id === id)?.name ?? 'Main'
-    const built = (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section, held, shelf]) => {
+    const built = (JSON.parse(cardsKey) as Row[]).map(([id, type, ref, space, folded, selected, inView, color, tucked, veiled, mark, section, held, shelf, madeBy]) => {
       let title = KIND[type] ?? type
       let file: string | undefined
       let url: string | undefined
@@ -549,6 +551,7 @@ export function BoardAgent() {
         ...(tucked || held === 'tucked' ? { tucked: true } : {}),
         ...(held === 'folded' ? { inFoldedSection: true } : {}),
         ...(shelf >= 0 ? { onShelf: backWhen(shelf) } : {}),
+        ...(madeBy ? { madeBy } : {}),
         ...(veiled ? { hidden: true } : {}),
         ...(sticky ? { color: color === 'ink' || !color ? 'charcoal' : color } : {}),
         ...(mark === 'shared' ? { shared: true } : {}),
@@ -775,13 +778,27 @@ export function BoardAgent() {
   }
   // a card into a section: beside what's in it (to the right of the rightmost, level with the top one), or at its
   // top-left when it's empty; the section grows to hold it. In the section's space. Undo puts it back.
-  const moveToSection = (c: Built, name: string) => {
-    const sec = sectionList.find(s => s.name === name)
+  const moveToSection = (c: Built, name: string, again = false): void | Promise<void> => {
+    const sec = sectionListRef.current.find(s => s.name === name)
     const s = sec && rf.getNode(sec.id)
     const n = rf.getNode(c.id)
     if (!s || !n) throw new Error(`No section "${name}".`)
-    if (s.data.tucked || s.data.inside) throw new Error(`The section "${name}" is tucked away: tuckSection("${name}", false) brings it back first.`)
-    if (s.data.folded) throw new Error(`The section "${name}" is folded: foldSection("${name}", false) opens it first.`)
+    // tucked away, on the shelf or folded: brought back and opened first (it's what was asked), then the card goes in
+    if (s.data.tucked || s.data.inside || s.data.folded) {
+      if (again) throw new Error(`The section "${name}" didn't come back: tuckSection("${name}", false) or foldSection("${name}", false), then try again.`)
+      if (s.data.tucked || s.data.inside) board.untuck(s.id)
+      else board.foldSection(s.id, false)
+      said(`Claude brought the section "${name}" back`)
+      return new Promise((resolve, reject) =>
+        setTimeout(() => {
+          try {
+            resolve(moveToSection(c, name, true))
+          } catch (e) {
+            reject(e)
+          }
+        }, 250),
+      )
+    }
     const size = (x: CardNode) => ({ w: x.measured?.width ?? x.width ?? 300, h: x.measured?.height ?? x.height ?? 280 })
     const sb = { x: s.position.x, y: s.position.y, ...size(s) }
     const inside = contentsOf(s, rf.getNodes()).filter(x => x.id !== c.id && !isSection(x))
@@ -906,6 +923,8 @@ export function BoardAgent() {
   const place = (id: string | undefined, space?: string) => {
     // what an agent makes is shared with agents: it can go on working with it
     if (id) board.setCardAgents([id], 'shared')
+    // and marked as made by Claude, so a later chat knows which cards are its own
+    if (id) rf.setNodes(ns => ns.map(n => (n.id === id && !n.data.madeBy ? { ...n, data: { ...n.data, madeBy: 'Claude' } } : n)))
     if (id) touchCard(id, 'made')
     if (!id || !space || spaceId(space) === board.space) return
     board.moveToSpace([id], spaceId(space))
@@ -943,11 +962,41 @@ export function BoardAgent() {
     said(`Claude put ${plain(title)} ${side === 'right' || side === 'left' ? `to the ${side} of` : side} ${plain(otherTitle)}`)
   }
 
+  // into view: tucked away, on the shelf or in a folded or tucked section, it comes back first (with its section)
   const focus = (id: string) => {
     const n = rf.getNode(id)
     if (!n) return
     if (spaceOf(n) !== board.space) board.switchSpace(spaceOf(n))
-    setTimeout(() => rf.fitView({ nodes: [{ id }], duration: 320, padding: 0.25, maxZoom: 1 }), 80)
+    const away = n.data.tucked || n.data.inside
+    if (away) board.untuck(id)
+    setTimeout(() => rf.fitView({ nodes: [{ id }], duration: 320, padding: 0.25, maxZoom: 1 }), away ? 240 : 80)
+  }
+  /**
+   * A card the user must see now (the Questions card, when Claude asks): out of wherever it was put away (tucked, on the
+   * shelf, in a folded or tucked section, another space), on its own, where the user is looking. Its section stays put.
+   */
+  const bringOut = (id: string) => {
+    const n = rf.getNode(id)
+    if (!n) return false
+    // on the board but folded: opened, so what's new in it shows
+    if (!n.hidden && !n.data.tucked && !n.data.inside && spaceOf(n) === board.space) {
+      if (n.data.folded) fold(id, false)
+      return !!n.data.folded
+    }
+    const size = { w: n.measured?.width ?? n.width ?? 360, h: n.measured?.height ?? n.height ?? 300 }
+    const want = rf.screenToFlowPosition({ x: innerWidth / 2 - 180, y: innerHeight / 4 })
+    const pos = freeSpot(want, size, rf.getNodes().filter(x => x.id !== id && !x.hidden && !isSection(x)))
+    board.remember()
+    rf.setNodes(ns =>
+      ns.map(x => {
+        if (x.id !== id) return x
+        const open = foldNode(x, false)
+        const { tucked: _t, inside: _i, shelf: _s, space: _sp, ...data } = open.data
+        return { ...open, position: pos, hidden: false, data: board.space === 'main' ? data : { ...data, space: board.space } }
+      }),
+    )
+    board.persist()
+    return true
   }
 
   return (
@@ -1011,6 +1060,7 @@ export function BoardAgent() {
           if (away.length) throw new Error(`${away.map(c => `"${c.title}"`).join(', ')} ${away.length === 1 ? 'is' : 'are'} in another space: switchSpace there first, or moveToSpace them here.`)
           const id = board.addSection({ around: named.map(c => c.id), title })
           touchCard(id, 'made')
+          if (id) setTimeout(() => rf.setNodes(ns => ns.map(n => (n.id === id ? { ...n, data: { ...n.data, madeBy: 'Claude' } } : n))), 30)
           // the cards it was put round may lie anywhere, on top of each other too: laid out in rows inside it (once
           // React Flow has it, a moment later)
           if (id) setTimeout(() => board.tidySection(id), 60)
@@ -1124,7 +1174,11 @@ export function BoardAgent() {
               questions.reload()
               // the Questions card comes onto the board where the person is looking, if it isn't on it yet
               const card = rf.getNodes().find(n => n.type === 'questions')
-              if (card) touchCard(card.id, 'writing')
+              // put away (in a tucked section, on the shelf, another space): brought out, else the question is never seen
+              if (card) {
+                bringOut(card.id)
+                touchCard(card.id, 'writing')
+              }
               else place(board.addCard('questions', 'questions', { at: rf.screenToFlowPosition({ x: innerWidth / 2, y: innerHeight / 3 }) }))
               said('Claude left you a question')
             },

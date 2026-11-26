@@ -105,6 +105,19 @@ export function startAgentBridge(asker: Ask) {
     },
   })
 
+  /**
+   * A card named by its ref (c18) where an action wants another card (placeNextTo, connectTo, focusOn, compare,
+   * addSection's cards): put as its title, which is what those take. A ref works for the step's own component already.
+   */
+  const withTitles = (input: unknown) => {
+    const steps = (input as { steps?: { args?: unknown[] }[] } | null)?.steps
+    if (!Array.isArray(steps)) return input
+    const isRef = (v: unknown) => typeof v === 'string' && /^c\d+$/.test(v)
+    if (!steps.some(s => Array.isArray(s?.args) && s.args.flat().some(isRef))) return input
+    const label = new Map((agent.snapshot() as { ref?: string; label?: string }[]).filter(c => c.ref && c.label).map(c => [c.ref!, c.label!]))
+    const swap = (v: unknown): unknown => (Array.isArray(v) ? v.map(swap) : isRef(v) && label.has(v as string) ? label.get(v as string) : v)
+    return { ...(input as object), steps: steps.map(s => (Array.isArray(s?.args) ? { ...s, args: s.args.map(swap) } : s)) }
+  }
   /** A step the app refused because nobody pressed Allow: says so, and why, instead of only "refused". */
   const explainRefusal = (out: unknown) => {
     const o = out as { ok?: boolean; error?: { message?: string } } | null
@@ -206,7 +219,7 @@ export function startAgentBridge(asker: Ask) {
         const steps = (c.input as { steps?: { ref?: unknown; action?: unknown; args?: unknown[] }[] })?.steps
         unanswered = null
         if (Array.isArray(steps) && !(await askAllAtOnce(steps))) output = { ok: false, error: { message: `The user did not allow these changes, so none of the steps ran. ${noAllow()}` }, steps: [] }
-        else output = await withLayout(explainRefusal(trimAct(await agent.act(c.input as Parameters<typeof agent.act>[0]))), steps)
+        else output = await withLayout(explainRefusal(trimAct(await agent.act(withTitles(c.input) as Parameters<typeof agent.act>[0]))), steps)
         allowed = new Map()
       }
       else if (c.tool === 'query') output = onPage(await agent.query((c.input || {}) as Parameters<typeof agent.query>[0]))

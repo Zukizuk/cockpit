@@ -466,6 +466,8 @@ export interface BoardCard {
   veiled?: boolean
   /** Shared with agents, or private (agents never see it); left out: as its space and Settings say. */
   agents?: AgentMark
+  /** Made by an agent: its name ("Claude"), so a later chat knows which cards are its own. */
+  madeBy?: string
   /** A section's title (a section is an area on the board; the cards whose middle is in it are in it). */
   title?: string
 }

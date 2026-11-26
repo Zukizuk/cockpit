@@ -20,6 +20,10 @@ for (;;) {
   try {
     const r = await fetch(`http://127.0.0.1:${port}/api/agent/wait?label=${encodeURIComponent(label)}`, { headers: { 'X-Cockpit': '1' } })
     const j = await r.json()
+    if (j?.stopped) {
+      console.log("The user pressed Stop listening on the Cockpit board. Don't start listening again unless they ask you to.")
+      process.exit(0)
+    }
     if (j?.ping) {
       const about = j.ping.about ? ` (about the card "${j.ping.about}")` : ''
       console.log(`The user, on the Cockpit board${about}: ${j.ping.text}`)

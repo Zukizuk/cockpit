@@ -7,6 +7,12 @@ Newest first. Each change is listed under New, Improved or Fixed.
 **Improved**
 - Claude now knows when cards on your board lie on top of each other or stick out of their section, and fixes it before saying the board is tidy. Before, it couldn't tell and asked you to look.
 - When Claude puts cards in a section, it lays them out in rows inside it, and "tidy" on a section does the same.
+- "Tidy what's in it" on a section's menu lays its cards out in rows, nothing on top of anything, and fits the section round them. Undo puts them back.
+- When Claude leaves you a question, the Questions card comes out to where you're looking, opened, even if it was tucked away or inside a tucked section. Before, the question could sit out of sight.
+- Moving a card into a tucked, shelved or folded section brings the section back first, instead of failing.
+- A "Stop listening" button beside Tell Claude lets a chat that's listening for the board go, and tells it not to start again unless you ask.
+- Claude can tell which cards it made, in this chat or an earlier one, so it leaves yours alone.
+- Claude can name a card by its short reference wherever it names another card (beside, arrows, focus), and keeps using it when a note's title changes.
 - Claude can put a whole section on the shelf in one step, instead of shelving its cards one by one, and it can see what's on the shelf and when it comes back.
 - When Claude needs your Allow while Cockpit is minimised or behind other windows, Cockpit's taskbar button flashes and it waits up to a minute for you. If nobody presses Allow, Claude is told why and asks you in the chat.
 
