@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 26 November 2026 (version 0.2.15)
 
 **Improved**
 - Claude now knows when cards on your board lie on top of each other or stick out of their section, and fixes it before saying the board is tidy. Before, it couldn't tell and asked you to look.
