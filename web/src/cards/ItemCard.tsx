@@ -77,6 +77,7 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
           icon: Bookmark,
           run: () => board.setLater(e.id, 'reading').then(() => (reload(), board.toast('On Later, under Reading'))),
           hidden: (e.kind !== 'link' && e.kind !== 'file') || (!!e.later && e.later !== 'done'),
+          more: true,
         },
         { label: 'Done reading', icon: Check, run: () => board.setLater(e.id, 'done').then(() => (reload(), board.toast('Done, on Later'))), hidden: !e.later || e.later === 'done' },
         { label: 'Pin to Quick access', icon: Pin, run: () => board.pin(e.kind === 'link' ? { url: e.url, title: e.title } : { path: e.path, title: e.title }), hidden: e.kind !== 'link' && e.kind !== 'file', more: true },

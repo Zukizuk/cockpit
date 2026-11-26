@@ -263,7 +263,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     [...own, { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) }],
     [
       { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F' },
-      { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
+      { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined), more: !board.focusing },
       {
         label: 'Compare side by side',
         icon: SquareSplitHorizontal,
@@ -287,9 +287,10 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     ],
     [
       { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L', more: !locked },
-      { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H' },
+      { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H', more: !veiled },
     ],
-    ...agentAndSpaceActions(board, markIds, nodeId, mark),
+    // sharing with agents and moving to another space: used now and then, so under More (a short menu fits the screen)
+    ...agentAndSpaceActions(board, markIds, nodeId, mark).map(g => g.map(a => ({ ...a, more: true }))),
     end,
   ]
   const shown = inGroups(groups)

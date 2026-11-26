@@ -9,6 +9,14 @@ Newest first. Each change is listed under New, Improved or Fixed.
 - The picture you started from is kept: "Back to the original" (under More on the card's menu) returns to it. A picture from your own folders is never changed or removed. One pasted into Cockpit keeps its original for 30 days after the edit, then Cockpit removes it so edits don't pile up.
 - Claude can draw on a picture on your board too: circle what it means, point an arrow at it, add a label, or blur something out.
 
+**Improved**
+- A card's menu is shorter, so it fits on the screen without scrolling: sharing with agents, moving to another space, focus, hide and the like are under More.
+- Menus stay clear of the screen's edges and show above messages at the bottom of the screen.
+
+**Fixed**
+- More on a card's menu now opens its side menu. It could open hidden, cut off by the menu it came from, so it looked like nothing happened.
+- The dots beside More sit apart from the word, like the other icons.
+
 ## 26 November 2026 (version 0.2.15)
 
 **Improved**

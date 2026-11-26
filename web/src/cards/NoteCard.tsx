@@ -96,13 +96,14 @@ export function NoteCard({ id, data, selected }: NodeProps<CardNode>) {
   const actions: CardAction[] = [
     { label: 'Open full screen', icon: Maximize2, run: expand, keys: 'Space' },
     { label: own ? 'Rename' : 'Add a title', icon: Heading, run: () => setNaming(true), keys: 'F2' },
-    ...(journal.enabled ? [{ label: 'Sync with Kokoro now', icon: RefreshCw, run: () => note.save().then(journal.syncNow).then(board.toast) }] : []),
+    ...(journal.enabled ? [{ label: 'Sync with Kokoro now', icon: RefreshCw, run: () => note.save().then(journal.syncNow).then(board.toast), more: true }] : []),
     { label: 'Copy the text', icon: Copy, run: () => board.copy(note.text.trim(), 'Copied'), hidden: !note.text.trim() },
-    { label: 'Pin to Quick access', icon: Pin, run: () => board.pin({ note: data.ref, title }) },
+    { label: 'Pin to Quick access', icon: Pin, run: () => board.pin({ note: data.ref, title }), more: true },
     {
       label: editorLabel(board.prefs.editor),
       icon: board.prefs.editor === 'vscode' ? Code2 : ExternalLink,
       run: () => note.save().then(() => openOutside({ kind: 'note', path: data.ref, how: 'editor' })).catch(e => board.toast(e.message)),
+      more: true,
     },
     { label: 'Archive note', icon: Archive, danger: true, gap: true, run: () => archive() },
     { label: 'Remove from board', icon: X, run: () => board.removeCard(id), keys: 'Del' },
