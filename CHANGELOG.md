@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 27 November 2026 (version 0.2.16)
 
 **New**
 - Draw on a picture. "Draw on it" on an image card (its menu, or the brush button on the card) opens it large with a pen, a highlighter, arrows, boxes, circles, text, blur (to hide a name or a number before you share it) and crop, in six colours, with undo. Save, and the card shows your marked-up picture.
@@ -10,7 +10,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 - Claude can draw on a picture on your board too: circle what it means, point an arrow at it, add a label, or blur something out.
 
 **Improved**
-- A card's menu is shorter, so it fits on the screen without scrolling: sharing with agents, moving to another space, focus, hide and the like are under More.
+- A card's menu is shorter, so it fits on the screen without scrolling. It keeps what you can only do there (comment, focus, the shelf, and sharing with agents while a card isn't shared or private yet); what the card's own strip already has (full screen, fold, hide, open, draw) and the rarer actions (moving to another space, pin, copy the path) are under More.
 - Menus stay clear of the screen's edges and show above messages at the bottom of the screen.
 
 **Fixed**

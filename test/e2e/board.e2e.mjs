@@ -169,7 +169,10 @@ test("a card's menu: what it does first, then view, More (agents, spaces and the
   const labels = (await menu.locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
   assert.deepEqual(await wrapped(), [], 'no item wraps onto a second line')
   const at = l => labels.findIndex(x => x.startsWith(l))
-  const order = ['Open full screen', 'Comment', 'Roll up into its strip', 'More', 'Remove from board']
+  // what's only here; what the strip has too (full screen, roll up, hide, tuck) and its agents and spaces (shared
+  // already: its strip says so) are under More
+  const order = ['Comment', 'Focus on this card', 'Put on the shelf…', 'More', 'Remove from board']
+  for (const l of ['Open full screen', 'Roll up into its strip', 'Stop sharing with agents']) assert.ok(at(l) < 0, `${l} is under More`)
   for (const l of order) assert.ok(at(l) >= 0, `${l} is in the menu`)
   assert.deepEqual([...order].sort((a, b) => at(a) - at(b)), order, 'in this order')
   assert.equal(labels.at(-1), 'Remove from board')
@@ -182,7 +185,17 @@ test("a card's menu: what it does first, then view, More (agents, spaces and the
   const sub = page.locator('[role=menu]').last()
   assert.ok(await until(async () => (await sub.innerText().catch(() => '')).includes('Stop sharing with agents')), 'More opens on hover')
   assert.match(await sub.innerText(), /Move to Work/)
+  assert.match(await sub.innerText(), /Open full screen/)
   await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+
+  // a card neither shared nor private: sharing is right in its menu
+  const plain = await note('Plain list').boundingBox()
+  await page.mouse.click(plain.x + 60, plain.y + 12, { button: 'right' })
+  const m2 = page.locator('[role=menu]').last()
+  await m2.waitFor()
+  const l2 = (await m2.locator(':scope > [role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0])
+  assert.ok(l2.includes('Share with agents') && l2.includes('Private from agents'), `sharing in the menu: ${l2.join(', ')}`)
   await page.keyboard.press('Escape')
 })
 

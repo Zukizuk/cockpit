@@ -94,7 +94,7 @@ export function NoteCard({ id, data, selected }: NodeProps<CardNode>) {
   )
 
   const actions: CardAction[] = [
-    { label: 'Open full screen', icon: Maximize2, run: expand, keys: 'Space' },
+    { label: 'Open full screen', icon: Maximize2, run: expand, keys: 'Space', more: true },
     { label: own ? 'Rename' : 'Add a title', icon: Heading, run: () => setNaming(true), keys: 'F2' },
     ...(journal.enabled ? [{ label: 'Sync with Kokoro now', icon: RefreshCw, run: () => note.save().then(journal.syncNow).then(board.toast), more: true }] : []),
     { label: 'Copy the text', icon: Copy, run: () => board.copy(note.text.trim(), 'Copied'), hidden: !note.text.trim() },

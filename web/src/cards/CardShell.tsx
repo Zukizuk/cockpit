@@ -262,8 +262,10 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     here,
     [...own, { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) }],
     [
-      { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F' },
-      { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined), more: !board.focusing },
+      // the card's own strip has fold (and hide, and a sticky note's tuck): in the menu they're under More, so it
+      // stays short with what's only here
+      { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F', more: true },
+      { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
       {
         label: 'Compare side by side',
         icon: SquareSplitHorizontal,
@@ -271,7 +273,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
         hidden: !(selected && pickedCount === 2),
         keys: 'Space',
       },
-      { label: 'Tuck away', icon: ArrowUpToLine, run: () => nodeId && board.tuck([nodeId]) },
+      { label: 'Tuck away', icon: ArrowUpToLine, run: () => nodeId && board.tuck([nodeId]), more: !!sticky },
       { label: 'Put on the shelf…', icon: Package, run: () => nodeId && askPutAway([nodeId]) },
       {
         label: 'Fit to contents',
@@ -289,8 +291,9 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L', more: !locked },
       { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H', more: !veiled },
     ],
-    // sharing with agents and moving to another space: used now and then, so under More (a short menu fits the screen)
-    ...agentAndSpaceActions(board, markIds, nodeId, mark).map(g => g.map(a => ({ ...a, more: true }))),
+    // sharing with agents: in the menu while the card is neither shared nor private (once it is, its strip shows a
+    // badge that undoes it, so then it's under More); moving to another space: under More
+    ...agentAndSpaceActions(board, markIds, nodeId, mark).map((g, i) => g.map(a => ({ ...a, more: i > 0 || !!mark }))),
     end,
   ]
   const shown = inGroups(groups)

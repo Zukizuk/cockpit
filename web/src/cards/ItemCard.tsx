@@ -59,8 +59,9 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
   const actions: CardAction[] = e
     ? [
         // an image: draw on it (arrows, boxes, text, blur, crop); and, once drawn on, back to how it was
-        { label: 'Draw on it', icon: Brush, run: () => editImage(e.id), hidden: e.format !== 'image' },
-        { label: e.kind === 'link' ? 'Open in the browser' : 'Open in its own program', icon: ExternalLink, run: () => native('default') },
+        // also on the card's strip: under More in its menu
+        { label: 'Draw on it', icon: Brush, run: () => editImage(e.id), hidden: e.format !== 'image', more: true },
+        { label: e.kind === 'link' ? 'Open in the browser' : 'Open in its own program', icon: ExternalLink, run: () => native('default'), more: true },
         { label: 'Back to the original', icon: Undo2, run: backToOriginal, hidden: e.format !== 'image' || !e.original, more: true },
         { label: 'Show in folder', icon: FolderOpen, run: () => native('reveal'), hidden: e.kind === 'link', more: true },
         {
@@ -163,7 +164,7 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
     [read],
   )
   const all: CardAction[] = [
-    { label: 'Open full screen', icon: Maximize2, run: () => board.expand({ type: 'item', ref: data.ref }) },
+    { label: 'Open full screen', icon: Maximize2, run: () => board.expand({ type: 'item', ref: data.ref }), more: true },
     ...actions,
     { label: 'Remove from board', icon: X, run: () => board.removeCard(id), gap: true },
   ]
