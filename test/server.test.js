@@ -283,8 +283,9 @@ test('sessions: whose turn it is', () => {
 test('sessions: reading a transcript', () => {
   const dir = path.join(T, '.claude', 'projects', 'C--work')
   fs.mkdirSync(dir, { recursive: true })
+  const work = path.join(path.parse(T).root, 'work') // C:\work on Windows, /work elsewhere
   const lines = [
-    { type: 'user', origin: { kind: 'task-notification', subkind: 'scheduled-trigger' }, cwd: 'C:\\work', message: { role: 'user', content: '<scheduled-task name="daily">do it</scheduled-task>' } },
+    { type: 'user', origin: { kind: 'task-notification', subkind: 'scheduled-trigger' }, cwd: work, message: { role: 'user', content: '<scheduled-task name="daily">do it</scheduled-task>' } },
     { type: 'custom-title', customTitle: 'My chat' },
     { type: 'assistant', message: { id: 'm1', content: [{ type: 'text', text: 'Looking.' }] } },
     { type: 'assistant', message: { id: 'm1', content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls -la' } }] } },
@@ -627,7 +628,7 @@ test('pinned: files, folders, links and notes; opened and counted; groups; never
   fs.writeFileSync(xlsx, 'x')
   const f = pinned.addPin({ path: `"${xlsx}"` })
   assert.deepEqual([f.kind, f.title, f.missing], ['file', 'Daily report.xlsx', false])
-  assert.equal(pinned.addPin({ path: xlsx.toUpperCase() }).already, process.platform === 'win32' ? true : undefined)
+  assert.equal(pinned.addPin({ path: xlsx.toUpperCase() }).already, true, 'file names ignore case, as on Windows and macOS')
   const d = pinned.addPin({ path: dir, group: 'Work' })
   assert.equal(d.kind, 'folder')
   const l = pinned.addPin({ url: 'https://example.com/forms/daily-check' })
@@ -865,7 +866,7 @@ test('board: cards saved and read back, bad ones dropped, sizes kept sane', asyn
   assert.deepEqual([odd.locked, odd.color], [undefined, undefined], 'anything else is dropped')
 })
 
-test('runs: only an output command runs, in its folder, with its output kept', async () => {
+test('runs: only an output command runs, in its folder, with its output kept', async t => {
   const outputs = await import('../server/lib/outputs.js')
   const runs = await import('../server/lib/runs.js')
   assert.equal(runs.guessShell('Get-ChildItem | Select-Object Name'), 'pwsh')
@@ -875,6 +876,7 @@ test('runs: only an output command runs, in its folder, with its output kept', a
   assert.equal(runs.commandFor(g.id, cmd).cwd, T)
   assert.throws(() => runs.commandFor(g.id, file), /not a command/)
   assert.throws(() => runs.commandFor(g.id, cmd, path.join(T, 'nope')), /No folder/)
+  if (process.platform !== 'win32') return t.skip('running a command needs PowerShell for now')
   let v = runs.startRun({ groupId: g.id, index: cmd, shell: 'pwsh' })
   let out = v.out
   for (let i = 0; i < 200 && v.status === 'running'; i++) {
@@ -1274,7 +1276,8 @@ test('agents: cards and spaces shared or private are kept; access is checked; th
   saveConfig({ agentAccess: { other: 'shared' } })
 
   const link = await import('../server/lib/claude-link.js')
-  assert.equal(link.rulePath('C:\\Users\\me\\Documents\\Cockpit'), '//c/Users/me/Documents/Cockpit')
+  if (process.platform === 'win32') assert.equal(link.rulePath('C:\\Users\\me\\Documents\\Cockpit'), '//c/Users/me/Documents/Cockpit')
+  else assert.equal(link.rulePath('/Users/me/Documents/Cockpit'), '//Users/me/Documents/Cockpit')
   // Claude Code's settings in the temporary home: the user's own rules stay, Cockpit's go in and out
   const settings = path.join(T, '.claude', 'settings.json')
   fs.mkdirSync(path.dirname(settings), { recursive: true })
