@@ -1,10 +1,11 @@
 // A file or link on the board, drawn in place. Expand for full screen; everything else is one click away.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useReactFlow, type NodeProps } from '@xyflow/react'
-import { Bookmark, Brush, Check, Code2, Copy, ExternalLink, PenLine, FolderOpen, Globe, Maximize2, Pin, RefreshCw, Undo2, X } from 'lucide-react'
+import { Bookmark, Brush, Check, ClipboardCopy, Code2, Copy, ExternalLink, PenLine, FolderOpen, Globe, Maximize2, Pin, RefreshCw, Undo2, X } from 'lucide-react'
 import { get, openOutside, post, type ShownEntry, type ShownRead } from '../api'
 import { ago, emit, onEvent } from '../lib'
 import { editImage } from '../views/ImageEditor'
+import { copyImage, imageUrl } from '../lib/markup'
 import { SIZES, useBoard, type CardNode } from '../board'
 import { Viewer, basename, iconFor, kindLabel, placeOf } from '../components/Viewer'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -54,12 +55,21 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
       board.toast(err.message)
     }
   }, [e, board])
+  // the picture itself on the clipboard: paste it to Claude (its path, in Cockpit's own folder, is no use to it)
+  const copyPicture = useCallback(() => {
+    if (!e || !read) return
+    copyImage(imageUrl(e.id, e.path, read.mtime)).then(
+      () => board.toast('Picture copied: paste it anywhere'),
+      (err: any) => board.toast(err?.message || "Couldn't copy the picture"),
+    )
+  }, [e, read, board])
   const textual = !!e && ['markdown', 'code', 'text', 'json', 'csv', 'diff', 'html', 'mermaid'].includes(e.format)
   const canCopyText = !!e && !!read?.text && (e.kind === 'content' || textual)
   const actions: CardAction[] = e
     ? [
         // an image: draw on it (arrows, boxes, text, blur, crop); and, once drawn on, back to how it was
         // on the card's strip too (draw, open): those are under More in its menu; the rest are in the menu itself
+        { label: 'Copy the picture', icon: ClipboardCopy, run: copyPicture, hidden: e.format !== 'image', more: true },
         { label: 'Draw on it', icon: Brush, run: () => editImage(e.id), hidden: e.format !== 'image', more: true },
         { label: e.kind === 'link' ? 'Open in the browser' : 'Open in its own program', icon: ExternalLink, run: () => native('default'), more: e.kind !== 'content' },
         { label: 'Back to the original', icon: Undo2, run: backToOriginal, hidden: e.format !== 'image' || !e.original },
@@ -85,7 +95,7 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
         { label: 'Copy the text', icon: Copy, run: () => board.copy(read?.text || '', 'Copied'), gap: e.kind === 'content', hidden: !canCopyText },
       ]
     : []
-  return { native, readAgain, actions, canCopyText }
+  return { native, readAgain, actions, canCopyText, copyPicture }
 }
 
 export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
@@ -141,7 +151,7 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
     [rf, id, board],
   )
 
-  const { native, readAgain, actions, canCopyText } = useItemActions(read, load)
+  const { native, readAgain, actions, canCopyText, copyPicture } = useItemActions(read, load)
   const e = read?.entry
   // The viewer is drawn again only when the item changes. Every card follows the board's shared state (a toast, a
   // note saved elsewhere, a list refreshed), and a long document or a wide sheet is slow to draw for nothing.
@@ -186,6 +196,7 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
             ) : (
               <IconButton icon={ExternalLink} label={e.kind === 'link' ? 'Open in the browser' : 'Open in its own program'} onClick={() => native('default')} />
             )}
+            {e.format === 'image' && <IconButton icon={ClipboardCopy} label="Copy the picture" onClick={copyPicture} />}
             {e.format === 'image' && <IconButton icon={Brush} label="Draw on it" onClick={() => editImage(e.id)} />}
             <IconButton icon={Maximize2} label="Open full screen" onClick={() => board.expand({ type: 'item', ref: data.ref })} />
           </>

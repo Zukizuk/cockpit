@@ -1177,6 +1177,17 @@ test('a picture: Claude draws on it, the user draws on it and saves, and goes ba
   assert.ok(await until(async () => { const e = await entry(); return e.path !== firstEdit && e.original?.path === made.path }), 'saved: a new edit, the same original')
   assert.ok(await until(async () => !(await editor.count())), 'the editor closes')
 
+  // the picture itself onto the clipboard, from its strip: a PNG to paste to Claude
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await node.hover()
+  await node.getByRole('button', { name: 'Copy the picture' }).click()
+  assert.ok(await until(async () => (await page.locator('[data-sonner-toast], [role=status]').allInnerTexts()).join(' ').includes('Picture copied')), 'it says so')
+  const pasted = await page.evaluate(async () => {
+    const [item] = await navigator.clipboard.read()
+    return item.types.includes('image/png') ? (await item.getType('image/png')).size : 0
+  })
+  assert.ok(pasted > 100, `a PNG on the clipboard (${pasted} bytes)`)
+
   // back to the original, from the card's menu
   await node.click({ button: 'right', position: { x: 60, y: 12 } })
   if (process.env.SHOT) await page.waitForTimeout(400), await page.screenshot({ path: process.env.SHOT.replace(/\.png$/, '-menu.png') })

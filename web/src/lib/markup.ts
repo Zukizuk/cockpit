@@ -130,3 +130,19 @@ export function loadImage(src: string) {
 
 /** Where an image card's picture is served (as the viewer has it). */
 export const imageUrl = (id: string, file: string, mtime = Date.now()) => `/api/shown/${id}/files/${encodeURIComponent(file.split(/[\\/]/).pop() || '')}?v=${Math.round(mtime)}`
+
+/** Put a picture on the clipboard as PNG, to paste into a chat with an agent (a pasted picture's path is no use to it).
+ * The write starts at once, while the click still counts, and the picture follows. */
+export function copyImage(src: string) {
+  const png = loadImage(src).then(
+    img =>
+      new Promise<Blob>((resolve, reject) => {
+        const c = document.createElement('canvas')
+        c.width = img.naturalWidth
+        c.height = img.naturalHeight
+        c.getContext('2d')!.drawImage(img, 0, 0)
+        c.toBlob(b => (b ? resolve(b) : reject(new Error("Couldn't copy the picture"))), 'image/png')
+      }),
+  )
+  return navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+}
