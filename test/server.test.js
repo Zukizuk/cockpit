@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const T = fs.mkdtempSync(path.join(os.tmpdir(), 'cockpit-unit-'))
@@ -866,18 +866,19 @@ test('board: cards saved and read back, bad ones dropped, sizes kept sane', asyn
   assert.deepEqual([odd.locked, odd.color], [undefined, undefined], 'anything else is dropped')
 })
 
-test('runs: only an output command runs, in its folder, with its output kept', async t => {
+test('runs: only an output command runs, in its folder, with its output kept', async () => {
   const outputs = await import('../server/lib/outputs.js')
   const runs = await import('../server/lib/runs.js')
-  assert.equal(runs.guessShell('Get-ChildItem | Select-Object Name'), 'pwsh')
-  assert.equal(runs.guessShell('$env:X = 1'), 'pwsh')
+  // PowerShell where it's installed (always on Windows)
+  const ps = runs.shells().pwsh ? 'pwsh' : 'bash'
+  assert.equal(runs.guessShell('Get-ChildItem | Select-Object Name'), ps)
+  assert.equal(runs.guessShell('$env:X = 1'), ps)
   const g = outputs.addOutputs({ cwd: T, items: [{ kind: 'command', label: 'echo', text: 'echo cockpit-run-ok' }, { kind: 'file', label: 'x', target: T, text: T }] })
   const [cmd, file] = g.items.map(i => i.id)
   assert.equal(runs.commandFor(g.id, cmd).cwd, T)
   assert.throws(() => runs.commandFor(g.id, file), /not a command/)
   assert.throws(() => runs.commandFor(g.id, cmd, path.join(T, 'nope')), /No folder/)
-  if (process.platform !== 'win32') return t.skip('running a command needs PowerShell for now')
-  let v = runs.startRun({ groupId: g.id, index: cmd, shell: 'pwsh' })
+  let v = runs.startRun({ groupId: g.id, index: cmd, shell: process.platform === 'win32' ? 'pwsh' : 'bash' })
   let out = v.out
   for (let i = 0; i < 200 && v.status === 'running'; i++) {
     await new Promise(r => setTimeout(r, 100))
@@ -886,6 +887,52 @@ test('runs: only an output command runs, in its folder, with its output kept', a
   }
   assert.equal(v.status, 'done')
   assert.match(out, /cockpit-run-ok/)
+})
+
+test('runs off Windows: the login shell, Stop ends the whole tree, Terminal opens it in its folder', { skip: process.platform === 'win32' }, async () => {
+  const outputs = await import('../server/lib/outputs.js')
+  const runs = await import('../server/lib/runs.js')
+  const until = async (check, ms = 3000) => {
+    for (const end = Date.now() + ms; Date.now() < end; await new Promise(r => setTimeout(r, 50))) if (await check()) return true
+    return false
+  }
+  assert.equal(runs.shells().bash, true, 'a shell is always there')
+  assert.equal(runs.guessShell('ls -la | head'), 'bash')
+  // a command that starts a child of its own: Stop ends both
+  const pidFile = path.join(T, 'child.pid')
+  const g = outputs.addOutputs({ cwd: T, items: [{ kind: 'command', text: `sleep 30 & echo $! > '${pidFile}'; wait` }, { kind: 'command', text: `echo "it's" 'a "test"'; pwd` }] })
+  const [long, quoted] = g.items.map(i => i.id)
+  let v = runs.startRun({ groupId: g.id, index: long })
+  assert.ok(await until(() => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf8').trim()), 'the child started')
+  const child = Number(fs.readFileSync(pidFile, 'utf8'))
+  v = runs.stopRun(v.id)
+  assert.equal(v.status, 'stopped')
+  const alive = pid => { try { process.kill(pid, 0); return true } catch { return false } }
+  assert.ok(await until(() => !alive(child), 5000), "the shell's child is gone too")
+
+  // Terminal: a script that goes to the folder and runs it, then leaves a shell open; nothing to quote for AppleScript
+  let launched = null
+  const r = runs.openInTerminal({ groupId: g.id, index: quoted }, { launch: (exe, args) => (launched = { exe, args }) })
+  assert.equal(r.ok, true)
+  assert.equal(launched.exe, '/usr/bin/open')
+  const script = launched.args.at(-1)
+  assert.deepEqual(launched.args.slice(0, -1), ['-a', 'Terminal'])
+  assert.match(script, /\.command$/)
+  assert.equal((fs.statSync(script).mode & 0o777).toString(8), '700')
+  // run as Terminal would, less the shell it leaves open at the end: the command whole, in its folder
+  // run as Terminal would, with nothing to type: the shell it leaves open ends at once. No rc files of the person
+  // running the tests.
+  const ran = spawnSync('/bin/sh', [script], { encoding: 'utf8', cwd: os.tmpdir(), input: '', env: { ...process.env, HOME: T, ZDOTDIR: T } })
+  const out = ran.stdout + ran.stderr
+  assert.equal(fs.existsSync(script), false, 'the script removes itself')
+  assert.ok(out.includes(`it's a "test"`), `the command whole: ${out}`)
+  assert.ok(out.includes(T), 'in its folder')
+
+  // Terminal not there: the script doesn't stay behind
+  let failed
+  runs.openInTerminal({ groupId: g.id, index: quoted }, { launch: (exe, args, onError) => ((failed = args.at(-1)), onError()) })
+  assert.equal(fs.existsSync(failed), false)
+  fs.rmSync(script, { force: true })
 })
 
 test('outputs: one group per chat, newest turn on top, repeats move up, rows keep their ids', async () => {

@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Fixed**
+- On a Mac, Run on a command from Outputs works: it runs in your own shell (zsh or bash, with your PATH), Stop ends everything it started, and Open in a terminal opens Terminal in its folder. PowerShell is offered when it's installed.
+
 ## 27 November 2026 (version 0.2.17)
 
 **Improved**

@@ -125,7 +125,7 @@ export function CommandCard({ id, data, selected }: NodeProps<CardNode>) {
           <div className="flex flex-wrap items-center gap-2">
             <Input value={cwd} onChange={e => setCwd(e.target.value)} className="h-8 min-w-[180px] flex-1 font-mono text-[12px]" title="Runs in this folder" aria-label="Folder" disabled={running} />
             <ToggleGroup type="single" variant="outline" size="sm" value={shell} onValueChange={v => v && setShell(v as Shell)} disabled={running}>
-              <ToggleGroupItem value="pwsh" className="px-2.5 text-[12px]">
+              <ToggleGroupItem value="pwsh" className="px-2.5 text-[12px]" disabled={!info.shells.pwsh}>
                 PowerShell
               </ToggleGroupItem>
               <ToggleGroupItem value="bash" className="px-2.5 text-[12px]" disabled={!info.shells.bash}>
