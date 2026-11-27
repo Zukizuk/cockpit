@@ -1117,6 +1117,9 @@ test('a table tucked away: Claude adds to it and fills a cell, each once, answer
 })
 
 test('a call Claude stopped waiting for, done later all the same: its next call says so, once', async () => {
+  // the board holds a Web Lock, so Edge doesn't freeze it in the background (a frozen page answers nothing)
+  const locks = await page.evaluate(async () => (await navigator.locks.query()).held.map(l => l.name))
+  assert.ok(locks.includes('cockpit-board-tools'), `held: ${locks}`)
   // the window's answer is slow, and the agent's side gives up first (as an MCP server with a shorter wait did)
   let held = 0
   await page.route('**/api/agent/result', async route => {

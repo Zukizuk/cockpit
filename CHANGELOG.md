@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 27 November 2026 (version 0.2.21)
+
+**Fixed**
+- Claude's changes on the board no longer wait for you to come back to Cockpit. Edge froze Cockpit's page when its window had been in the background a while. Claude's change then waited there and was only made when you next used the window, long after Claude had given up. Cockpit now keeps its page awake while it's open. An idle board costs next to nothing.
+
 ## 27 November 2026 (version 0.2.20)
 
 **Fixed**

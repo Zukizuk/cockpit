@@ -74,9 +74,24 @@ let allowed = new Map<string, number>()
 /** The last Allow nobody pressed: whether Cockpit's window was out of sight while it waited (for what Claude is told). */
 let unanswered: { away: boolean } | null = null
 
+/**
+ * Edge freezes a page whose window has been in the background a while (sleeping tabs, efficiency mode): it runs
+ * nothing until the window is used again. Then an agent's call waits there, unanswered, and its change is made only
+ * when the person comes back, long after the agent gave up. A page holding a Web Lock isn't frozen, so the board holds
+ * one for as long as it's open. An idle page costs next to nothing awake.
+ */
+function stayUnfrozen() {
+  try {
+    void navigator.locks?.request('cockpit-board-tools', () => new Promise<never>(() => {})).catch(() => {})
+  } catch {
+    // no Web Locks here: the page may be frozen, and a call then waits for the window to be used
+  }
+}
+
 export function startAgentBridge(asker: Ask) {
   if (started) return
   started = true
+  stayUnfrozen()
   const ask: Ask = async (text, button) => {
     const away = document.hidden
     const ok = await asker(text, button)
