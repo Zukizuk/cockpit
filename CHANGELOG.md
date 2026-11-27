@@ -5,6 +5,8 @@ Newest first. Each change is listed under New, Improved or Fixed.
 ## Coming next
 
 **Fixed**
+- On a Mac, Run on a command from Outputs works: it runs in your own shell (zsh or bash, with your PATH), Stop ends everything it started, and Open in a terminal opens Terminal in its folder. PowerShell is offered when it's installed.
+
 - On a Mac, the key that encrypts your secret snippets is kept in your Keychain, not in a file. A key already in the file moves there the next time it's used.
 
 **New**
