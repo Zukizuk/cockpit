@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Fixed**
+- On a Mac, the key that encrypts your secret snippets is kept in your Keychain, not in a file. A key already in the file moves there the next time it's used.
+
 ## 27 November 2026 (version 0.2.17)
 
 **Improved**

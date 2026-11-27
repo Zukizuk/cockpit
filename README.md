@@ -52,7 +52,7 @@ Windows may warn that the installer is from an unknown publisher: the release is
 - **Sticky notes** (<kbd>N</kbd>): click and type. Five colours, a title if you want one. They're plain text
   files in your notes folder.
 - **Snippets** (<kbd>C</kbd>): things you copy often, one click each. Secrets are encrypted on disk with Windows'
-  own data protection and hidden until revealed.
+  own data protection (on a Mac, with a key kept in your Keychain) and hidden until revealed.
 - **Quick access** (<kbd>Q</kbd>): your pins, plus what you open most. Its pin keeps it open beside the board.
   Drag a row from it (or from Later, Outputs or a folder card) onto the board to make it a card.
 - **Today** (<kbd>T</kbd>): a simple to-do list on this PC, or today's Todoist tasks once you add your Todoist token
