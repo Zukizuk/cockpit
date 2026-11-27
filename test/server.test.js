@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const T = fs.mkdtempSync(path.join(os.tmpdir(), 'cockpit-unit-'))
@@ -73,6 +73,59 @@ test('journal extra: off for a new install, kept on for someone who already writ
   assert.equal(load().extras.journal, true)
   saveConfig({ extras: { journal: false } })
   fs.rmSync(dir, { recursive: true, force: true })
+})
+
+test('claude link: finds an executable on PATH before trying install folders', { skip: process.platform === 'win32' }, async t => {
+  const { findClaude } = await import('../server/lib/claude-link.js')
+  const home = path.join(T, "claude user's home")
+  const first = path.join(home, 'first')
+  const second = path.join(home, 'second')
+  const env = { HOME: home, PATH: [first, second].join(path.delimiter) }
+  const make = (dir, mode = 0o755) => {
+    fs.mkdirSync(dir, { recursive: true })
+    const file = path.join(dir, 'claude')
+    fs.writeFileSync(file, '#!/bin/sh\n', { mode })
+    return file
+  }
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const native = make(path.join(home, '.local', 'bin'))
+  const legacy = make(path.join(home, '.claude', 'local'))
+  const blocked = make(first, 0o644)
+  const onPath = make(second)
+
+  assert.equal(await findClaude(env), onPath)
+  fs.chmodSync(blocked, 0o755)
+  assert.equal(await findClaude(env), blocked)
+  fs.unlinkSync(blocked)
+  fs.mkdirSync(blocked)
+  fs.unlinkSync(onPath)
+  assert.equal(await findClaude(env), native)
+  fs.unlinkSync(native)
+  assert.equal(await findClaude(env), legacy)
+})
+
+test('claude link: Settings connects using the Claude command outside PATH', { skip: process.platform === 'win32' }, t => {
+  const home = fs.mkdtempSync(path.join(T, "claude user's home-"))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const bin = path.join(home, '.local', 'bin')
+  fs.mkdirSync(bin, { recursive: true })
+  fs.writeFileSync(path.join(bin, 'claude'), '#!/usr/bin/env node\nrequire("node:fs").appendFileSync(process.env.HOME + "/calls", process.argv.slice(2).join("\\n") + "\\n")\n', { mode: 0o755 })
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import { connectClaude } from './server/lib/claude-link.js'
+    console.log(JSON.stringify(await connectClaude()))
+  `], {
+    cwd: path.join(here, '..'), encoding: 'utf8',
+    env: { ...process.env, HOME: home, PATH: home, COCKPIT_HOME: home, COCKPIT_DATA: path.join(home, 'data') },
+  })
+  assert.equal(child.status, 0, child.stderr)
+  const link = JSON.parse(child.stdout)
+  assert.equal(link.claude, true)
+  assert.deepEqual(link.problems, [])
+  assert.ok(link.command.startsWith("'" + bin.replace(/'/g, "'\\''") + "/claude' mcp add "))
+  assert.deepEqual(fs.readFileSync(path.join(home, 'calls'), 'utf8').trimEnd().split('\n'), [
+    'mcp', 'remove', '--scope', 'user', 'cockpit',
+    'mcp', 'add', '--scope', 'user', 'cockpit', '--', process.execPath, path.join(here, '..', 'server', 'mcp.js'),
+  ])
 })
 
 test('claude link: says whether the Outputs hook and the board tools point at this copy', async () => {

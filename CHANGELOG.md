@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Fixed**
+- Settings can find and connect to Claude Code on macOS and Linux, even when Cockpit starts outside your terminal.
+
 ## 27 November 2026 (version 0.2.17)
 
 **Improved**
