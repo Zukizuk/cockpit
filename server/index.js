@@ -489,7 +489,7 @@ async function api(req, res, url) {
   // windows: how many Cockpit pages are open (Send to brings one forward rather than opening another)
   if (area === 'health') return json(res, 200, { ok: true, app: 'cockpit', version: VERSION, pid: process.pid, startedAt, windows: clients.size })
 
-  // the + box's "Choose files…": Windows' Open dialog, for files with their real paths
+  // the + box's "Choose files…": the system Open dialog, for files with their real paths
   if (area === 'pick' && method === 'POST') {
     const r = await pickFiles()
     if (r.paths.length) counted('add.pick')

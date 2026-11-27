@@ -4,6 +4,9 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 ## Coming next
 
+**New**
+- Choose files… in the + box now works on macOS too, opening the Mac's own file picker.
+
 **Fixed**
 - Settings can find and connect to Claude Code on macOS and Linux, even when Cockpit starts outside your terminal.
 
