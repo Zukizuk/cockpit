@@ -186,7 +186,7 @@ function callBoard(tool, input, { agent = 'other', label = '' } = {}) {
     throw new UserError("The user has turned off agents' access to the board (Cockpit: Settings > Agents). Don't try to read the board another way.")
   }
   const target = windowForAgent()
-  if (!target) throw new UserError('No Cockpit window is open. Ask the user to open Cockpit (Ctrl+Alt+K), then try again.')
+  if (!target) throw new UserError(`No Cockpit window is open. Ask the user to open Cockpit${process.platform === 'win32' ? ' (Ctrl+Alt+K)' : ''}, then try again.`)
   const id = Math.random().toString(36).slice(2, 12)
   // an act can wait for the person to allow a step (up to a minute while the window is out of sight)
   const wait = tool === 'act' ? 90_000 : 10_000

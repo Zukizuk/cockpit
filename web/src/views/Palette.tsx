@@ -11,6 +11,7 @@ import { isPath, isUrl, unquote } from './paste'
 import { openDictionary } from './Dictionary'
 import { looksTabular, newTable, rowsFromText } from '../cards/TableCard'
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut } from '@/components/ui/command'
+import { shortcut } from '../platform'
 
 // How many kept things, notes and tables show at a time: a few recent ones when nothing is typed, more when searching,
 // and "Show more" for the rest. Searching looks through all of them, not only the ones shown, so the list stays short
@@ -258,7 +259,7 @@ export function Palette() {
               <CommandItem value="tidy arrange line up cards" onSelect={() => (close(), board.tidy())}>
                 <LayoutGrid strokeWidth={1.5} />
                 Tidy the board
-                <CommandShortcut>Ctrl Alt T</CommandShortcut>
+                <CommandShortcut>{shortcut('Ctrl Alt T')}</CommandShortcut>
               </CommandItem>
               <CommandItem value="what's new changelog changes updates" onSelect={() => (close(), board.openChangelog())}>
                 <Sparkles strokeWidth={1.5} />

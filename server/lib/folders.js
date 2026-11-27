@@ -36,7 +36,7 @@ export function listFolder(p) {
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true })
   } catch (e) {
-    throw new UserError(e?.code === 'EPERM' || e?.code === 'EACCES' ? "Windows doesn't let Cockpit read that folder" : "Couldn't read that folder")
+    throw new UserError(e?.code === 'EPERM' || e?.code === 'EACCES' ? (process.platform === 'darwin' ? "macOS doesn't let Cockpit read that folder (System Settings → Privacy & Security)" : "Windows doesn't let Cockpit read that folder") : "Couldn't read that folder")
   }
   const out = []
   for (const e of entries) {

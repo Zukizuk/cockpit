@@ -38,6 +38,8 @@ import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
 import { AgentFrames, AgentPill } from './agent/presence'
 import { DictionaryExtra, openDictionary } from './views/Dictionary'
+import { fileManager, letterOf, mac, shortcut } from './platform'
+import { KeyCaps } from './components/KeyCaps'
 import { TableCard } from './cards/TableCard'
 import { Arrow } from './cards/Arrow'
 import { SectionCard, SectionMenuItems } from './cards/SectionCard'
@@ -357,7 +359,7 @@ function Canvas({ initial }: { initial: Board }) {
       }
       // A section, as FigJam's Ctrl+Alt+G: around the selected cards, or an empty one in the middle of the screen. Also
       // from inside a note (a click on a sticky note puts the cursor in it), where it types nothing.
-      if ((e.ctrlKey || e.metaKey) && e.altKey && !e.getModifierState('AltGraph') && e.key.toLowerCase() === 'g' && !board.expanded && !board.palette) {
+      if ((e.ctrlKey || e.metaKey) && e.altKey && !e.getModifierState('AltGraph') && letterOf(e) === 'g' && !board.expanded && !board.palette) {
         e.preventDefault()
         ;(document.activeElement as HTMLElement | null)?.blur()
         board.addSection({ around: rf.getNodes().filter(n => n.selected && !isSection(n)).map(n => n.id) })
@@ -372,7 +374,7 @@ function Canvas({ initial }: { initial: Board }) {
       const alt = e.altKey && !altGr
       // the digit row by position, so it works on AZERTY too (digits need Shift there)
       const digit = /^(Digit|Numpad)\d$/.test(e.code) ? e.code.slice(-1) : ''
-      const key = e.key.toLowerCase()
+      const key = letterOf(e)
       // Undo and redo for the board's layout (inside a note, Ctrl+Z is the note's own)
       if (ctrl && !alt && (key === 'z' || key === 'y')) {
         e.preventDefault()
@@ -534,7 +536,8 @@ function Canvas({ initial }: { initial: Board }) {
     if (files.length) {
       e.preventDefault()
       const images = files.filter(f => f.type.startsWith('image/'))
-      if (!images.length) return board.toast('Only images can be dropped here. For other files: Send to → Cockpit in Explorer, or Choose files in the + box')
+      if (!images.length)
+        return board.toast(mac ? 'Only images can be dropped here. For other files: Choose files in the + box, or paste their path' : `Only images can be dropped here. For other files: Send to → Cockpit in ${fileManager}, or Choose files in the + box`)
       images.slice(0, 12).forEach((f, i) => board.showImage(f, { at: { x: at.x + i * 40, y: at.y + i * 40 } }))
       return
     }
@@ -638,12 +641,12 @@ function Canvas({ initial }: { initial: Board }) {
           <DropdownMenuItem onSelect={() => paneMenu && board.addSection({ at: paneMenu.at })}>
             <SquareDashed strokeWidth={1.75} />
             Section here
-            <DropdownMenuShortcut>Ctrl Alt G</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{shortcut('Ctrl Alt G')}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => board.setPalette(true)}>
             <Plus strokeWidth={1.75} />
             Add or find…
-            <DropdownMenuShortcut>Ctrl K</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{shortcut('Ctrl K')}</DropdownMenuShortcut>
           </DropdownMenuItem>
           {!inSection && (
             <>
@@ -659,7 +662,7 @@ function Canvas({ initial }: { initial: Board }) {
           <DropdownMenuItem disabled={!nodes.length} onSelect={() => board.tidy()}>
             <LayoutGrid strokeWidth={1.75} />
             Tidy
-            <DropdownMenuShortcut>Ctrl Alt T</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{shortcut('Ctrl Alt T')}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!nodes.length} onSelect={fitAll}>
             <Maximize strokeWidth={1.75} />
@@ -674,12 +677,12 @@ function Canvas({ initial }: { initial: Board }) {
           <DropdownMenuItem onSelect={() => board.undo()}>
             <Undo2 strokeWidth={1.75} />
             Undo
-            <DropdownMenuShortcut>Ctrl Z</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{shortcut('Ctrl Z')}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => board.redo()}>
             <Redo2 strokeWidth={1.75} />
             Redo
-            <DropdownMenuShortcut>Ctrl Y</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{shortcut('Ctrl Y')}</DropdownMenuShortcut>
           </DropdownMenuItem>
             </>
           )}
@@ -751,7 +754,8 @@ function Canvas({ initial }: { initial: Board }) {
         selectionOnDrag
         selectionMode={SelectionMode.Partial}
         multiSelectionKeyCode={['Shift', 'Control', 'Meta']}
-        deleteKeyCode={['Delete']}
+        // a Mac's delete key is Backspace (its Delete is fn+delete)
+        deleteKeyCode={mac ? ['Delete', 'Backspace'] : ['Delete']}
         onMoveEnd={() => board.persist()}
         onNodeDragStart={(_e, node, dragged) => {
           board.remember()
@@ -820,7 +824,7 @@ function Canvas({ initial }: { initial: Board }) {
           <div className="grid justify-items-center gap-3 text-center">
             <p className="text-[15px] text-foreground/80">An empty board</p>
             <p className="max-w-[360px] text-[13.5px] leading-relaxed text-muted-foreground">
-              Paste a link anywhere, press <Kbd>N</Kbd> for a sticky note, or <Kbd>Ctrl</Kbd> <Kbd>K</Kbd> for anything else.
+              Paste a link anywhere, press <Kbd>N</Kbd> for a sticky note, or <KeyCaps keys={['Ctrl', 'K']} /> for anything else.
             </p>
           </div>
         </div>
@@ -880,9 +884,9 @@ function CornerTools() {
   return (
     <div className="corner-tools">
       <div className="corner-pill glass" role="group" aria-label={`Zoom, ${zoom}%`}>
-        {tool(`Zoom out (${zoom}%)`, 'Ctrl −', () => rf.zoomOut({ duration: 200 }), <Minus className="size-[16px]" strokeWidth={1.75} />)}
+        {tool(`Zoom out (${zoom}%)`, shortcut('Ctrl −'), () => rf.zoomOut({ duration: 200 }), <Minus className="size-[16px]" strokeWidth={1.75} />)}
         <span className="corner-sep" />
-        {tool(`Zoom in (${zoom}%)`, 'Ctrl +', () => rf.zoomIn({ duration: 200 }), <Plus className="size-[16px]" strokeWidth={1.75} />)}
+        {tool(`Zoom in (${zoom}%)`, shortcut('Ctrl +'), () => rf.zoomIn({ duration: 200 }), <Plus className="size-[16px]" strokeWidth={1.75} />)}
       </div>
       <div className="corner-pill corner-round glass">{tool('Keyboard shortcuts', '?', () => board.setKeysOpen(true), <span className="text-[15px] font-medium">?</span>)}</div>
     </div>
@@ -896,7 +900,7 @@ function Dock() {
   const update = useData(() => get<UpdateStatus>('/api/update'), [board.settingsOpen], { refreshEvery: 3_600_000 })
   return (
     <nav className="dock glass" aria-label="Cockpit">
-      <DockButton label="Add" shortcut="Ctrl K" onClick={() => board.setPalette(true)}>
+      <DockButton label="Add" shortcut={shortcut('Ctrl K')} onClick={() => board.setPalette(true)}>
         <Plus className="size-[18px]" strokeWidth={1.75} />
       </DockButton>
       <DockButton label="New sticky note" shortcut="N" onClick={() => board.newSticky()}>

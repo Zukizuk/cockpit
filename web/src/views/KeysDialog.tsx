@@ -4,6 +4,7 @@
 // it, and every layout change can be undone.
 import { useBoard } from '../board'
 import { Kbd } from '@/components/ui/kbd'
+import { keyList, mac, mod, shortcut } from '../platform'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 type Key = { keys: string[]; what: string }
@@ -40,14 +41,14 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
       { keys: ['Scroll'], what: 'Move around (or hold Space and drag)' },
       { keys: ['Drag'], what: 'On empty board: select several cards' },
       { keys: ['Shift', 'Click'], what: 'Add a card to the selection' },
-      { keys: ['Ctrl', '+'], what: 'Zoom in (Ctrl − zooms out)' },
+      { keys: ['Ctrl', '+'], what: `Zoom in (${shortcut('Ctrl −')} zooms out)` },
       { keys: ['Ctrl', '0'], what: 'Back to 100%' },
       { keys: ['0'], what: 'Show everything' },
       { keys: ['Ctrl', 'Alt', 'T'], what: 'Tidy: line cards up from the top-left' },
       { keys: ['Ctrl', 'Alt', 'G'], what: 'A section around the selected cards (or an empty one)' },
       { keys: ['[', ']'], what: 'The space before or after (S lists them)' },
       { keys: ['Alt', '1'], what: 'Go to space 1 (to 9)' },
-      { keys: ['Ctrl', 'Z'], what: 'Undo (Ctrl Y redoes)' },
+      { keys: ['Ctrl', 'Z'], what: `Undo (${shortcut('Ctrl Y')} redoes)` },
     ],
   },
   {
@@ -56,7 +57,8 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
       { keys: ['Esc'], what: 'Leave a note, close, or deselect' },
       { keys: [','], what: 'Settings' },
       { keys: ['?'], what: 'This list' },
-      { keys: ['Ctrl', 'Alt', 'K'], what: 'Bring Cockpit up from anywhere in Windows' },
+      // Windows only so far: the Mac app has no such key yet
+      ...(mac ? [] : [{ keys: ['Ctrl', 'Alt', 'K'], what: 'Bring Cockpit up from anywhere in Windows' }]),
     ],
   },
 ]
@@ -80,7 +82,7 @@ export function KeysDialog() {
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>
-            {board.prefs.singleKeys ? "Single keys work on the board whenever you're not typing." : 'Single keys are off (Settings); the Ctrl ones still work.'}
+            {board.prefs.singleKeys ? "Single keys work on the board whenever you're not typing." : `Single keys are off (Settings); the ${mod} ones still work.`}
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
@@ -92,7 +94,7 @@ export function KeysDialog() {
                   <li key={k.what} className="flex items-center justify-between gap-4 border-b border-ink/[0.06] py-2 text-[13.5px] last:border-0">
                     <span>{k.what}</span>
                     <span className="flex shrink-0 gap-1">
-                      {k.keys.map(key => (
+                      {keyList(k.keys).map(key => (
                         <Kbd key={key}>{key}</Kbd>
                       ))}
                     </span>

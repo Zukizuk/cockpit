@@ -1,4 +1,5 @@
 import type { Theme } from './theme'
+import { mac } from './platform'
 // Talking to Cockpit's local server. Every change carries X-Cockpit: 1, which the server requires.
 
 export class ApiError extends Error {
@@ -299,7 +300,7 @@ export interface Config {
   editor: Editor
   /** Where Cockpit's code lives (Send feedback opens an issue there). */
   repository: string
-  /** The Windows build, for feedback. */
+  /** The Windows build, for feedback (on a Mac, the Darwin version). */
   windows: string
   /** Light, dark, or as Windows is set. */
   theme: Theme
@@ -337,12 +338,13 @@ export interface UpdateStatus {
 /** Where a note or text file opens outside Cockpit (Settings). */
 export type Editor = 'notepad' | 'vscode' | 'default'
 export const EDITORS: { value: Editor; label: string }[] = [
-  { value: 'notepad', label: 'Notepad' },
+  // 'notepad' is TextEdit on a Mac
+  { value: 'notepad', label: mac ? 'TextEdit' : 'Notepad' },
   { value: 'vscode', label: 'VS Code' },
   { value: 'default', label: 'Default app' },
 ]
 /** The menu line for opening in the chosen editor. */
-export const editorLabel = (e: Editor) => (e === 'notepad' ? 'Open in Notepad' : e === 'vscode' ? 'Open in VS Code' : 'Open in its own program')
+export const editorLabel = (e: Editor) => (e === 'notepad' ? (mac ? 'Open in TextEdit' : 'Open in Notepad') : e === 'vscode' ? 'Open in VS Code' : 'Open in its own program')
 
 export const openOutside = (body: { kind: 'shown' | 'note' | 'table' | 'project' | 'notes-folder' | 'output' | 'path'; id?: string; path?: string; index?: number | string; side?: 'left' | 'right'; how?: 'default' | 'reveal' | 'vscode' | 'notepad' | 'editor' }) =>
   post<{ ok: true }>('/api/open', body)

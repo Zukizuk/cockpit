@@ -15,6 +15,7 @@ import { dragToBoard } from '../drag'
 import { CardShell, type CardAction } from './CardShell'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { terminalApp } from '../platform'
 
 const CODE = /\.(tsx?|jsx?|mjs|py|ps1|sh|sql|json|ya?ml|toml|css|html?|rs|go|java|cs|cpp|c|rb|php)$/i
 
@@ -197,7 +198,7 @@ export function OutputRow({ group, item, index, near, onView, counts }: { group:
   const terminal = async () => {
     try {
       await post('/api/run/terminal', { group: group.id, index: ref })
-      board.toast('Opened in Windows Terminal')
+      board.toast(`Opened in ${terminalApp}`)
     } catch (e: any) {
       board.toast(e.message)
     }
@@ -232,7 +233,7 @@ export function OutputRow({ group, item, index, near, onView, counts }: { group:
             <>
               <RowButton icon={Play} label="Run here" onClick={() => setRunning(true)} active={running} />
               <RowButton icon={Maximize2} label="Open as a card on the board" onClick={view} />
-              <RowButton icon={TerminalSquare} label="Run in Windows Terminal" onClick={terminal} />
+              <RowButton icon={TerminalSquare} label={`Run in ${terminalApp}`} onClick={terminal} />
             </>
           ) : (
             <RowButton icon={Eye} label="View here" onClick={view} />

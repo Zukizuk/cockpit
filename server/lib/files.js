@@ -120,7 +120,19 @@ export function openUrl(url) {
   child.unref()
 }
 
-/** Opens a file outside the app: with its default program, selected in Explorer, in Notepad or in VS Code. */
+/**
+ * What `open` is given on a Mac to open a file outside the app: shown selected in Finder, in TextEdit (the Mac's
+ * Notepad), in VS Code (by its app id, since its `code` command is often not installed, or not on the PATH of an app
+ * started at login), or with its default program.
+ */
+export function macOpenArgs(file, how) {
+  if (how === 'reveal') return ['-R', file]
+  if (how === 'notepad') return ['-e', file]
+  if (how === 'vscode') return ['-b', 'com.microsoft.VSCode', file]
+  return [file]
+}
+
+/** Opens a file outside the app: with its default program, selected in Explorer (Finder), in Notepad (TextEdit) or in VS Code. */
 export function openOutside(file, how) {
   if (!fs.existsSync(file)) throw Object.assign(new Error('That file is no longer there'), { status: 404 })
   const opts = { detached: true, stdio: 'ignore', windowsHide: false }
@@ -134,10 +146,10 @@ export function openOutside(file, how) {
       const exe = vscodeExe()
       child = exe ? spawn(exe, [file], opts) : spawn('cmd.exe', ['/d', '/c', 'code', file], { ...opts, windowsHide: true })
     } else child = spawn('explorer.exe', [file], opts)
-  } else {
-    const opener = process.platform === 'darwin' ? 'open' : 'xdg-open'
+  } else if (process.platform === 'darwin') child = spawn('open', macOpenArgs(file, how), opts)
+  else {
     if (how === 'vscode') child = spawn('code', [file], opts)
-    else child = spawn(opener, [how === 'reveal' ? path.dirname(file) : file], opts)
+    else child = spawn('xdg-open', [how === 'reveal' ? path.dirname(file) : file], opts)
   }
   child.on('error', () => {})
   child.unref()

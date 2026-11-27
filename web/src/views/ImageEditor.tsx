@@ -9,6 +9,7 @@ import { emit, onEvent } from '../lib'
 import { useBoard } from '../board'
 import { COLORS, baseSize, drawMark, exportPng, imageUrl, loadImage, norm, render, type ColorName, type Mark, type Pt, type Rect } from '../lib/markup'
 import { cn } from '@/lib/utils'
+import { shortcut } from '../platform'
 
 type Tool = 'pen' | 'marker' | 'arrow' | 'box' | 'circle' | 'text' | 'blur' | 'crop'
 const TOOLS: { tool: Tool; label: string; icon: typeof Pencil; key: string }[] = [
@@ -232,10 +233,10 @@ export function ImageEditor() {
           ))}
         </div>
         <span className="img-editor-sep" />
-        <button type="button" className="img-tool" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!past.length} onClick={undo}>
+        <button type="button" className="img-tool" aria-label="Undo" title={`Undo (${shortcut('Ctrl+Z')})`} disabled={!past.length} onClick={undo}>
           <Undo2 className="size-[16px]" strokeWidth={1.75} />
         </button>
-        <button type="button" className="img-tool" aria-label="Redo" title="Redo (Ctrl+Y)" disabled={!future.length} onClick={redo}>
+        <button type="button" className="img-tool" aria-label="Redo" title={`Redo (${shortcut('Ctrl+Y')})`} disabled={!future.length} onClick={redo}>
           <Redo2 className="size-[16px]" strokeWidth={1.75} />
         </button>
         <span className="img-editor-fill" />

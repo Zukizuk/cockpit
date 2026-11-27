@@ -33,6 +33,7 @@ import { RowButton } from './OutputsCard'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { shortcut } from '../platform'
 
 const KEEPS: { value: SnippetKeep; label: string }[] = [
   { value: 'day', label: '1 day' },
@@ -273,7 +274,7 @@ function NewSnippet({ onKept }: { onKept: () => void }) {
       else board.toast('The clipboard has no text')
     } catch {
       field.current?.focus()
-      board.toast('Press Ctrl+V to paste it here')
+      board.toast(`Press ${shortcut('Ctrl+V')} to paste it here`)
     }
   }
 
