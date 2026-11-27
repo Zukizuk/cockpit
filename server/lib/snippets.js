@@ -5,12 +5,13 @@
 //
 // One file per snippet in ~/.cockpit/snippets, so the app and the MCP server never write over each other.
 // A secret's text is encrypted (AES-256-GCM). Its key sits in ~/.cockpit/snippets.key, itself locked with Windows'
-// per-user protection (DPAPI): the folder copied elsewhere, or read by another account, gives nothing away. Anything
-// running as you can still unlock it; this is a place to copy from, not a password manager.
+// per-user protection (DPAPI); on macOS the key is in the login Keychain instead and the file only says so. Either
+// way the folder copied elsewhere, or read by another account, gives nothing away. Anything running as you can still
+// unlock it; this is a place to copy from, not a password manager.
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawn, spawnSync } from 'node:child_process'
+import { execFile, spawn, spawnSync } from 'node:child_process'
 import { DATA_DIR, UserError, writeFileAtomic } from './config.js'
 
 export const snippetsDir = () => path.join(DATA_DIR, 'snippets')
@@ -26,9 +27,99 @@ const PS = op =>
   `[Convert]::ToBase64String([Security.Cryptography.ProtectedData]::${op}($b, $null, 'CurrentUser'))`
 const psArgs = op => ['-NoProfile', '-NonInteractive', '-Command', PS(op)]
 const win = process.platform === 'win32'
+const mac = process.platform === 'darwin'
 
 let keyCache = null
 let keyLoading = null
+
+// macOS: the key in the login Keychain, through Apple's own `security` command. It goes in on stdin (security -i),
+// never on a command line another process could read. The file then holds only this note.
+const IN_KEYCHAIN = 'in the macOS Keychain'
+const SERVICE = 'Cockpit snippets key'
+// one key per data folder (a second copy of Cockpit, or the tests, keep their own)
+const account = () => {
+  const dir = path.resolve(DATA_DIR)
+  return /^[^"\\\n]+$/.test(dir) ? dir : crypto.createHash('sha256').update(dir).digest('hex')
+}
+const SECURITY = '/usr/bin/security'
+const keychainError = (what, e) => new Error(`The macOS Keychain could not ${what} the snippets key: ${String(e?.stderr || e?.message || e).trim().split('\n')[0]}`)
+
+const macKeychain = {
+  read(acct) {
+    const r = spawnSync(SECURITY, ['find-generic-password', '-a', acct, '-s', SERVICE, '-w'], { encoding: 'utf8', timeout: 60_000 })
+    if (r.status === 44) return null // not there
+    if (r.status !== 0) throw keychainError('unlock', r.stderr || r.error)
+    return r.stdout.trim()
+  },
+  readAsync(acct) {
+    return new Promise((resolve, reject) =>
+      execFile(SECURITY, ['find-generic-password', '-a', acct, '-s', SERVICE, '-w'], { timeout: 60_000 }, (err, out) =>
+        err ? (err.code === 44 ? resolve(null) : reject(keychainError('unlock', err))) : resolve(String(out).trim()),
+      ),
+    )
+  },
+  // replace: false fails when there's one already (another process just made it)
+  write(acct, b64, replace) {
+    const cmd = `add-generic-password ${replace ? '-U ' : ''}-a "${acct}" -s "${SERVICE}" -w ${b64}\n`
+    const r = spawnSync(SECURITY, ['-i'], { input: cmd, encoding: 'utf8', timeout: 60_000 })
+    if (r.status !== 0 || /error/i.test(r.stderr || '')) throw new Error(r.stderr || r.error?.message || 'security failed')
+  },
+}
+let keychain = macKeychain
+
+/** The tests' way in: a stand-in for the Keychain (read, write(account, b64, replace); readAsync optional), and the key read afresh. */
+export function useKeychain(store) {
+  keychain = store
+  keyCache = null
+  keyLoading = null
+}
+
+const isKey = b64 => /^[A-Za-z0-9+/]{43}=$/.test(b64) && Buffer.from(b64, 'base64').length === 32
+
+function keepInKeychain(b64, replace) {
+  if (!isKey(b64)) throw new Error('The snippets key file is damaged, so secrets kept before can\'t be read')
+  try {
+    keychain.write(account(), b64, replace)
+  } catch (e) {
+    throw keychainError('keep', e)
+  }
+}
+
+/** A new key, kept in the Keychain; if another process (the MCP server) has just kept one there, that one. */
+function newMacKey() {
+  const raw = crypto.randomBytes(32).toString('base64')
+  try {
+    keepInKeychain(raw, false)
+    return raw
+  } catch (e) {
+    const there = keychain.read(account())
+    if (there) return there
+    throw e
+  }
+}
+
+const secretsKept = () => {
+  try {
+    return fs.readdirSync(snippetsDir()).some(n => n.endsWith('.json') && JSON.parse(fs.readFileSync(path.join(snippetsDir(), n), 'utf8')).secret)
+  } catch {
+    return false
+  }
+}
+
+/** macOS: the key the file points to, or the one left in it before (moved to the Keychain now). */
+function macKeySync(stored) {
+  if (stored !== IN_KEYCHAIN) {
+    keepInKeychain(stored, true)
+    writeFileAtomic(KEY_FILE(), IN_KEYCHAIN + '\n')
+    fs.chmodSync(KEY_FILE(), 0o600)
+    return stored
+  }
+  const b64 = keychain.read(account())
+  if (b64) return b64
+  // taken out of the Keychain: a new key, unless secrets kept with the old one would be lost without a word
+  if (!secretsKept()) return newMacKey()
+  throw new Error("The snippets key is gone from the macOS Keychain, so the secrets kept before can't be read. Delete them in Snippets to start again")
+}
 
 function dpapiSync(op, b64) {
   const r = spawnSync('powershell.exe', psArgs(op), { input: b64, encoding: 'utf8', windowsHide: true, timeout: 60_000 })
@@ -56,12 +147,13 @@ function keySync() {
   const file = KEY_FILE()
   if (fs.existsSync(file)) {
     const stored = fs.readFileSync(file, 'utf8').trim()
-    keyCache = Buffer.from(win ? dpapiSync('Unprotect', stored) : stored, 'base64')
+    keyCache = Buffer.from(win ? dpapiSync('Unprotect', stored) : mac ? macKeySync(stored) : stored, 'base64')
     return keyCache
   }
-  const raw = crypto.randomBytes(32).toString('base64')
   fs.mkdirSync(DATA_DIR, { recursive: true })
-  writeFileAtomic(file, (win ? dpapiSync('Protect', raw) : raw) + '\n')
+  // on a Mac into the Keychain first, so a key that can't be kept leaves no file behind
+  const raw = mac ? newMacKey() : crypto.randomBytes(32).toString('base64')
+  writeFileAtomic(file, (win ? dpapiSync('Protect', raw) : mac ? IN_KEYCHAIN : raw) + '\n')
   if (!win) fs.chmodSync(file, 0o600)
   keyCache = Buffer.from(raw, 'base64')
   return keyCache
@@ -71,7 +163,12 @@ function keySync() {
 export function warmKey() {
   if (keyCache || keyLoading || !fs.existsSync(KEY_FILE())) return keyLoading || Promise.resolve()
   const stored = fs.readFileSync(KEY_FILE(), 'utf8').trim()
-  keyLoading = (win ? dpapiAsync('Unprotect', stored) : Promise.resolve(stored))
+  const unlock = win
+    ? dpapiAsync('Unprotect', stored)
+    : mac && stored === IN_KEYCHAIN && keychain.readAsync
+      ? keychain.readAsync(account()).then(b64 => b64 || macKeySync(stored))
+      : Promise.resolve().then(() => (mac ? macKeySync(stored) : stored))
+  keyLoading = unlock
     .then(b64 => {
       keyCache = Buffer.from(b64, 'base64')
     })

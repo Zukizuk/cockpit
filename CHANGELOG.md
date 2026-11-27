@@ -4,6 +4,9 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 ## Coming next
 
+**Fixed**
+- On a Mac, the key that encrypts your secret snippets is kept in your Keychain, not in a file. A key already in the file moves there the next time it's used.
+
 **New**
 - Choose files… in the + box now works on macOS too, opening the Mac's own file picker.
 

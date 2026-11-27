@@ -1,6 +1,7 @@
 // Server tests: everything runs against a temporary home folder, never the real notes, hub or transcripts.
 import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
+import crypto from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -750,8 +751,19 @@ test('often opened: on 3 different days lately shows it; a burst is one day; pin
   assert.equal(usage.oftenOpened(new Set(), now + 8 * day).length, 0, 'not opened for a week: it leaves')
 })
 
+/** A stand-in for the macOS Keychain, so the tests never write to the real one. */
+const fakeKeychain = () => {
+  const items = new Map()
+  const write = (account, b64, replace) => {
+    if (!replace && items.has(account)) throw new Error('The specified item already exists in the keychain.')
+    items.set(account, b64)
+  }
+  return { items, read: account => items.get(account) ?? null, write }
+}
+
 test('snippets: copy text back, secrets encrypted and hidden, expiry, instant delete', { timeout: 60_000 }, async () => {
   const sn = await import('../server/lib/snippets.js')
+  if (process.platform === 'darwin') sn.useKeychain(fakeKeychain())
   // the real clock: reading a snippet back checks its time against now, so a fixed date would expire it
   const now = Date.now()
   const code = await sn.addSnippet({ text: 'Get-Process node | Stop-Process', language: 'powershell' }, now)
@@ -791,6 +803,65 @@ test('snippets: copy text back, secrets encrypted and hidden, expiry, instant de
   sn.removeSnippet(secret.id)
   assert.ok(!fs.existsSync(path.join(sn.snippetsDir(), `${secret.id}.json`)))
   await assert.rejects(sn.snippetText(secret.id), /gone/)
+})
+
+test('snippets on macOS: the key is in the Keychain, not the file; a key left in the file moves there', { skip: process.platform !== 'darwin' }, async () => {
+  const sn = await import('../server/lib/snippets.js')
+  const keyFile = path.join(process.env.COCKPIT_DATA, 'snippets.key')
+  fs.rmSync(keyFile, { force: true })
+  const kc = fakeKeychain()
+  sn.useKeychain(kc)
+  const s = await sn.addSnippet({ text: 'first secret', secret: true })
+  assert.equal(kc.items.size, 1, 'a new key goes in the Keychain')
+  const kept = [...kc.items.values()][0]
+  assert.equal(Buffer.from(kept, 'base64').length, 32)
+  const onDisk = fs.readFileSync(keyFile, 'utf8')
+  assert.ok(!onDisk.includes(kept), 'and never in the file')
+  assert.equal((fs.statSync(keyFile).mode & 0o777).toString(8), '600')
+  // a fresh start reads it back from the Keychain
+  sn.useKeychain(kc)
+  assert.equal(await sn.snippetText(s.id), 'first secret')
+
+  // a key from before, kept in the file: moved to the Keychain, the file keeps only the note that it's there
+  const old = crypto.randomBytes(32).toString('base64')
+  fs.writeFileSync(keyFile, old + '\n')
+  const kc2 = fakeKeychain()
+  sn.useKeychain(kc2)
+  const t = await sn.addSnippet({ text: 'second secret', secret: true })
+  assert.deepEqual([...kc2.items.values()], [old])
+  assert.ok(!fs.readFileSync(keyFile, 'utf8').includes(old), 'gone from the file')
+  sn.useKeychain(kc2)
+  assert.equal(await sn.snippetText(t.id), 'second secret')
+
+  // taken out of the Keychain while secrets need it: said so, and nothing new is lost
+  kc2.items.clear()
+  sn.useKeychain(kc2)
+  await assert.rejects(sn.addSnippet({ text: 'lost', secret: true }), /gone from the macOS Keychain/)
+  // once they're deleted, a new key
+  for (const x of sn.listSnippets()) if (x.secret) sn.removeSnippet(x.id)
+  const u = await sn.addSnippet({ text: 'fresh start', secret: true })
+  assert.equal(kc2.items.size, 1)
+  assert.equal(await sn.snippetText(u.id), 'fresh start')
+
+  // first use in two processes at once (the app and the MCP server): the one that's there already is used
+  fs.rmSync(keyFile, { force: true })
+  const kc3 = fakeKeychain()
+  const theirs = crypto.randomBytes(32).toString('base64')
+  kc3.items.set([...kc2.items.keys()][0], theirs)
+  sn.useKeychain(kc3)
+  await sn.addSnippet({ text: 'raced', secret: true })
+  assert.deepEqual([...kc3.items.values()], [theirs], 'not replaced')
+
+  // a damaged key file isn't sent to the Keychain
+  fs.writeFileSync(keyFile, 'not a key\n')
+  sn.useKeychain(fakeKeychain())
+  await assert.rejects(sn.addSnippet({ text: 'x', secret: true }), /damaged/)
+
+  // no Keychain to keep it in: the secret isn't kept rather than kept with its key in the open
+  fs.rmSync(keyFile, { force: true })
+  sn.useKeychain({ read: () => null, write: () => { throw new Error('The user name or passphrase you entered is not correct.') } })
+  await assert.rejects(sn.addSnippet({ text: 'third secret', secret: true }), /Keychain/)
+  assert.ok(!fs.existsSync(keyFile))
 })
 
 test('journal sync: when it is due', async () => {

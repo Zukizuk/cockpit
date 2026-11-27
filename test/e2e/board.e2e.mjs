@@ -7,7 +7,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
@@ -92,6 +92,8 @@ after(async () => {
   await browser?.close()
   server?.kill()
   fs.rmSync(T, { recursive: true, force: true })
+  // on a Mac the secret's key went in the login Keychain, one item for this data folder
+  if (process.platform === 'darwin') spawnSync('/usr/bin/security', ['delete-generic-password', '-a', data, '-s', 'Cockpit snippets key'], { stdio: 'ignore' })
 })
 
 /** The items of the open menu whose words run onto a second line (an item is one line, about 32px tall). */
