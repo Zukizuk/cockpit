@@ -21,7 +21,7 @@ jobs:
       - run: npm run build
       # the board in Edge (on every Windows runner): pasting, agents, sticky notes, menus
       - run: npm run test:e2e
-  # macOS: the server's tests and the build (the browser tests join once the board's menus work there)
+  # macOS: the same, in the Edge on every macOS runner
   check-macos:
     runs-on: macos-latest
     steps:
@@ -34,3 +34,4 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      - run: npm run test:e2e
