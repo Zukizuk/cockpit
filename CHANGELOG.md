@@ -5,7 +5,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 ## Coming next
 
 **Improved**
-- A card's menu has everything it does again: sharing (and stopping it), lock, pin, copy, show in folder, read again, back to the original. Only what the card's own strip already has (full screen, fold, hide, open, draw, a sticky note's tuck) and moving to another space are under More.
+- A card's menu has everything it does again: sharing (and stopping it), moving to another space, lock, pin, show in folder, read again, back to the original. Only what the card's own strip already has (full screen, fold, hide, open, draw, a sticky note's tuck) and Copy path are under More. Moving to another space is in the menu itself.
 
 ## 26 November 2026 (version 0.2.16)
 

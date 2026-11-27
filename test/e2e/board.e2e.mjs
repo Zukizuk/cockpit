@@ -169,7 +169,7 @@ test("a card's menu: everything it does, with only what its strip has too under 
   const labels = (await menu.locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
   assert.deepEqual(await wrapped(), [], 'no item wraps onto a second line')
   const at = l => labels.findIndex(x => x.startsWith(l))
-  // what the strip has too (full screen, roll up, hide, tuck) and the spaces are under More; the rest, sharing
+  // what the strip has too (full screen, roll up, hide, tuck) are under More; the rest, sharing and spaces
   // included (even once shared), is in the menu itself
   const order = ['Comment', 'Focus on this card', 'Put on the shelf…', 'Lock in place', 'Stop sharing with agents', 'More', 'Remove from board']
   for (const l of ['Open full screen', 'Roll up into its strip', 'Hide its contents']) assert.ok(at(l) < 0, `${l} is under More`)
@@ -177,14 +177,14 @@ test("a card's menu: everything it does, with only what its strip has too under 
   for (const l of order) assert.ok(at(l) >= 0, `${l} is in the menu`)
   assert.deepEqual([...order].sort((a, b) => at(a) - at(b)), order, 'in this order')
   assert.equal(labels.at(-1), 'Remove from board')
-  // the menu is all on the screen, and More opens beside it with the strip's own and the spaces
+  // the menu is all on the screen, and More opens beside it with the strip's own
   const m = await menu.boundingBox()
   const vp = page.viewportSize()
   assert.ok(m.y >= 0 && m.y + m.height <= vp.height && m.x + m.width <= vp.width, 'on the screen')
   await menu.getByRole('menuitem', { name: 'More', exact: true }).hover()
   const sub = page.locator('[role=menu]').last()
   assert.ok(await until(async () => (await sub.innerText().catch(() => '')).includes('Open full screen')), 'More opens on hover')
-  assert.match(await sub.innerText(), /Move to Work/)
+  assert.ok(at('Move to Work') >= 0, 'spaces are in the menu itself')
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
 
@@ -294,7 +294,6 @@ test('arrows: drag from a card to another, change it from its menu, take it off 
   // a card in another space: its arrow goes out of view with it, and comes back
   await note('Private diary').click({ position: { x: 150, y: 200 } })
   await note('Private diary').click({ button: 'right', position: { x: 60, y: 12 } })
-  await page.getByRole('menuitem', { name: 'More', exact: true }).hover()
   await page.getByRole('menuitem', { name: 'Move to Work' }).click()
   assert.ok(await until(async () => (await page.locator('.react-flow__edge').count()) === 0), 'hidden with its card')
   assert.equal((await links()).length, 1, 'still saved')

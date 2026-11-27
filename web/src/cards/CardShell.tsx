@@ -290,8 +290,8 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
       { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H', more: true },
     ],
-    // sharing with agents: always in the menu; moving to another space (a list of them): under More
-    ...agentAndSpaceActions(board, markIds, nodeId, mark).map((g, i) => g.map(a => ({ ...a, more: i > 0 }))),
+    // sharing with agents and moving to another space: in the menu itself
+    ...agentAndSpaceActions(board, markIds, nodeId, mark),
     end,
   ]
   const shown = inGroups(groups)

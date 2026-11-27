@@ -80,7 +80,7 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
         },
         { label: 'Done reading', icon: Check, run: () => board.setLater(e.id, 'done').then(() => (reload(), board.toast('Done, on Later'))), hidden: !e.later || e.later === 'done' },
         { label: 'Pin to Quick access', icon: Pin, run: () => board.pin(e.kind === 'link' ? { url: e.url, title: e.title } : { path: e.path, title: e.title }), hidden: e.kind !== 'link' && e.kind !== 'file' },
-        { label: e.kind === 'link' ? 'Copy link' : 'Copy path', icon: Copy, run: () => board.copy(e.kind === 'link' ? e.url || '' : e.path, e.kind === 'link' ? 'Link copied' : 'Path copied'), gap: true, hidden: e.kind === 'content' },
+        { label: e.kind === 'link' ? 'Copy link' : 'Copy path', icon: Copy, run: () => board.copy(e.kind === 'link' ? e.url || '' : e.path, e.kind === 'link' ? 'Link copied' : 'Path copied'), gap: true, hidden: e.kind === 'content', more: e.kind !== 'link' },
         // written content (a draft Claude made, a note kept): its words are what you came for
         { label: 'Copy the text', icon: Copy, run: () => board.copy(read?.text || '', 'Copied'), gap: e.kind === 'content', hidden: !canCopyText },
       ]
