@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { useOpeningReleaseGuard } from "./opening-release"
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 import { DropdownMenu as DropdownMenuPrimitive } from "radix-ui"
 
@@ -32,9 +33,12 @@ function DropdownMenuTrigger({
 
 function DropdownMenuContent({
   className,
+  onPointerDownCapture,
+  onPointerUpCapture,
   sideOffset = 4,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  const guard = useOpeningReleaseGuard(onPointerDownCapture, onPointerUpCapture)
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
@@ -46,6 +50,7 @@ function DropdownMenuContent({
           className
         )}
         {...props}
+        {...guard}
       />
     </DropdownMenuPrimitive.Portal>
   )

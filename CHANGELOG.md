@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Fixed**
+- On a Mac, a quick right-click on the board or on a card opens its menu. It could pick the item under the pointer instead (on a card low on the screen, for example "Stop sharing with agents") and close the menu.
+
 ## 27 November 2026 (version 0.2.17)
 
 **Improved**

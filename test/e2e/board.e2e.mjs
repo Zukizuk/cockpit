@@ -23,6 +23,8 @@ const H = { 'X-Cockpit': '1', 'Content-Type': 'application/json' }
 let server
 let browser
 let page
+/** Links the board asked to open in the browser: noted here, never opened, so a test can't open the user's browser. */
+const opened = []
 
 const api = (p, init = {}) => fetch(base + p, { ...init, headers: { ...H, ...(init.headers || {}) } }).then(r => r.json())
 /** One board-tool call, as Claude Code's makes it. */
@@ -77,6 +79,10 @@ before(async () => {
   browser = await chromium.launch({ channel: 'msedge' })
   page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
   page.on('pageerror', e => console.log('page error:', e.message))
+  await page.route('**/api/open-url', route => {
+    opened.push(route.request().postDataJSON()?.url)
+    return route.fulfill({ json: { ok: true } })
+  })
   await page.goto(base + '/')
   await until(async () => (await page.locator('.react-flow__node').count()) >= 4, 15000)
   await page.waitForTimeout(800)
@@ -205,6 +211,57 @@ test('the board menu closes where it was opened, not at the top-left corner', as
   await page.keyboard.press('Escape')
   const anchor = await page.locator('span[data-anchor="board"]').evaluate(el => ({ left: el.style.left, top: el.style.top }))
   assert.deepEqual(anchor, { left: `${EMPTY.x}px`, top: `${EMPTY.y}px` })
+})
+
+test('a quick right-click opens the menu and picks nothing: on the board, on a card, low on the screen', async () => {
+  await clearSelection()
+  const board = async () => JSON.stringify((await api('/api/board')).cards)
+  const before = await board()
+  const links = opened.length
+  // a click is down and up at once; on a Mac the menu is already open, under the pointer, when the button comes up
+  const opens = async (x, y, how = { button: 'right' }) => {
+    await page.mouse.click(x, y, how)
+    await page.locator('[role=menu]').last().waitFor()
+    await page.waitForTimeout(400) // the menu's slide-in, during which a stray pick would land
+    const menus = await page.locator('[role=menu]').count()
+    assert.equal(menus, 1, `the menu stays open at ${x},${y} (${menus} open; opened: ${opened.join(', ')})`)
+    await page.keyboard.press('Escape')
+    assert.ok(await until(async () => (await page.locator('[role=menu]').count()) === 0), 'and closes')
+  }
+  await opens(EMPTY.x, EMPTY.y)
+  const card = await note('Shared plan').boundingBox()
+  await opens(card.x + 60, card.y + 12)
+  // low on the screen: the menu moves up to fit, over the pointer
+  const size = page.viewportSize()
+  await page.setViewportSize({ width: size.width, height: 360 })
+  try {
+    await opens(card.x + 60, 320)
+    await opens(EMPTY.x, 320)
+    // a press in a menu let go outside it leaves the next menu guarded all the same
+    await page.mouse.click(EMPTY.x, 100, { button: 'right' })
+    const menu = await page.locator('[role=menu]').last().boundingBox()
+    await page.mouse.move(menu.x + menu.width / 2, menu.y + 2)
+    await page.mouse.down()
+    await page.mouse.move(EMPTY.x - 400, 200, { steps: 4 })
+    await page.mouse.up()
+    await page.keyboard.press('Escape')
+    assert.ok(await until(async () => (await page.locator('[role=menu]').count()) === 0), 'closed')
+    await opens(EMPTY.x, 320)
+    // a Mac's Ctrl+click is a right-click
+    if (process.platform === 'darwin') {
+      await page.keyboard.down('Control')
+      try {
+        await opens(card.x + 60, 320, {})
+      } finally {
+        await page.keyboard.up('Control')
+      }
+    }
+  } finally {
+    await page.setViewportSize(size)
+  }
+  await page.waitForTimeout(1500) // the board is saved a moment after a change
+  assert.equal(await board(), before, 'nothing on the board changed')
+  assert.equal(opened.length, links, 'nothing opened in the browser')
 })
 
 test('full screen has the menu too (⋮ and a right-click on its bar), with only what makes sense there', async () => {
