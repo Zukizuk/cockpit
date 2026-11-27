@@ -3,6 +3,9 @@ on:
   push:
     branches: [main]
   pull_request:
+# the checks only read the code
+permissions:
+  contents: read
 jobs:
   check:
     runs-on: windows-latest
@@ -18,3 +21,16 @@ jobs:
       - run: npm run build
       # the board in Edge (on every Windows runner): pasting, agents, sticky notes, menus
       - run: npm run test:e2e
+  # macOS: the server's tests and the build (the browser tests join once the board's menus work there)
+  check-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
