@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { useOpeningReleaseGuard } from "./opening-release"
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react"
 import { ContextMenu as ContextMenuPrimitive } from "radix-ui"
 
@@ -98,8 +99,11 @@ function ContextMenuSubContent({
 
 function ContextMenuContent({
   className,
+  onPointerDownCapture,
+  onPointerUpCapture,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content>) {
+  const guard = useOpeningReleaseGuard(onPointerDownCapture, onPointerUpCapture)
   return (
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
@@ -110,6 +114,7 @@ function ContextMenuContent({
           className
         )}
         {...props}
+        {...guard}
       />
     </ContextMenuPrimitive.Portal>
   )
