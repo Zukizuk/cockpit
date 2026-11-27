@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## 27 November 2026 (version 0.2.20)
+
+**Fixed**
+- Claude doesn't do a board change twice anymore. When Cockpit's window was slow to answer, Claude could stop waiting even though the change still went through a moment later. It then tried again, and a table got the same row twice. Now Claude's next call on the board tells it the earlier one went through, so it doesn't repeat it.
+
 ## 27 November 2026 (version 0.2.19)
 
 **New**

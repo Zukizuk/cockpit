@@ -1116,6 +1116,29 @@ test('a table tucked away: Claude adds to it and fills a cell, each once, answer
   assert.deepEqual(read.output?.steps?.[0]?.result?.rows, [['Feature', 'Status'], ['Arrows', 'Done · 0.2.9'], ['Shelf', 'Done']], 'each change made once')
 })
 
+test('a call Claude stopped waiting for, done later all the same: its next call says so, once', async () => {
+  // the window's answer is slow, and the agent's side gives up first (as an MCP server with a shorter wait did)
+  let held = 0
+  await page.route('**/api/agent/result', async route => {
+    if (held++ === 0) await new Promise(r => setTimeout(r, 2500))
+    return route.continue()
+  })
+  const gaveUp = new AbortController()
+  setTimeout(() => gaveUp.abort(), 800)
+  const first = await fetch(`${base}/api/agent/call`, {
+    method: 'POST', headers: H, signal: gaveUp.signal,
+    body: JSON.stringify({ tool: 'act', input: { steps: [{ ref: 'Roadmap test', action: 'setCell', args: ['Shelf', 'Status', 'Late'] }] }, agent: 'claude-code', label: 'Claude · e2e' }),
+  }).then(() => 'answered', () => 'gave up')
+  assert.equal(first, 'gave up')
+  await page.waitForTimeout(3000) // the window's answer arrives after all
+  await page.unroute('**/api/agent/result')
+  const next = await agent('act', { steps: [{ ref: 'Roadmap test', action: 'read' }] })
+  assert.match(String(next.output?.earlierCalls), /setCell on Roadmap test\) did go through/, JSON.stringify(next).slice(0, 300))
+  assert.equal(next.output?.steps?.[0]?.result?.rows?.[2]?.[1], 'Late', 'the change was made')
+  const again = await agent('act', { steps: [{ ref: 'Roadmap test', action: 'read' }] })
+  assert.equal(again.output?.earlierCalls, undefined, 'said once')
+})
+
 test('Claude sees cards on top of each other, a section lays them out, a whole section goes on the shelf in one step, and a dialog hides nothing', async () => {
   await clearSelection()
   const made = await agent('act', { steps: ['Lay A', 'Lay B', 'Lay C'].map(t => ({ ref: 'Board', action: 'addSticky', args: [t] })) })

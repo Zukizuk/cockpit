@@ -163,6 +163,32 @@ function windowForAgent() {
   return [...clients].at(-1) || null
 }
 const agentCallInfo = new Map() // id -> { agent, tool } (for the log, when the window answers)
+// A call the agent stopped waiting for (it timed out here, or the agent's side gave up first) can still be done by the
+// window a while later. Then the agent hears it on its next call, so it doesn't do the same thing twice.
+const lateCalls = new Map() // id -> { label, what }
+const finishedLate = new Map() // agent label -> [{ what, at }]
+const LATE_FOR = 15 * 60_000
+function callWords(tool, input) {
+  if (tool !== 'act') return tool
+  const steps = Array.isArray(input?.steps) ? input.steps : []
+  return steps.slice(0, 4).map(s => `${String(s?.action ?? '')} on ${String(s?.ref ?? '')}`).join(', ') || 'act'
+}
+function markLate(id, label, what) {
+  lateCalls.set(id, { label, what })
+  setTimeout(() => lateCalls.delete(id), LATE_FOR).unref()
+}
+/** What an agent should know before it goes on: its earlier calls that went through after it had stopped waiting. */
+function withLateNews(label, output) {
+  const done = finishedLate.get(label)
+  if (!done?.length) return output
+  finishedLate.delete(label)
+  const text = done
+    .map(d => `Your earlier board call (${d.what}) did go through at ${d.at}, after you had stopped waiting for its answer. Don't do it again: read the card first if you need to see the result.`)
+    .join(' ')
+  if (Array.isArray(output)) return [{ component: 'note', text }, ...output]
+  if (output && typeof output === 'object') return { earlierCalls: text, ...output }
+  return output
+}
 // agents listening for the user's Tell Claude (GET /api/agent/wait): each an open response, answered when the user pings
 const pingWaiters = new Set()
 const listeningLabels = () => [...new Set([...pingWaiters].map(w => w.label))]
@@ -175,7 +201,7 @@ function answerWaiter(w, payload) {
   } catch {}
   sayListening()
 }
-function callBoard(tool, input, { agent = 'other', label = '' } = {}) {
+function callBoard(tool, input, { agent = 'other', label = '', res = null } = {}) {
   if (!AGENT_TOOLS.has(tool)) throw new UserError(`No board tool ${tool}`)
   const who = AGENTS.includes(agent) ? agent : 'other'
   const name = label || (who === 'claude-code' ? 'Claude Code' : 'An agent')
@@ -190,9 +216,19 @@ function callBoard(tool, input, { agent = 'other', label = '' } = {}) {
   const id = Math.random().toString(36).slice(2, 12)
   // an act can wait for the person to allow a step (up to a minute while the window is out of sight)
   const wait = tool === 'act' ? 90_000 : 10_000
+  const what = callWords(tool, input)
   return new Promise((resolve, reject) => {
+    // the agent's side gave up before the window answered (its connection closed): the answer may still come
+    res?.on('close', () => {
+      if (res.writableEnded || !agentCalls.has(id)) return
+      clearTimeout(agentCalls.get(id).timer)
+      agentCalls.delete(id)
+      markLate(id, name, what)
+      reject(new UserError('The agent stopped waiting.'))
+    })
     const timer = setTimeout(() => {
       agentCalls.delete(id)
+      markLate(id, name, what)
       reject(
         new UserError(
           tool === 'act'
@@ -201,7 +237,7 @@ function callBoard(tool, input, { agent = 'other', label = '' } = {}) {
         ),
       )
     }, wait)
-    agentCalls.set(id, { resolve, timer })
+    agentCalls.set(id, { resolve: out => resolve(withLateNews(name, out)), timer })
     agentCallInfo.set(id, { agent: name, tool })
     target.write(`event: agent-call\ndata: ${JSON.stringify({ id, client: target.cockpitClient, tool, input: input ?? {}, access, agent: name })}\n\n`)
   })
@@ -531,9 +567,20 @@ async function api(req, res, url) {
   // board tools (experimental): the MCP server's call, a window's answer, and which window was used last
   if (area === 'agent' && method === 'POST') {
     const body = await readBody(req)
-    if (a === 'call') return json(res, 200, { output: await callBoard(String(body.tool || ''), body.input, { agent: String(body.agent || ''), label: String(body.label || '') }) })
+    if (a === 'call') return json(res, 200, { output: await callBoard(String(body.tool || ''), body.input, { agent: String(body.agent || ''), label: String(body.label || ''), res }) })
     if (a === 'result') {
       const c = agentCalls.get(String(body.id || ''))
+      // a call the agent had stopped waiting for: it hears that it went through on its next call
+      const late = !c && lateCalls.get(String(body.id || ''))
+      if (late) {
+        lateCalls.delete(String(body.id))
+        const failed = body.output && typeof body.output === 'object' && (body.output.ok === false || body.output.error)
+        if (!failed) {
+          const list = finishedLate.get(late.label) || []
+          list.push({ what: late.what, at: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) })
+          finishedLate.set(late.label, list.slice(-5))
+        }
+      }
       const info = agentCallInfo.get(String(body.id || ''))
       agentCallInfo.delete(String(body.id || ''))
       // the log: what it asked, and the cards it could see or used (titles only)
