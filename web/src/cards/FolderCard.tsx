@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { fileManager } from '../platform'
 
 const ICONS: Record<string, LucideIcon> = {
   sheet: FileSpreadsheet, csv: FileSpreadsheet, docx: FileText, markdown: FileText, text: FileText, pdf: FileText,
@@ -115,7 +116,7 @@ export function FolderCard({ id, data, selected }: NodeProps<CardNode>) {
   const outside = async (e: FolderEntry, how: 'default' | 'reveal') => {
     try {
       await openOutside({ kind: 'path', path: e.path, how })
-      board.toast(how === 'reveal' ? 'Showing it in Explorer…' : `Opening ${e.name}…`)
+      board.toast(how === 'reveal' ? `Showing it in ${fileManager}…` : `Opening ${e.name}…`)
     } catch (err: any) {
       board.toast(err.message)
     }
@@ -154,14 +155,14 @@ export function FolderCard({ id, data, selected }: NodeProps<CardNode>) {
                   {!e.dir && viewable(e) && <RowButton icon={ExternalLink} label="Open in its own program" onClick={() => outside(e, 'default')} />}
                   {e.dir && <RowButton icon={Folder} label="Open as its own card" onClick={() => asCard(e)} />}
                   <RowButton icon={Pin} label="Pin to Quick access" onClick={() => board.pin({ path: e.path, title: e.name })} />
-                  <RowButton icon={FolderOpen} label="Show in Explorer" onClick={() => outside(e, 'reveal')} />
+                  <RowButton icon={FolderOpen} label={`Show in ${fileManager}`} onClick={() => outside(e, 'reveal')} />
                 </div>
               </div>
               {e.dir && open.has(e.path) && rows(e.path, depth + 1)}
             </div>
           )
         })}
-        {l.more > 0 && <div className="folder-note" style={{ paddingLeft: 28 + depth * 16 }}>and {l.more} more: open it in Explorer</div>}
+        {l.more > 0 && <div className="folder-note" style={{ paddingLeft: 28 + depth * 16 }}>and {l.more} more: open it in {fileManager}</div>}
       </>
     )
   }
@@ -179,11 +180,11 @@ export function FolderCard({ id, data, selected }: NodeProps<CardNode>) {
       quick={
         <>
           <IconButton icon={RefreshCw} label="Look again" onClick={refresh} />
-          <IconButton icon={ExternalLink} label="Open in Explorer" onClick={() => outside({ name, path: root, dir: true, size: 0, mtime: 0, format: '' }, 'default')} />
+          <IconButton icon={ExternalLink} label={`Open in ${fileManager}`} onClick={() => outside({ name, path: root, dir: true, size: 0, mtime: 0, format: '' }, 'default')} />
         </>
       }
       actions={[
-        { label: 'Open in Explorer', icon: ExternalLink, run: () => outside({ name, path: root, dir: true, size: 0, mtime: 0, format: '' }, 'default') },
+        { label: `Open in ${fileManager}`, icon: ExternalLink, run: () => outside({ name, path: root, dir: true, size: 0, mtime: 0, format: '' }, 'default') },
         { label: 'Pin to Quick access', icon: Pin, run: () => board.pin({ path: root, title: name }) },
         { label: 'Copy path', icon: File, run: () => board.copy(root, 'Path copied') },
         { label: 'Remove from board', icon: X, run: () => board.removeCard(id), gap: true },

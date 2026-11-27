@@ -15,9 +15,10 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+import { computer, mac, mod, shortcut, system } from '../platform'
 
 const THEMES = [
-  { value: 'system', label: 'Like Windows' },
+  { value: 'system', label: `Like ${system}` },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ]
@@ -111,7 +112,7 @@ export function SettingsDialog() {
     <Dialog open={board.settingsOpen} onOpenChange={board.setSettingsOpen}>
       <DialogContent showCloseButton={false} className="glass-panel settings flex h-[min(560px,calc(100vh-48px))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[680px]">
         <DialogTitle className="sr-only">Settings</DialogTitle>
-        <DialogDescription className="sr-only">Everything stays on this PC.</DialogDescription>
+        <DialogDescription className="sr-only">Everything stays on this {computer}.</DialogDescription>
         <div className="flex min-h-0 flex-1">
           <nav className="settings-nav" aria-label="Settings">
             <p className="px-3 pt-1 pb-3 text-[15px] font-medium">Settings</p>
@@ -163,7 +164,7 @@ export function SettingsDialog() {
             </div>
             <div className="flex min-h-12 items-center gap-2 px-4 py-2">
               <p className={cn('min-w-0 flex-1 truncate text-[12.5px]', msg?.bad ? 'text-destructive' : 'text-muted-foreground')} aria-live="polite">
-                {msg?.t || 'Everything stays on this PC.'}
+                {msg?.t || `Everything stays on this ${computer}.`}
               </p>
               <Button
                 size="sm"
@@ -230,7 +231,7 @@ function BoardSection({ cfg, save }: { cfg: Config; save: Save }) {
           ))}
         </div>
       </Row>
-      <Row name="Space between cards" hint="When you tidy (Ctrl+Alt+T)">
+      <Row name="Space between cards" hint={`When you tidy (${shortcut('Ctrl+Alt+T')})`}>
         <ToggleGroup type="single" variant="outline" size="sm" value={String(cfg.tidyGap ?? 24)} onValueChange={v => v && save({ tidyGap: Number(v) }, 'Saved.')}>
           {GAPS.map(g => (
             <ToggleGroupItem key={g.value} value={String(g.value)} className="px-3">
@@ -248,7 +249,7 @@ function BoardSection({ cfg, save }: { cfg: Config; save: Save }) {
           ))}
         </ToggleGroup>
       </Row>
-      <Row name="Single-letter shortcuts" hint="N, L, T… Off keeps only the Ctrl ones">
+      <Row name="Single-letter shortcuts" hint={`N, L, T… Off keeps only the ${mod} ones`}>
         <OnOff on={cfg.singleKeys !== false} onChange={on => save({ singleKeys: on }, on ? 'Single-letter shortcuts on.' : 'Single-letter shortcuts off.')} />
       </Row>
     </section>
@@ -262,8 +263,8 @@ const EXTRAS: { id: keyof NonNullable<Config['extras']>; name: string; icon: Luc
     id: 'dictionary',
     name: 'Dictionary',
     icon: BookA,
-    about: 'Meanings, examples, pronunciation, and words that mean the same or the opposite. 128,000 English words kept on this PC, so it works without the internet.',
-    how: 'Press D, or select a word anywhere (in a note, a page, a card) and press Ctrl+D to see it right there.',
+    about: `Meanings, examples, pronunciation, and words that mean the same or the opposite. 128,000 English words kept on this ${computer}, so it works without the internet.`,
+    how: `Press D, or select a word anywhere (in a note, a page, a card) and press ${shortcut('Ctrl+D')} to see it right there.`,
   },
   {
     id: 'tables',
@@ -313,7 +314,7 @@ function TasksSection({ cfg, save, setMsg }: { cfg: Config; save: Save; setMsg: 
   const [replacing, setReplacing] = useState(false)
   return (
     <section className="grid gap-3">
-      <Heading hint="The Today card (T) keeps a simple list on this PC. Connect Todoist to use your Todoist tasks there instead.">Tasks</Heading>
+      <Heading hint={`The Today card (T) keeps a simple list on this ${computer}. Connect Todoist to use your Todoist tasks there instead.`}>Tasks</Heading>
       {cfg.hasTodoistToken && !replacing ? (
         <div className="flex items-center gap-2">
           <span className="flex items-center gap-2 text-[13.5px]">
@@ -334,7 +335,7 @@ function TasksSection({ cfg, save, setMsg }: { cfg: Config; save: Save; setMsg: 
           <Button type="button" size="sm" variant="ghost" onClick={() => setReplacing(true)}>
             Replace token
           </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => save({ todoistToken: '' }, 'Todoist disconnected: Today uses the list on this PC.')}>
+          <Button type="button" size="sm" variant="ghost" onClick={() => save({ todoistToken: '' }, `Todoist disconnected: Today uses the list on this ${computer}.`)}>
             Disconnect
           </Button>
         </div>
@@ -408,7 +409,7 @@ function ClaudeSection({ cfg, save }: { cfg: Config; save: Save }) {
       <ClaudeConnection />
       <div className="grid gap-2">
         <h4 className="text-[13.5px] font-medium">Trackers</h4>
-        <p className="text-[12.5px] text-muted-foreground">A tracker a chat works in (from the tracker mod) is added here by itself. Put one on the board from Ctrl+K.</p>
+        <p className="text-[12.5px] text-muted-foreground">A tracker a chat works in (from the tracker mod) is added here by itself. Put one on the board from {shortcut('Ctrl+K')}.</p>
         {board.trackers.length > 0 ? (
           <ul className="grid">
             {board.trackers.map(t => (
@@ -501,8 +502,11 @@ function AgentsSection({ cfg, save }: { cfg: Config; save: Save }) {
       </Row>
       <p className="text-[12px] text-muted-foreground">
         {fence === 'yes' ? 'The rules are in place. ' : cfg.agentFence !== false ? "The rules aren't there yet: Connect (under Claude Code) adds them. " : ''}
-        They stop Claude Code's own file tools and the common shell commands. On Windows, Claude Code doesn't sandbox the commands it runs, so a
-        command that reads files another way still could. It's a fence, not a lock.
+        They stop Claude Code's own file tools and the common shell commands.{' '}
+        {mac
+          ? 'A command that reads files another way still could.'
+          : "On Windows, Claude Code doesn't sandbox the commands it runs, so a command that reads files another way still could."}{' '}
+        It's a fence, not a lock.
       </p>
       <div className="grid gap-2">
         <div className="flex items-center gap-3">
@@ -584,7 +588,7 @@ function ClaudeConnection() {
       {!all && (
         <div className="flex items-center gap-3 pt-1">
           <p className="min-w-0 flex-1 text-[12.5px] text-muted-foreground">
-            {st.claude ? 'Connect them now: Cockpit adds itself to Claude Code for you.' : "Claude Code's command (claude) isn't on this PC, so only Outputs can be connected from here."}
+            {st.claude ? 'Connect them now: Cockpit adds itself to Claude Code for you.' : `Claude Code's command (claude) isn't on this ${computer}, so only Outputs can be connected from here.`}
           </p>
           <Button size="sm" onClick={connect} disabled={busy}>
             {busy ? 'Connecting…' : 'Connect'}
@@ -641,7 +645,7 @@ function PrivacySection({ usage, setUsage, setMsg }: { usage: TelemetryStatus | 
       {usage.choice === 'yes' && (
         <p className="text-[12.5px] text-muted-foreground">
           {usage.lastSent
-            ? `Last sent ${ago(new Date(usage.lastSent.at).toISOString())}: ${usage.lastSent.days.map(d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })).join(', ')}. Once sent, a day is gone from this PC.`
+            ? `Last sent ${ago(new Date(usage.lastSent.at).toISOString())}: ${usage.lastSent.days.map(d => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })).join(', ')}. Once sent, a day is gone from this ${computer}.`
             : 'Nothing sent yet. Each day is sent once it has ended.'}
         </p>
       )}

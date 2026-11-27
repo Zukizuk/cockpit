@@ -9,6 +9,7 @@ import { useReactFlow, useStore, type Edge, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
 import { get, post, put, track, type Board, type BoardCard, type BoardLink, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Shelf, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
 import { pack } from './layout'
+import { fileManager, mac } from './platform'
 import { useData, useEvent } from './lib'
 
 export const SIZES: Record<CardType, { w: number; h: number }> = {
@@ -361,7 +362,7 @@ interface Ctx {
   reloadPrefs: () => void
   /** What's new: the changelog, full screen. */
   openChangelog: () => Promise<void>
-  /** Send feedback: a new GitHub issue with the version and Windows build filled in. */
+  /** Send feedback: a new GitHub issue with the version and Windows build (macOS's Darwin version on a Mac) filled in. */
   sendFeedback: () => void
   outputs: OutputGroup[]
   unseenOutputs: number
@@ -1631,7 +1632,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
         if (r.note) {
           setPinnedOpen(false, true)
           setExpanded({ type: 'note', ref: r.note })
-        } else toast(how === 'reveal' ? `Showing ${p.title} in Explorer` : `Opening ${p.title}`)
+        } else toast(how === 'reveal' ? `Showing ${p.title} in ${fileManager}` : `Opening ${p.title}`)
       } catch (e: any) {
         toast(e.message)
       }
@@ -1720,7 +1721,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     const c = config.data
     if (!c?.repository) return toast('No project address to send feedback to')
     track('feedback.open')
-    const q = new URLSearchParams({ template: 'feedback.yml', version: c.version, windows: c.windows })
+    const q = new URLSearchParams({ template: 'feedback.yml', version: c.version, windows: mac ? `macOS (Darwin ${c.windows})` : c.windows })
     openLink(`${c.repository}/issues/new?${q}`)
   }, [config.data, toast, openLink])
 

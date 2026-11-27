@@ -811,6 +811,55 @@ test('Ctrl+K shows a few recent things, Show more opens up the rest, and typing 
   await page.keyboard.press('Escape')
 })
 
+test('on a Mac the shortcuts say ⌘ (Windows keeps Ctrl), and ⌘⌥G makes a section though Option turns the G into ©', async () => {
+  await clearSelection()
+  const sections = async () => (await api('/api/board')).cards.filter(c => c.type === 'section')
+  const had = (await sections()).length
+  // what a Mac sends for ⌘⌥G: the key is ©, only its place on the keyboard says G
+  await page.evaluate(() => document.body.dispatchEvent(new KeyboardEvent('keydown', { key: '©', code: 'KeyG', metaKey: true, altKey: true, bubbles: true, cancelable: true })))
+  assert.ok(await until(async () => (await sections()).length === had + 1), 'a section was made')
+  await until(() => page.evaluate(() => document.activeElement?.matches('.section-title input')))
+  await page.locator('.section-title input').fill('Mac keys')
+  await page.locator('.section-title input').press('Enter')
+  // (its title may sit under another card here, so its menu is opened on it directly)
+  await page.locator('.react-flow__node-section .section-title', { hasText: 'Mac keys' }).dispatchEvent('contextmenu', { bubbles: true, button: 2 })
+  await page.getByRole('menuitem', { name: /^Remove the section/ }).click()
+  assert.ok(await until(async () => (await sections()).length === had), 'taken off again')
+
+  await clearSelection()
+  await page.getByRole('button', { name: 'Keyboard shortcuts' }).click()
+  const list = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
+  await list.waitFor()
+  const text = await list.innerText()
+  if (process.platform === 'darwin') {
+    assert.match(text, /⌘/, 'the list says ⌘')
+    assert.doesNotMatch(text, /Ctrl/, 'and never Ctrl')
+    assert.doesNotMatch(text, /anywhere in Windows/, 'no Windows-only hotkey')
+  } else {
+    assert.match(text, /Ctrl/)
+    assert.doesNotMatch(text, /⌘/)
+  }
+  await page.keyboard.press('Escape')
+
+  // a Mac's delete key (Backspace) takes a selected card off the board; elsewhere only Delete does
+  await clearSelection()
+  await page.keyboard.press('n')
+  const sticky = await until(async () => (await api('/api/board')).cards.find(c => c.type === 'note' && !['shared', 'private', 'plain'].includes(c.id)))
+  assert.ok(sticky, 'a new sticky note')
+  // Esc leaves the note, which stays selected
+  await page.keyboard.press('Escape')
+  await until(() => page.evaluate(id => document.querySelector(`.react-flow__node[data-id="${id}"]`)?.classList.contains('selected') && document.activeElement === document.body, sticky.id))
+  await page.keyboard.press('Backspace')
+  const gone = async () => !(await api('/api/board')).cards.some(c => c.id === sticky.id)
+  if (process.platform === 'darwin') assert.ok(await until(gone), 'Backspace took it off')
+  else {
+    await page.waitForTimeout(800)
+    assert.ok(!(await gone()), 'Backspace leaves it on Windows')
+    await page.keyboard.press('Delete')
+    assert.ok(await until(gone), 'Delete takes it off')
+  }
+})
+
 test('many tucked cards: as many tabs as fit, the rest under "N more", found and brought back from its list', async () => {
   await clearSelection()
   for (let i = 1; i <= 16; i++) await agent('act', { steps: [{ ref: 'Board', action: 'addSticky', args: [`Parked idea ${i}

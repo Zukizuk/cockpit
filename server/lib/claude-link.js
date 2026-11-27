@@ -123,7 +123,7 @@ export async function connectClaude() {
     problems.push(`Fence: ${e.message}`)
   }
   const claude = await findClaude()
-  if (!claude) problems.push("Board tools: Claude Code's command (claude) wasn't found on this PC")
+  if (!claude) problems.push(`Board tools: Claude Code's command (claude) wasn't found on this ${process.platform === 'darwin' ? 'Mac' : 'PC'}`)
   else {
     try {
       await run(claude, ['mcp', 'remove', '--scope', 'user', 'cockpit']).catch(() => {})

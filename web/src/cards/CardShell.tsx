@@ -13,6 +13,7 @@ import { askPutAway } from '../views/Shelf'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { shortcut } from '../platform'
 
 const SIDE_POS = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left } as const
 
@@ -324,7 +325,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
         <Item variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
           <a.icon strokeWidth={1.75} />
           {a.label}
-          {a.keys && !inMore && <Keys>{a.keys}</Keys>}
+          {a.keys && !inMore && <Keys>{shortcut(a.keys)}</Keys>}
         </Item>
       </Fragment>
     )

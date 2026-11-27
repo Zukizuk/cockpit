@@ -39,6 +39,8 @@ import { isPath, isUrl } from './paste'
 import { dragToBoard } from '../drag'
 import { placeOf } from '../components/Viewer'
 import { cn } from '@/lib/utils'
+import { fileManager } from '../platform'
+import { KeyCaps } from '../components/KeyCaps'
 
 function iconOf(p: Pin): LucideIcon {
   if (p.kind === 'link') return Globe
@@ -68,7 +70,7 @@ export { BOARD_DRAG as QUICK_DRAG } from '../drag'
 
 type RowAction = { label: string; icon: LucideIcon; run: () => void; primary?: boolean; danger?: boolean; gap?: boolean }
 
-const openLabel = (kind: Pin['kind']) => (kind === 'folder' ? 'Open in Explorer' : kind === 'link' ? 'Open in the browser' : 'Open in its own program')
+const openLabel = (kind: Pin['kind']) => (kind === 'folder' ? `Open in ${fileManager}` : kind === 'link' ? 'Open in the browser' : 'Open in its own program')
 
 /**
  * One row: a click does the usual thing; on hover, its main actions (open in its own program, read in Cockpit when
@@ -176,7 +178,7 @@ function PinRow({ p, n }: { p: Pin; n?: number }) {
   const actions: RowAction[] = [
     ...(outside ? [{ label: openLabel(p.kind), icon: ExternalLink, run: () => board.openPin(p), primary: true }] : []),
     ...(p.viewable ? [{ label: p.kind === 'note' ? 'Open in Cockpit' : 'Read in Cockpit', icon: BookOpen, run: () => board.readPin(p), primary: true }] : []),
-    ...(p.kind === 'file' || p.kind === 'folder' ? [{ label: 'Show in Explorer', icon: FolderOpen, run: () => board.openPin(p, 'reveal') }] : []),
+    ...(p.kind === 'file' || p.kind === 'folder' ? [{ label: `Show in ${fileManager}`, icon: FolderOpen, run: () => board.openPin(p, 'reveal') }] : []),
     { label: 'Put on the board', icon: LayoutGrid, run: () => board.putOnBoard(p) },
     { label: 'Rename', icon: Pencil, run: () => setEditing('title'), gap: true },
     { label: 'Move to a group', icon: FolderInput, run: () => setEditing('group') },
@@ -313,7 +315,7 @@ export function PinnedSheet() {
               <PinIcon className="size-5 opacity-60" strokeWidth={1.5} />
               <p>Nothing here yet.</p>
               <p className="text-[12.5px] leading-relaxed">
-                Paste a path or a link above, or choose Pin on a card or in the <Kbd>Ctrl</Kbd> <Kbd>K</Kbd> box. What you open on three different days
+                Paste a path or a link above, or choose Pin on a card or in the <KeyCaps keys={['Ctrl', 'K']} /> box. What you open on three different days
                 shows up here by itself. Drag any of them onto the board to make it a card.
               </p>
             </div>

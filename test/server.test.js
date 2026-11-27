@@ -13,7 +13,7 @@ process.env.COCKPIT_DATA = path.join(T, 'data')
 
 const { loadConfig } = await import('../server/lib/config.js')
 const { checkApiRequest } = await import('../server/lib/security.js')
-const { detect } = await import('../server/lib/files.js')
+const { detect, macOpenArgs } = await import('../server/lib/files.js')
 const shown = await import('../server/lib/shown.js')
 const notes = await import('../server/lib/notes.js')
 const sessions = await import('../server/lib/sessions.js')
@@ -160,6 +160,15 @@ test('files: kinds by extension, and by content when there is none', () => {
   assert.equal(detect(f('blob', Buffer.from([1, 0, 2]))).format, 'binary')
 })
 
+test('files: on a Mac, Show in Finder selects the file, Notepad is TextEdit, VS Code is found by its app id', () => {
+  const f = '/Users/me/My notes/a b.md'
+  assert.deepEqual(macOpenArgs(f, 'reveal'), ['-R', f])
+  assert.deepEqual(macOpenArgs(f, 'notepad'), ['-e', f])
+  assert.deepEqual(macOpenArgs(f, 'vscode'), ['-b', 'com.microsoft.VSCode', f])
+  assert.deepEqual(macOpenArgs(f, 'default'), [f])
+  assert.deepEqual(macOpenArgs(f, undefined), [f])
+})
+
 test('shown: files and content; a file can only reach files beside it', () => {
   const dir = path.join(T, 'docs')
   fs.mkdirSync(path.join(dir, 'img'), { recursive: true })
@@ -266,6 +275,11 @@ test('board: the first launch gets welcome sticky notes, once', async () => {
   assert.equal(stickies.length, 6)
   assert.ok(stickies.every(c => c.ref.startsWith('stickies/') && notes.readNote(cfg, c.ref).text.trim()), 'each one has words, in a real file')
   assert.ok(b.cards.some(c => c.type === 'later'))
+  // they name this computer's things: Finder and ⌘K on a Mac, Explorer and Ctrl+K elsewhere
+  const words = stickies.map(c => notes.readNote(cfg, c.ref).text).join('\n')
+  const mac = process.platform === 'darwin'
+  for (const w of mac ? ['this Mac', 'Finder', '⌘K'] : ['this PC', 'Explorer', 'Ctrl+K']) assert.ok(words.includes(w), `the notes say ${w}`)
+  for (const w of mac ? ['this PC', 'Explorer', 'Ctrl+K'] : ['this Mac', 'Finder', '⌘K']) assert.ok(!words.includes(w), `and not ${w}`)
   assert.equal(board.hasBoard(), true, 'saved, so it only happens once')
   fs.rmSync(path.join(DATA_DIR, 'board.json'), { force: true })
 })

@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Fixed**
+- On a Mac, Cockpit speaks Mac: Show in Finder (with the file selected), TextEdit in place of Notepad, Terminal in place of Windows Terminal, "this Mac", and shortcuts written ⌘K, ⌥⌘T, ⇧⌘L. ⌥⌘T (Tidy) and ⌥⌘G (a section) work, though Option changes the letter typed, and the delete key takes cards off the board.
+
 ## 27 November 2026 (version 0.2.17)
 
 **Improved**

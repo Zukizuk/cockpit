@@ -1,5 +1,5 @@
 // A command Claude wrote, ready to run: see it whole, check the folder and shell, press Run and watch the output
-// right here. Anything that asks questions goes to a Windows Terminal tab instead.
+// right here. Anything that asks questions goes to a Windows Terminal tab (Terminal on a Mac) instead.
 import { useEffect, useRef, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { Copy, Play, Square, SquareTerminal, TerminalSquare, X } from 'lucide-react'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
+import { mac, terminalApp } from '../platform'
 import { CardShell } from './CardShell'
 
 const secs = (ms: number) => (ms < 10_000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms / 1000)} s`)
@@ -84,7 +85,7 @@ export function CommandCard({ id, data, selected }: NodeProps<CardNode>) {
   const terminal = async () => {
     try {
       await post('/api/run/terminal', { group: groupId, index, shell, cwd })
-      board.toast('Opened in Windows Terminal')
+      board.toast(`Opened in ${terminalApp}`)
     } catch (e: any) {
       setError(e.message)
     }
@@ -113,7 +114,7 @@ export function CommandCard({ id, data, selected }: NodeProps<CardNode>) {
       subtitle={group ? `${group.from}` : undefined}
       actions={[
         { label: 'Copy the command', icon: Copy, run: () => board.copy(command, 'Command copied'), hidden: !command },
-        { label: 'Open in Windows Terminal', icon: TerminalSquare, run: terminal, hidden: !command },
+        { label: `Open in ${terminalApp}`, icon: TerminalSquare, run: terminal, hidden: !command },
         { label: 'Remove from board', icon: X, run: () => board.removeCard(id), gap: true },
       ]}
       bodyClassName="flex flex-col gap-3"
@@ -162,7 +163,7 @@ export function CommandCard({ id, data, selected }: NodeProps<CardNode>) {
               {run.truncated && '\n… output cut at 1 MB'}
             </pre>
           )}
-          {!run && <p className="text-[12px] text-muted-foreground">Runs in {tidyPath(cwd)} with {shell === 'pwsh' ? 'PowerShell' : 'Git Bash'}. Nothing runs until you press Run.</p>}
+          {!run && <p className="text-[12px] text-muted-foreground">Runs in {tidyPath(cwd)} with {shell === 'pwsh' ? 'PowerShell' : mac ? 'your shell' : 'Git Bash'}. Nothing runs until you press Run.</p>}
         </>
       )}
       {error && <p className="text-[13px] text-destructive">{error}</p>}
