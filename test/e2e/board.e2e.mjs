@@ -160,7 +160,7 @@ test('a sticky note rolls up into its strip and back; Fold all leaves sticky not
   await page.getByRole('menuitem', { name: 'Unfold all cards', exact: true }).click()
 })
 
-test("a card's menu: what it does first, then view, More (agents, spaces and the rest), and Remove from board last; short enough to fit", async () => {
+test("a card's menu: everything it does, with only what its strip has too under More; Remove from board last; fits", async () => {
   await clearSelection()
   const box = await note('Shared plan').boundingBox()
   await page.mouse.click(box.x + 60, box.y + 12, { button: 'right' })
@@ -169,27 +169,26 @@ test("a card's menu: what it does first, then view, More (agents, spaces and the
   const labels = (await menu.locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
   assert.deepEqual(await wrapped(), [], 'no item wraps onto a second line')
   const at = l => labels.findIndex(x => x.startsWith(l))
-  // what's only here; what the strip has too (full screen, roll up, hide, tuck) and its agents and spaces (shared
-  // already: its strip says so) are under More
-  const order = ['Comment', 'Focus on this card', 'Put on the shelf…', 'More', 'Remove from board']
-  for (const l of ['Open full screen', 'Roll up into its strip', 'Stop sharing with agents']) assert.ok(at(l) < 0, `${l} is under More`)
+  // what the strip has too (full screen, roll up, hide, tuck) and the spaces are under More; the rest, sharing
+  // included (even once shared), is in the menu itself
+  const order = ['Comment', 'Focus on this card', 'Put on the shelf…', 'Lock in place', 'Stop sharing with agents', 'More', 'Remove from board']
+  for (const l of ['Open full screen', 'Roll up into its strip', 'Hide its contents']) assert.ok(at(l) < 0, `${l} is under More`)
+  for (const l of ['Pin to Quick access', 'Copy the text']) assert.ok(at(l) >= 0, `${l} is in the menu`)
   for (const l of order) assert.ok(at(l) >= 0, `${l} is in the menu`)
   assert.deepEqual([...order].sort((a, b) => at(a) - at(b)), order, 'in this order')
   assert.equal(labels.at(-1), 'Remove from board')
-  assert.ok(labels.length <= 10, `short (${labels.length} items): ${labels.join(', ')}`)
-  // the menu is all on the screen, and More opens beside it with agents and spaces
+  // the menu is all on the screen, and More opens beside it with the strip's own and the spaces
   const m = await menu.boundingBox()
   const vp = page.viewportSize()
   assert.ok(m.y >= 0 && m.y + m.height <= vp.height && m.x + m.width <= vp.width, 'on the screen')
-  await menu.getByRole('menuitem', { name: 'More' }).hover()
+  await menu.getByRole('menuitem', { name: 'More', exact: true }).hover()
   const sub = page.locator('[role=menu]').last()
-  assert.ok(await until(async () => (await sub.innerText().catch(() => '')).includes('Stop sharing with agents')), 'More opens on hover')
+  assert.ok(await until(async () => (await sub.innerText().catch(() => '')).includes('Open full screen')), 'More opens on hover')
   assert.match(await sub.innerText(), /Move to Work/)
-  assert.match(await sub.innerText(), /Open full screen/)
   await page.keyboard.press('Escape')
   await page.keyboard.press('Escape')
 
-  // a card neither shared nor private: sharing is right in its menu
+  // a card neither shared nor private: sharing is right in its menu too
   const plain = await note('Plain list').boundingBox()
   await page.mouse.click(plain.x + 60, plain.y + 12, { button: 'right' })
   const m2 = page.locator('[role=menu]').last()
@@ -295,7 +294,7 @@ test('arrows: drag from a card to another, change it from its menu, take it off 
   // a card in another space: its arrow goes out of view with it, and comes back
   await note('Private diary').click({ position: { x: 150, y: 200 } })
   await note('Private diary').click({ button: 'right', position: { x: 60, y: 12 } })
-  await page.getByRole('menuitem', { name: 'More' }).hover()
+  await page.getByRole('menuitem', { name: 'More', exact: true }).hover()
   await page.getByRole('menuitem', { name: 'Move to Work' }).click()
   assert.ok(await until(async () => (await page.locator('.react-flow__edge').count()) === 0), 'hidden with its card')
   assert.equal((await links()).length, 1, 'still saved')
@@ -1179,9 +1178,8 @@ test('a picture: Claude draws on it, the user draws on it and saves, and goes ba
   assert.ok(await until(async () => { const e = await entry(); return e.path !== firstEdit && e.original?.path === made.path }), 'saved: a new edit, the same original')
   assert.ok(await until(async () => !(await editor.count())), 'the editor closes')
 
-  // back to the original, from the card's menu (under More)
+  // back to the original, from the card's menu
   await node.click({ button: 'right', position: { x: 60, y: 12 } })
-  await page.getByRole('menuitem', { name: 'More' }).hover()
   if (process.env.SHOT) await page.waitForTimeout(400), await page.screenshot({ path: process.env.SHOT.replace(/\.png$/, '-menu.png') })
   await page.getByRole('menuitem', { name: 'Back to the original' }).click()
   assert.ok(await until(async () => { const e = await entry(); return e.path === made.path && !e.original }), 'the original again')

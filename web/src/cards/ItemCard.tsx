@@ -59,30 +59,28 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
   const actions: CardAction[] = e
     ? [
         // an image: draw on it (arrows, boxes, text, blur, crop); and, once drawn on, back to how it was
-        // also on the card's strip: under More in its menu
+        // on the card's strip too (draw, open): those are under More in its menu; the rest are in the menu itself
         { label: 'Draw on it', icon: Brush, run: () => editImage(e.id), hidden: e.format !== 'image', more: true },
-        { label: e.kind === 'link' ? 'Open in the browser' : 'Open in its own program', icon: ExternalLink, run: () => native('default'), more: true },
-        { label: 'Back to the original', icon: Undo2, run: backToOriginal, hidden: e.format !== 'image' || !e.original, more: true },
-        { label: 'Show in folder', icon: FolderOpen, run: () => native('reveal'), hidden: e.kind === 'link', more: true },
+        { label: e.kind === 'link' ? 'Open in the browser' : 'Open in its own program', icon: ExternalLink, run: () => native('default'), more: e.kind !== 'content' },
+        { label: 'Back to the original', icon: Undo2, run: backToOriginal, hidden: e.format !== 'image' || !e.original },
+        { label: 'Show in folder', icon: FolderOpen, run: () => native('reveal'), hidden: e.kind === 'link' },
         {
           label: editorLabel(board.prefs.editor),
           icon: board.prefs.editor === 'vscode' ? Code2 : PenLine,
           run: () => native('editor'),
           hidden: !textual || e.kind !== 'file' || board.prefs.editor === 'default',
-          more: true,
         },
-        { label: 'Read the page again', icon: RefreshCw, run: readAgain, hidden: e.kind !== 'link', more: true },
+        { label: 'Read the page again', icon: RefreshCw, run: readAgain, hidden: e.kind !== 'link' },
         // Later is a list of the same kept things: the card stays on the board either way
         {
           label: 'Keep on Later',
           icon: Bookmark,
           run: () => board.setLater(e.id, 'reading').then(() => (reload(), board.toast('On Later, under Reading'))),
           hidden: (e.kind !== 'link' && e.kind !== 'file') || (!!e.later && e.later !== 'done'),
-          more: true,
         },
         { label: 'Done reading', icon: Check, run: () => board.setLater(e.id, 'done').then(() => (reload(), board.toast('Done, on Later'))), hidden: !e.later || e.later === 'done' },
-        { label: 'Pin to Quick access', icon: Pin, run: () => board.pin(e.kind === 'link' ? { url: e.url, title: e.title } : { path: e.path, title: e.title }), hidden: e.kind !== 'link' && e.kind !== 'file', more: true },
-        { label: e.kind === 'link' ? 'Copy link' : 'Copy path', icon: Copy, run: () => board.copy(e.kind === 'link' ? e.url || '' : e.path, e.kind === 'link' ? 'Link copied' : 'Path copied'), gap: true, hidden: e.kind === 'content', more: e.kind !== 'link' },
+        { label: 'Pin to Quick access', icon: Pin, run: () => board.pin(e.kind === 'link' ? { url: e.url, title: e.title } : { path: e.path, title: e.title }), hidden: e.kind !== 'link' && e.kind !== 'file' },
+        { label: e.kind === 'link' ? 'Copy link' : 'Copy path', icon: Copy, run: () => board.copy(e.kind === 'link' ? e.url || '' : e.path, e.kind === 'link' ? 'Link copied' : 'Path copied'), gap: true, hidden: e.kind === 'content' },
         // written content (a draft Claude made, a note kept): its words are what you came for
         { label: 'Copy the text', icon: Copy, run: () => board.copy(read?.text || '', 'Copied'), gap: e.kind === 'content', hidden: !canCopyText },
       ]

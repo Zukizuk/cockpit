@@ -262,8 +262,8 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     here,
     [...own, { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) }],
     [
-      // the card's own strip has fold (and hide, and a sticky note's tuck): in the menu they're under More, so it
-      // stays short with what's only here
+      // only what the card's own strip already has (fold, hide, a sticky note's tuck, full screen, open, draw) is
+      // under More; everything else stays in the menu itself
       { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F', more: true },
       { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
       {
@@ -284,16 +284,14 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
           board.persist()
         },
         hidden: !autoHeight || fits || folded,
-        more: true,
       },
     ],
     [
-      { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L', more: !locked },
-      { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H', more: !veiled },
+      { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
+      { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H', more: true },
     ],
-    // sharing with agents: in the menu while the card is neither shared nor private (once it is, its strip shows a
-    // badge that undoes it, so then it's under More); moving to another space: under More
-    ...agentAndSpaceActions(board, markIds, nodeId, mark).map((g, i) => g.map(a => ({ ...a, more: i > 0 || !!mark }))),
+    // sharing with agents: always in the menu; moving to another space (a list of them): under More
+    ...agentAndSpaceActions(board, markIds, nodeId, mark).map((g, i) => g.map(a => ({ ...a, more: i > 0 }))),
     end,
   ]
   const shown = inGroups(groups)
