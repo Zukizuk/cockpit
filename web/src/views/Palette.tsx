@@ -84,7 +84,7 @@ export function Palette() {
     board.addCard('note', r.path)
   }
 
-  // Windows' own Open dialog (the server opens it), so each file keeps its real path; several can be picked
+  // the system's own Open dialog (the server opens it), so each file keeps its real path; several can be picked
   const chooseFiles = async () => {
     close()
     try {

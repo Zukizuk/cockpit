@@ -1480,3 +1480,91 @@ test('images drawn on: the edit shown, the first original kept, an edit of an ed
   assert.ok(fs.existsSync(yours), 'yours never removed')
   assert.ok(shown.getShown(b.id).original, 'and still offered')
 })
+
+test('file picker: macOS opens osascript, parses paths with spaces/quotes/non-ASCII, treats -128 as cancel, blocks overlapping dialogs', async () => {
+  const { pickFiles, parseMacPaths, isMacCancel } = await import('../server/lib/pick.js')
+
+  // pure parsing: spaces, quotes, non-ASCII, spaces around names and a line break inside one stay intact
+  assert.deepEqual(
+    parseMacPaths('/Users/me/My Notes.md\0/Users/me/it\'s "quoted".txt\0/Users/me/café 日本語.pdf\0/Users/me/ leading and trailing \0/Users/me/two\nlines.txt\n'),
+    ['/Users/me/My Notes.md', '/Users/me/it\'s "quoted".txt', '/Users/me/café 日本語.pdf', '/Users/me/ leading and trailing ', '/Users/me/two\nlines.txt'],
+  )
+  assert.deepEqual(parseMacPaths(''), [])
+  assert.equal(isMacCancel(new Error('Command failed'), '0:17: execution error: User cancelled. (-128)\n'), true)
+  assert.equal(isMacCancel(new Error('User canceled. (-128)'), ''), true)
+  assert.equal(isMacCancel(new Error('Command failed'), 'execution error: Not authorized. (-1743)\n'), false)
+
+  // macOS happy path: invokes /usr/bin/osascript with activate + choose file + 30 min timeout
+  let seen = null
+  const res = await pickFiles({
+    platform: 'darwin',
+    run(cmd, args, opts, cb) {
+      seen = { cmd, args, opts }
+      cb(null, '/Users/me/café "notes".md\0/Users/me/it\'s here.txt\n', '')
+    },
+  })
+  assert.equal(seen.cmd, '/usr/bin/osascript')
+  assert.equal(seen.args[0], '-e')
+  assert.match(seen.args[1], /activate/)
+  assert.match(seen.args[1], /choose file with prompt "Put on the board" with multiple selections allowed/)
+  assert.equal(seen.opts.timeout, 30 * 60_000)
+  assert.deepEqual(res, { paths: ['/Users/me/café "notes".md', '/Users/me/it\'s here.txt'] })
+
+  // macOS cancel (-128): resolves empty paths, not an error
+  const cancelled = await pickFiles({
+    platform: 'darwin',
+    run(_cmd, _args, _opts, cb) {
+      cb(new Error('Command failed'), '', '36:109: execution error: User canceled. (-128)\n')
+    },
+  })
+  assert.deepEqual(cancelled, { paths: [] })
+
+  // macOS other error: rejects with the standard message
+  await assert.rejects(
+    pickFiles({
+      platform: 'darwin',
+      run(_cmd, _args, _opts, cb) {
+        cb(new Error('spawn ENOENT'), '', '')
+      },
+    }),
+    /Couldn't open the file picker/,
+  )
+
+  // one dialog at a time: a second call while one is open returns busy without spawning again
+  let calls = 0
+  let finish
+  const first = pickFiles({
+    platform: 'darwin',
+    run(_cmd, _args, _opts, cb) {
+      calls++
+      finish = () => cb(null, '/Users/me/one.txt\n', '')
+    },
+  })
+  const second = await pickFiles({
+    platform: 'darwin',
+    run() { calls++ },
+  })
+  assert.deepEqual(second, { paths: [], busy: true })
+  assert.equal(calls, 1)
+  finish()
+  assert.deepEqual(await first, { paths: ['/Users/me/one.txt'] })
+
+  // Windows path stays unchanged
+  let winCmd = null
+  const winRes = await pickFiles({
+    platform: 'win32',
+    run(cmd, args, opts, cb) {
+      winCmd = { cmd, args, opts }
+      cb(null, JSON.stringify(['C:\\Users\\me\\file.txt']), '')
+    },
+  })
+  assert.equal(winCmd.cmd, 'powershell.exe')
+  assert.equal(winCmd.opts.timeout, 30 * 60_000)
+  assert.deepEqual(winRes, { paths: ['C:\\Users\\me\\file.txt'] })
+
+  // unsupported platform: clear error message
+  await assert.rejects(
+    pickFiles({ platform: 'linux', run() {} }),
+    /not available here; paste a path instead/,
+  )
+})

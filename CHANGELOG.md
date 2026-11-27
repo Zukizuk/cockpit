@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**New**
+- Choose files… in the + box now works on macOS too, opening the Mac's own file picker.
+
 ## 27 November 2026 (version 0.2.17)
 
 **Improved**
