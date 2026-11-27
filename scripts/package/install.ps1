@@ -137,6 +137,12 @@ Write-Host ''
 if ($Update) {
   # the one-off task Cockpit started this update with (server/lib/updates.js)
   cmd /d /c 'schtasks /Delete /TN "Cockpit update" /F >nul 2>&1'
+  # installed with Setup.exe: Settings > Apps shows the new version too
+  $entry = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{F123EE23-6B69-452D-8502-CC346A602483}_is1'
+  if (Test-Path $entry) {
+    $version = (Get-Content (Join-Path $app 'package.json') -Raw | ConvertFrom-Json).version
+    Set-ItemProperty $entry DisplayVersion $version
+  }
   Write-Host 'Cockpit is updated.'
 }
 elseif ($hotkey) { Write-Host 'Cockpit is installed. Open it from the Start menu, or press Ctrl+Alt+K.' }

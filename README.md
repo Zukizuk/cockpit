@@ -17,15 +17,24 @@ irm https://raw.githubusercontent.com/Zukizuk/cockpit/main/scripts/package/get.p
 ```
 
 It downloads the latest release, checks it against the checksum GitHub publishes, and runs the installer, without
-Windows stopping to check each file as it does for a zip downloaded in the browser. Or by hand:
+Windows stopping to check each file as it does for a zip downloaded in the browser.
+
+Or with the installer: download `Cockpit-Setup-<version>.exe` from the [latest release](../../releases/latest) and
+run it. No admin rights needed. It isn't signed, so Windows may say it protected your PC: click **More info**, then
+**Run anyway**. Its checkboxes choose whether Cockpit starts at login, gets the
+<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>K</kbd> hotkey, is in Explorer's Send to, and connects to Claude Code. Remove it
+in Settings > Apps.
+
+Or by hand:
 
 1. Download `Cockpit-<version>-win-x64.zip` from the [latest release](../../releases/latest).
 2. Unzip it and double-click **Install.cmd**. No admin rights needed. Cockpit brings its own Node, so there's nothing
    else to install.
 3. Open **Cockpit** from the Start menu, or press <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>K</kbd> from anywhere.
 
-The installer puts Cockpit in `%LOCALAPPDATA%\Programs\Cockpit`, starts it at login, adds it to Explorer's Send to,
-and (if you use Claude Code) offers to connect the two. To remove Cockpit, run **Uninstall.cmd** in that folder; your notes and board are kept.
+Each way puts Cockpit in `%LOCALAPPDATA%\Programs\Cockpit`, starts it at login, adds it to Explorer's Send to,
+and (if you use Claude Code) offers to connect the two. To remove Cockpit, run **Uninstall.cmd** in that folder (or
+use Settings > Apps if you installed with Setup); your notes and board are kept.
 
 **Updates:** Cockpit checks GitHub for a new release about once a day. When there is one, a dot appears on the
 Settings button; **Settings → Updates → Update now** downloads it, checks it against the checksum GitHub publishes,

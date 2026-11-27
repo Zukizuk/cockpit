@@ -15,6 +15,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Inno Setup (for Setup.exe)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
       - run: npm run package
       - name: Publish the release
         env:
@@ -22,4 +26,6 @@ jobs:
         shell: pwsh
         run: |
           $zip = Get-ChildItem release/*.zip | Select-Object -First 1
-          gh release create $env:GITHUB_REF_NAME $zip.FullName --title "Cockpit $($env:GITHUB_REF_NAME)" --notes "To install, paste this in PowerShell: ``irm https://raw.githubusercontent.com/Zukizuk/cockpit/main/scripts/package/get.ps1 | iex``. Or download the zip, unzip it and double-click Install.cmd. What changed: see CHANGELOG.md."
+          $setup = Get-ChildItem release/Cockpit-Setup-*.exe | Select-Object -First 1
+          if (-not $setup) { throw 'Setup.exe was not built' }
+          gh release create $env:GITHUB_REF_NAME $zip.FullName $setup.FullName --title "Cockpit $($env:GITHUB_REF_NAME)" --notes "To install, download $($setup.Name) and run it (no admin rights needed; Windows may say it protected your PC: More info, then Run anyway). Or paste this in PowerShell: ``irm https://raw.githubusercontent.com/Zukizuk/cockpit/main/scripts/package/get.ps1 | iex``. What changed: see CHANGELOG.md."

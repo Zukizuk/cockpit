@@ -59,6 +59,26 @@ fs.copyFileSync(process.execPath, path.join(stage, 'runtime', 'node.exe'))
 for (const f of ['Install.cmd', 'install.ps1', 'Uninstall.cmd', 'uninstall.ps1']) fs.copyFileSync(path.join(root, 'scripts/package', f), path.join(stage, f))
 
 run('powershell', ['-NoProfile', '-Command', `Compress-Archive -Path '${stage}' -DestinationPath '${zip}' -CompressionLevel Optimal`], root)
+
+// Setup.exe from the same folder (scripts/package/cockpit.iss), with Inno Setup's compiler: ISCC, or where its
+// installer puts it. Skipped with a note when it isn't there, except in CI, where the release needs it.
+const setup = path.join(out, `Cockpit-Setup-${pkg.version}.exe`)
+fs.rmSync(setup, { force: true })
+const iscc = [
+  process.env.ISCC,
+  path.join(process.env.LOCALAPPDATA || '', 'Programs', 'Inno Setup 6', 'ISCC.exe'),
+  path.join(process.env['ProgramFiles(x86)'] || '', 'Inno Setup 6', 'ISCC.exe'),
+  path.join(process.env.ProgramFiles || '', 'Inno Setup 6', 'ISCC.exe'),
+].find(p => p && fs.existsSync(p))
+if (iscc) {
+  execFileSync(iscc, ['/Q', `/DVersion=${pkg.version}`, `/DStage=${stage}`, `/DOutDir=${out}`, path.join(root, 'scripts/package/cockpit.iss')], { stdio: 'inherit' })
+} else if (process.env.CI) {
+  throw new Error("Inno Setup's compiler (ISCC.exe) isn't installed: the release needs Setup.exe")
+} else {
+  console.log("\nSkipped Setup.exe: install Inno Setup 6 (winget install JRSoftware.InnoSetup) or set ISCC to its ISCC.exe")
+}
+
 fs.rmSync(path.join(out, 'stage'), { recursive: true, force: true })
 console.log(`\nBuilt ${path.relative(root, zip)} (${(fs.statSync(zip).size / 1048576).toFixed(1)} MB, Node ${process.version})`)
+if (fs.existsSync(setup)) console.log(`Built ${path.relative(root, setup)} (${(fs.statSync(setup).size / 1048576).toFixed(1)} MB)`)
 

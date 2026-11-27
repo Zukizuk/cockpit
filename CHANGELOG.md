@@ -6,6 +6,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 **New**
 - Copy the picture: a button on an image card's strip (and in its menu) puts the picture itself on the clipboard, to paste straight into a chat with Claude. A pasted picture's path is no use to an agent.
+- Setup.exe: each release now comes with `Cockpit-Setup-<version>.exe` too. Run it to install, with no admin rights. Checkboxes choose the login start, the Ctrl+Alt+K hotkey, Send to and the Claude Code connection. Cockpit then shows in Settings > Apps, where you can remove it. The zip and the one-line install work as before, and Cockpit keeps updating itself.
 
 ## 27 November 2026 (version 0.2.17)
 

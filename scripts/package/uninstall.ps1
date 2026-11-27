@@ -1,9 +1,18 @@
 # Takes Cockpit away: its Start menu, Send to and login entries, the Cockpit helper, the Claude Code connection, and the
 # installed app. Your notes (Documents\Cockpit) and board (%USERPROFILE%\.cockpit) are kept; delete them yourself
 # if you want them gone.
-param([string]$InstallDir = $PSScriptRoot)
+# -FromSetup: Setup.exe's uninstaller runs this, and takes the files away itself.
+param([string]$InstallDir = $PSScriptRoot, [switch]$FromSetup)
 $ErrorActionPreference = 'Continue'
 if (-not (Test-Path (Join-Path $InstallDir 'app\server\index.js'))) { throw "No installed Cockpit in $InstallDir" }
+
+# installed with Setup.exe: its uninstaller does it all (and takes Cockpit off Settings > Apps), running this back
+$setupUninstaller = Get-ChildItem $InstallDir -Filter 'unins*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $FromSetup -and $setupUninstaller) {
+  Start-Process $setupUninstaller.FullName '/SILENT'
+  Write-Host 'Uninstalling Cockpit...'
+  exit 0
+}
 
 # only this copy's helper (a clone set up with npm run setup has its own)
 Get-Process CockpitHotkey -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($InstallDir, [StringComparison]::OrdinalIgnoreCase) } | Stop-Process -Force
@@ -27,6 +36,8 @@ if (Get-Command claude -ErrorAction SilentlyContinue) {
   $info = cmd /d /c "claude mcp get cockpit 2>nul" | Out-String
   if ($info.Contains($InstallDir)) { cmd /d /c "claude mcp remove --scope user cockpit >nul 2>&1" }
 }
+
+if ($FromSetup) { exit 0 }
 
 # this script runs from inside the folder it removes, so the last step is left to a separate process
 Start-Process cmd.exe "/d /c timeout /t 2 /nobreak >nul & rmdir /s /q `"$InstallDir`"" -WindowStyle Hidden
