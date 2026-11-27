@@ -4,19 +4,14 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 ## Coming next
 
-**Fixed**
-- On a Mac, Cockpit speaks Mac: Show in Finder (with the file selected), TextEdit in place of Notepad, Terminal in place of Windows Terminal, "this Mac", and shortcuts written ⌘K, ⌥⌘T, ⇧⌘L. ⌥⌘T (Tidy) and ⌥⌘G (a section) work, though Option changes the letter typed, and the delete key takes cards off the board.
-
-- On a Mac, Run on a command from Outputs works: it runs in your own shell (zsh or bash, with your PATH), Stop ends everything it started, and Open in a terminal opens Terminal in its folder. PowerShell is offered when it's installed.
-
-- On a Mac, the key that encrypts your secret snippets is kept in your Keychain, not in a file. A key already in the file moves there the next time it's used.
-
 **New**
 - Choose files… in the + box now works on macOS too, opening the Mac's own file picker.
 
 **Fixed**
+- On a Mac, Cockpit speaks Mac: Show in Finder (with the file selected), TextEdit in place of Notepad, Terminal in place of Windows Terminal, "this Mac", and shortcuts written ⌘K, ⌥⌘T, ⇧⌘L. ⌥⌘T (Tidy) and ⌥⌘G (a section) work, though Option changes the letter typed, and the delete key takes cards off the board.
+- On a Mac, Run on a command from Outputs works: it runs in your own shell (zsh or bash, with your PATH), Stop ends everything it started, and Open in a terminal opens Terminal in its folder. PowerShell is offered when it's installed.
+- On a Mac, the key that encrypts your secret snippets is kept in your Keychain, not in a file. A key already in the file moves there the next time it's used.
 - Settings can find and connect to Claude Code on macOS and Linux, even when Cockpit starts outside your terminal.
-
 - On a Mac, a quick right-click on the board or on a card opens its menu. It could pick the item under the pointer instead (on a card low on the screen, for example "Stop sharing with agents") and close the menu.
 
 ## 27 November 2026 (version 0.2.18)
