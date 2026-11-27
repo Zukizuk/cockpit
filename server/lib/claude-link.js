@@ -5,6 +5,7 @@
 import { appPath } from './app-root.js'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { DATA_DIR, HOME, loadConfig, writeFileAtomic } from './config.js'
 
@@ -25,10 +26,35 @@ function readJson(file) {
   }
 }
 
-/** Claude Code's own command, if it's on this PC (where.exe finds claude.exe or claude.cmd). */
-function findClaude() {
+/** Claude Code's own command (where.exe finds claude.exe or claude.cmd on Windows). */
+export async function findClaude(env = process.env) {
+  if (process.platform !== 'win32') return findUnixClaude(env)
   return new Promise(resolve => execFile('where.exe', ['claude'], { windowsHide: true, timeout: 5000 }, (err, out) => resolve(err ? '' : String(out).split(/\r?\n/).find(Boolean) || '')))
 }
+
+function findUnixClaude(env) {
+  const home = env.HOME || os.homedir()
+  const prefix = env.npm_config_prefix || env.NPM_CONFIG_PREFIX
+  // A launcher or login job may start Cockpit without the user's shell PATH.
+  const dirs = [
+    ...(env.PATH || '').split(path.delimiter).filter(Boolean),
+    path.join(home, '.local', 'bin'), path.join(home, '.claude', 'local'),
+    path.join(home, '.npm-global', 'bin'), path.join(home, '.volta', 'bin'), path.join(home, '.bun', 'bin'),
+    '/opt/homebrew/bin', '/usr/local/bin',
+    ...(prefix ? [path.join(prefix, 'bin')] : []), path.dirname(process.execPath),
+  ]
+  for (const dir of dirs) {
+    const file = path.resolve(dir, 'claude')
+    try {
+      if (!fs.statSync(file).isFile()) continue
+      fs.accessSync(file, fs.constants.X_OK)
+      return file
+    } catch {}
+  }
+  return ''
+}
+
+const shellQuote = value => `'${value.replace(/'/g, "'\\''")}'`
 
 /**
  * yes: connected to this copy of Cockpit; other: connected to another copy (an older install, or a folder that's
@@ -47,13 +73,23 @@ export async function claudeLink() {
     const dir = path.join(DATA_DIR, 'outputs')
     for (const n of fs.readdirSync(dir)) lastOutput = Math.max(lastOutput, fs.statSync(path.join(dir, n)).mtimeMs)
   } catch {}
-  return { hook, tools, fence: fenceState(loadConfig()), lastOutput, claude: !!claude, command: `claude mcp add --scope user cockpit -- "${process.execPath}" "${MCP}"` }
+  const command = process.platform === 'win32'
+    ? `claude mcp add --scope user cockpit -- "${process.execPath}" "${MCP}"`
+    : `${claude ? shellQuote(claude) : 'claude'} mcp add --scope user cockpit -- ${shellQuote(process.execPath)} ${shellQuote(MCP)}`
+  return { hook, tools, fence: fenceState(loadConfig()), lastOutput, claude: !!claude, command }
 }
 
-const run = (file, args) =>
-  new Promise((resolve, reject) =>
-    execFile(file, args, { windowsHide: true, timeout: 30000, shell: /\.(cmd|bat)$/i.test(file) }, (err, out, stderr) => (err ? reject(new Error(String(stderr || err.message).trim().split(/\r?\n/)[0])) : resolve(out))),
+function run(file, args) {
+  const options = { windowsHide: true, timeout: 30000, shell: /\.(cmd|bat)$/i.test(file) }
+  if (process.platform !== 'win32') {
+    // npm's Claude command may need to find Node even when Cockpit was launched by absolute path.
+    const PATH = [process.env.PATH, path.dirname(process.execPath)].filter(Boolean).join(path.delimiter)
+    options.env = { ...process.env, PATH }
+  }
+  return new Promise((resolve, reject) =>
+    execFile(file, args, options, (err, out, stderr) => (err ? reject(new Error(String(stderr || err.message).trim().split(/\r?\n/)[0])) : resolve(out))),
   )
+}
 
 // ---- the fence: Claude Code asked not to read Cockpit's notes or data folders ----------------------------------
 // Deny rules in ~/.claude/settings.json. They stop Claude Code's Read, Edit and Write (and Grep and Glob) there, and
