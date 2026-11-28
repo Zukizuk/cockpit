@@ -2,6 +2,11 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**New**
+- On a Mac, a clone set up with `npm run setup:mac` gets Cockpit.app: open Cockpit from Launchpad or Spotlight, or keep it in the Dock. It starts the server if needed and opens Cockpit in its own Chrome or Edge window. The server also starts at login.
+
 ## 27 November 2026 (version 0.2.21)
 
 **Fixed**

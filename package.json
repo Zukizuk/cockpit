@@ -13,6 +13,7 @@
     "icons": "node scripts/make-icons.mjs",
     "package": "npm run build && node scripts/package.mjs",
     "setup": "npm run build && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-dev.ps1",
+    "setup:mac": "npm run build && bash scripts/mac/setup-dev.sh",
     "test:e2e": "node --test --test-concurrency=1 \"test/e2e/*.e2e.mjs\""
   },
   "engines": {
