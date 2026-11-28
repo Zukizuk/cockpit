@@ -10,13 +10,12 @@ Newest first. Each change is listed under New, Improved or Fixed.
 - Filter a table: "Filter rows" puts a box under each heading, and only the rows that match what you type are shown, with "Showing 3 of 12 rows" above the table. The file keeps every row. The filter stays until you clear it.
 - Draw on the board: the pen button (or B) lets you draw lines and boxes around and between your cards, in five colours, with an eraser. Each space has its own drawings, and Undo takes back a stroke. Right-click the board to clear a space's drawings. Esc or Done goes back to moving cards.
 - Approve on the board: when you ask Claude for a change from the board (Tell Claude), it can leave its plan in Questions with Do it and Don't buttons. Your click goes straight to Claude, with no switching to the chat to say yes. This covers changes to the board only: anything outside Cockpit still asks in the chat.
+- On a Mac, a clone set up with `npm run setup:mac` gets Cockpit.app: open Cockpit from Launchpad or Spotlight, or keep it in the Dock. It starts the server if needed and opens Cockpit in its own Chrome or Edge window. The server also starts at login.
 
 **Improved**
 - A folded card's menu has Unfold in it, and a hidden card's has Show its contents. Before, both were under More.
 - A folded table says how many rows it has, and has an Unfold button, so it no longer looks empty.
 - While Focus is on, the sections behind fade, so a section whose cards moved to the side doesn't look emptied.
-
-- On a Mac, a clone set up with `npm run setup:mac` gets Cockpit.app: open Cockpit from Launchpad or Spotlight, or keep it in the Dock. It starts the server if needed and opens Cockpit in its own Chrome or Edge window. The server also starts at login.
 
 ## 27 November 2026 (version 0.2.21)
 
