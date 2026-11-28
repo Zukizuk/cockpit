@@ -1375,3 +1375,33 @@ test('a table: sort by a column from its menu, filter rows by what is typed, and
   assert.notEqual(sorted.output?.ok, false, JSON.stringify(sorted).slice(0, 300))
   assert.deepEqual((await rowsOf()).map(r => r[0]), ['Name', 'banana', 'pear', 'Apple', 'fig'], 'Z to A by Amount, the empty cell still last')
 })
+
+test('a table: formulas show their result, the formula while editing; Claude sees both; sorting keeps the total row last', async () => {
+  await clearSelection()
+  const rows = [['Item', 'Qty', 'Price', 'Total'], ['Pens', '3', '1.50', '=B2*C2'], ['Paper', '2', '4', '=B3*C3'], ['Sum', '=SUM(B2:B3)', '', '=SUM(D2:D3)'], ['Oops', '1', '0', '=B5/C5']]
+  const made = await agent('act', { steps: [{ ref: 'Board', action: 'addTable', args: ['Formula test', rows] }] })
+  assert.notEqual(made.output?.ok, false, JSON.stringify(made).slice(0, 300))
+  const card = page.locator('.react-flow__node-table', { hasText: 'Formula test' })
+  await card.waitFor()
+  const cell = (r, c) => card.locator(`input[data-cell="${r}:${c}"]`)
+  assert.equal(await cell(1, 3).inputValue(), '4.5', 'the result shows')
+  assert.equal(await cell(3, 3).inputValue(), '12.5', 'a sum of formulas')
+  assert.equal(await cell(4, 3).inputValue(), '#DIV/0!', "an error, as Excel's")
+  await cell(1, 3).click()
+  assert.equal(await cell(1, 3).inputValue(), '=B2*C2', 'the formula while editing')
+  await cell(1, 1).fill('10')
+  await cell(1, 0).click()
+  assert.equal(await cell(1, 3).inputValue(), '15', 'worked out again')
+  // Claude: what's written, and what shows (once the typed 10 is saved)
+  await page.waitForTimeout(1000)
+  const read = (await agent('act', { steps: [{ ref: 'Formula test', action: 'read' }] })).output?.steps?.[0]?.result
+  assert.equal(read?.rows?.[1]?.[3], '=B2*C2')
+  assert.equal(read?.values?.[1]?.[3], '15')
+  // sorted by Total, Z to A: the rows move with their formulas, the total row stays last
+  const sorted = await agent('act', { steps: [{ ref: 'Formula test', action: 'sortBy', args: ['Total', 'desc'] }] })
+  assert.notEqual(sorted.output?.ok, false, JSON.stringify(sorted).slice(0, 300))
+  const after = (await agent('act', { steps: [{ ref: 'Formula test', action: 'read' }] })).output?.steps?.[0]?.result
+  assert.deepEqual(after.rows.map(r => r[0]), ['Item', 'Pens', 'Paper', 'Oops', 'Sum'], JSON.stringify(after.rows))
+  assert.equal(after.rows[3][3], '=B4/C4', "a moved row's formula follows it")
+  assert.equal(after.values[1][3], '15')
+})

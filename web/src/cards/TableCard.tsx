@@ -2,7 +2,7 @@
 // opens in Excel too. Type in a cell; Tab and Enter move along (and add a row at the end); a block copied from Excel
 // pastes across the cells; Copy gives it back for Excel, or as Markdown for a note or a chat. The first row is the
 // header. Claude can make a table, read it and fill it in.
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
 import { ArrowDownAZ, ArrowDownToLine, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowUpZA, Copy, ExternalLink, FileText, Filter, FilterX, Heading, Plus, Table2, Trash2, X } from 'lucide-react'
 import { get, openOutside, post, put, type TableData } from '../api'
@@ -11,6 +11,7 @@ import { onEvent } from '../lib'
 import { CardShell, type CardAction } from './CardShell'
 import { TitleButton, TitleInput } from './NoteCard'
 import { cn } from '@/lib/utils'
+import { evaluate, hasFormulas, isTotalRow, shiftRows } from '../lib/formula'
 
 type Board = ReturnType<typeof useBoard>
 
@@ -65,17 +66,22 @@ export function compareCells(a: string, b: string) {
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 }
 /** The rows under the header in order of one column (A to Z, or Z to A); the header stays on top, ties keep their order. */
-export function sortRows(rows: string[][], col: number, desc = false) {
+export function sortRows(rows: string[][], col: number, desc = false, values?: string[][]) {
   const [head, ...body] = rows
-  const sorted = body
-    .map((r, i) => ({ r, i }))
+  // a formula's cell sorts by its result (values: what each cell shows)
+  const shows = (i: number) => (values?.[i + 1] ?? body[i])[col] ?? ''
+  const all = body.map((r, i) => ({ r, i, v: shows(i) }))
+  // total rows (=SUM over a range) stay under the rest, in their order
+  const totals = all.filter(x => isTotalRow(x.r))
+  const sorted = all
+    .filter(x => !isTotalRow(x.r))
     .sort((p, q) => {
-      const empty = !(p.r[col] ?? '').trim() || !(q.r[col] ?? '').trim()
-      const c = compareCells(p.r[col] ?? '', q.r[col] ?? '')
+      const empty = !p.v.trim() || !q.v.trim()
+      const c = compareCells(p.v, q.v)
       return (empty || !desc ? c : -c) || p.i - q.i
     })
-    .map(x => x.r)
-  return [head, ...sorted]
+  // a row's own formulas (=B2*C2) follow it to where it went
+  return [head, ...[...sorted, ...totals].map((x, to) => x.r.map(cell => shiftRows(cell, to - x.i)))]
 }
 /** Whether a row passes the filters (a word or part of one per column, any case); a row still empty always does. */
 export function passes(row: string[], filters: string[]) {
@@ -190,8 +196,12 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fresh, !!t])
 
-  const rows = t?.rows || []
+  const rows = useMemo(() => t?.rows || [], [t?.rows])
   const cols = rows[0]?.length || 0
+  // formulas (=SUM(B2:B7)): each cell shows its result, and its formula while it's being edited
+  const values = useMemo(() => (hasFormulas(rows) ? evaluate(rows) : null), [rows])
+  const shows = (r: number) => (values ? values[r].map(x => x.value) : rows[r])
+  const [editing, setEditing] = useState<string | null>(null)
 
   // Filter: a box under each heading; only the rows that match are shown (the file keeps them all). Kept for this
   // table on this PC until cleared.
@@ -210,7 +220,7 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
     } catch {}
   }, [filters, data.ref])
   const filtering = !!filters && filters.some(f => f.trim())
-  const shown = rows.map((row, r) => r === 0 || !filters || passes(row, filters))
+  const shown = rows.map((_, r) => r === 0 || !filters || passes(shows(r), filters))
   const shownCount = shown.filter((s, r) => r > 0 && s).length
   const openFilter = () => {
     setFilters(f => f ?? Array(cols).fill(''))
@@ -223,7 +233,7 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
     return -1
   }
   const sortBy = (c: number, desc = false) => {
-    change(sortRows(rows, c, desc))
+    change(sortRows(rows, c, desc, values?.map(r => r.map(x => x.value))))
     board.toast(`Sorted by ${rows[0]?.[c]?.trim() || `column ${c + 1}`}, ${desc ? 'Z to A' : 'A to Z'}`)
   }
   const set = (r: number, c: number, v: string) => change(rows.map((row, i) => (i === r ? row.map((x, j) => (j === c ? v : x)) : row)))
@@ -398,7 +408,11 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
                       <td key={c}>
                         <input
                           data-cell={`${r}:${c}`}
-                          value={v}
+                          value={editing === `${r}:${c}` || !values ? v : values[r][c].value}
+                          title={v.startsWith('=') && v.length > 1 ? v : undefined}
+                          className={cn(values && v.startsWith('=') && v.length > 1 && 'is-formula', values?.[r][c].error && 'is-error')}
+                          onFocus={() => setEditing(`${r}:${c}`)}
+                          onBlur={() => setEditing(e => (e === `${r}:${c}` ? null : e))}
                           aria-label={r === 0 ? `Column ${c + 1} heading` : `${rows[0][c] || `Column ${c + 1}`}, row ${r}`}
                           placeholder={r === 0 ? `Column ${c + 1}` : ''}
                           spellCheck={false}

@@ -6,6 +6,7 @@ Newest first. Each change is listed under New, Improved or Fixed.
 
 **New**
 - Sort a table: right-click a cell for "Sort by <column>, A to Z" or "Z to A". Numbers sort as numbers (9 before 10, 1,200 after 900), and empty cells go last. Claude can sort a table too.
+- Formulas in a table, written as in Excel: =SUM(D2:D7), =B2*C2, =ROUND(D2/3, 1), with AVERAGE, MIN, MAX, COUNT and ABS too. A cell shows its result, and its formula while you edit it. Errors show as Excel shows them (#DIV/0!). The table still opens in Excel with its formulas working. Sorting keeps a total row at the bottom, and each formula moves with its row. Claude sees both the formula and its result.
 - Filter a table: "Filter rows" puts a box under each heading, and only the rows that match what you type are shown, with "Showing 3 of 12 rows" above the table. The file keeps every row. The filter stays until you clear it.
 
 - On a Mac, a clone set up with `npm run setup:mac` gets Cockpit.app: open Cockpit from Launchpad or Spotlight, or keep it in the Dock. It starts the server if needed and opens Cockpit in its own Chrome or Edge window. The server also starts at login.

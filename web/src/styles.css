@@ -4494,3 +4494,13 @@ body.col-resizing .reader-divider::after {
 .tbl-filter-note button:hover {
   background: oklch(var(--contrast) / 0.1);
 }
+
+/* a formula's cell shows its result; an error, like Excel's #DIV/0!, in the destructive colour */
+.tbl input.is-formula:not(:focus) {
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in oklab, var(--foreground) 88%, var(--ring));
+}
+
+.tbl input.is-error:not(:focus) {
+  color: var(--destructive);
+}

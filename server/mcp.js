@@ -90,7 +90,10 @@ const BOARD_NOTE =
   'setCell(row, column, text) (row: its number from 1 under the header, or its first cell; column: its heading or ' +
   'number from 1), addRows(rows), sortBy(column, "asc" | "desc") to put the rows in order of one column (numbers as ' +
   'numbers, empty cells last), setRows(rows) to replace it all, removeRow(row). setRows and removeRow wait for ' +
-  "the user's Allow. If addTable says tables are off, tell the user where to turn them on. " +
+  "the user's Allow. A cell can hold a formula, written as in Excel so the file still works there: =SUM(D2:D7), " +
+  '=B2*C2, =ROUND(D2/3, 1) (cells named A1 style, row 1 being the header; SUM, AVERAGE, MIN, MAX, COUNT, ROUND, ' +
+  'ABS); read() then also gives values, what each cell shows. ' +
+  "If addTable says tables are off, tell the user where to turn them on. " +
   "Pages: Board's addPage(title, html, space?) puts a small page you write (HTML with its own CSS and script, or just " +
   'what goes in its body) on the board as a card that keeps what the user types or ticks in it: use it for a ' +
   'checklist, a calculator, a planner or a form to fill in. Its inputs, text boxes, choices, checkboxes and ' +

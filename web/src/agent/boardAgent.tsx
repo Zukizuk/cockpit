@@ -14,6 +14,7 @@ import { createParts } from '@ui-sdk/react/primitive'
 import { contentsOf, foldNode, freeSpot, isSection, isSticky, sectionOf, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
 import { get, post, put, type Question, type ShownRead, type Snippet, type StickyColor, type TableData } from '../api'
 import { newTable, rowsFromText, sortRows } from '../cards/TableCard'
+import { evaluate, hasFormulas } from '../lib/formula'
 import { emit, onEvent, useData } from '../lib'
 import { COLORS as INK, baseSize, exportPng, imageUrl, loadImage, type ColorName, type Mark, type Pt } from '../lib/markup'
 import { summary } from '../cards/OutputsCard'
@@ -219,6 +220,8 @@ export type CardContent = {
   typed?: Record<string, unknown>
   /** a table: its rows, the first being the header (up to 200) */
   rows?: string[][]
+  /** a table with formulas: what each cell shows (a formula's result), beside rows (what's written in it) */
+  values?: string[][]
   comments?: { by: string; text: string }[]
 }
 type CardOptions = {
@@ -586,6 +589,8 @@ export function BoardAgent() {
         if (t) {
           value.rowCount = Math.max(0, t.rows.length - 1)
           content.rows = t.rows.slice(0, 201)
+          // with formulas (=SUM(B2:B7)): rows are what's written in the cells; values are what the user sees
+          if (hasFormulas(t.rows)) content.values = evaluate(t.rows.slice(0, 201)).map(r => r.map(c => c.value))
         }
       }
       return { id, type, ref, title, value, content, mark, spaceId: space }
@@ -931,7 +936,7 @@ export function BoardAgent() {
       done = `Claude took a row out of ${title}`
     } else if (ch.sortBy) {
       const c = col(ch.sortBy[0])
-      rows = sortRows(rows, c, ch.sortBy[1])
+      rows = sortRows(rows, c, ch.sortBy[1], hasFormulas(rows) ? evaluate(rows).map(r => r.map(x => x.value)) : undefined)
       done = `Claude sorted ${title} by ${head[c]?.trim() || `column ${c + 1}`}`
     }
     await put('/api/tables', { path: ref, rows, baseMtime: t.mtime, by: 'Claude' })
