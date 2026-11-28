@@ -1703,8 +1703,15 @@ test('while Focus is on: no Focus, Lock, Tuck or Shelf in a card menu, no Tidy o
   assert.ok(l.includes('Remove from board') && l.includes('Private from agents'), `the rest is: ${l}`)
   await page.keyboard.press('Escape')
 
-  // the board's menu, on a bit of empty board
-  await page.mouse.click(1380, 130, { button: 'right' })
+  // the board's menu, on a bit of empty board (looked for: where sections lie differs between runs)
+  const spot = await page.evaluate(() => {
+    for (let y = 120; y < innerHeight - 40; y += 40)
+      for (let x = innerWidth - 60; x > 200; x -= 40)
+        if (document.elementFromPoint(x, y)?.matches('.react-flow__pane')) return { x, y }
+    return null
+  })
+  assert.ok(spot, 'there is a bit of empty board')
+  await page.mouse.click(spot.x, spot.y, { button: 'right' })
   await page.locator('[role=menu]').last().waitFor()
   const b = await items()
   assert.ok(b.includes('Show everything') && b.includes('Sticky note here'), `the board's menu: ${b}`)
