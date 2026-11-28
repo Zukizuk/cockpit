@@ -53,6 +53,8 @@ type BoardValue = {
   overlapping?: string[]
   /** cards on the space shown that stick out of the section they're in */
   stickingOut?: string[]
+  /** pen strokes and boxes the user has drawn on the space shown (you can't see them or draw any) */
+  drawings?: number
   selected: string[]
   inView: string[]
   focus?: string[]
@@ -388,12 +390,12 @@ const { Root: LaterRoot } = createParts(laterPrimitive, { root: 'div' })
 // What an agent asks instead of stopping: the question with its best guess, which it carries on with; the person
 // answers on the board when they like, and the agent reads the answers when it next looks.
 
-type QuestionItem = { id: string; question: string; guess?: string; about?: string; choices?: string[]; answer?: string; state: 'open' | 'answered' }
-type QuestionOptions = { value?: { question: string; state: string }[]; items?: QuestionItem[]; onAsk?: (question: string, guess: string, about: string, choices: string[]) => void; onRemove?: (id: string) => void }
+type QuestionItem = { id: string; question: string; guess?: string; about?: string; choices?: string[]; answer?: string; kind?: 'plan'; state: 'open' | 'answered' }
+type QuestionOptions = { value?: { question: string; state: string }[]; items?: QuestionItem[]; onAsk?: (question: string, guess: string, about: string, choices: string[]) => void; onPropose?: (plan: string, about: string) => void; onRemove?: (id: string) => void }
 
 const questionPrimitive = definePrimitive({
   name: 'question-list',
-  options: { value: 'value', items: 'value', onAsk: 'action', onRemove: 'action' },
+  options: { value: 'value', items: 'value', onAsk: 'action', onPropose: 'action', onRemove: 'action' },
   state: (options: QuestionOptions) => ({ value: options.value ?? [] }),
   sync: options => (options.value === undefined ? {} : { value: options.value }),
   api: context => {
@@ -408,13 +410,20 @@ const questionPrimitive = definePrimitive({
         if (Array.isArray(choices) && options.length < 2) throw new Error('Give at least two choices, or none.')
         call('onAsk')(q, words(guess), words(about), options)
       },
+      // Approve on the board: a change you'd make to the board, for the person to say Do it or Don't. Their click
+      // wakes a chat that's listening (wait-ping); make the change only after "Do it"
+      propose: (plan: string, about?: string) => {
+        const p = words(plan)
+        if (!p) throw new Error('Say what you would change on the board, in one line.')
+        call('onPropose')(p, words(about))
+      },
       // every question with your guess and the person's answer (an open one: your guess stands)
       read: () => list().map(({ id: _id, ...q }) => q),
       remove: (which: string) => call('onRemove')(pick(list(), which, x => x.id, x => x.question, 'question').id),
     }
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['ask', 'read', 'remove'] },
+  agent: { actions: ['ask', 'propose', 'read', 'remove'] },
 })
 const { Root: QuestionRoot } = createParts(questionPrimitive, { root: 'div' })
 
@@ -740,6 +749,7 @@ export function BoardAgent() {
         const out = [...layout.out].filter(id => titleOf.has(id)).map(id => `"${titleOf.get(id)}"`)
         return { ...(pairs.length ? { overlapping: pairs.slice(0, 20) } : {}), ...(out.length ? { stickingOut: out.slice(0, 20) } : {}) }
       })(),
+      ...(board.drawings.some(d => d.space === board.space) ? { drawings: board.drawings.filter(d => d.space === board.space).length } : {}),
       selected: visible.filter(c => c.value.selected).map(c => c.title),
       inView: visible.filter(c => c.value.inView).map(c => c.title),
       ...(board.focusing ? { focus: visible.filter(c => c.value.selected).map(c => c.title) } : {}),
@@ -748,7 +758,7 @@ export function BoardAgent() {
         : {}),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visible, openSpaces, sectionList, board.space, board.focusing, access, layout],
+    [visible, openSpaces, sectionList, board.space, board.focusing, board.drawings, access, layout],
   )
   // the arrows between the cards it can see, on each card's value: "→ Title" it points to, "← Title" from
   const edgesKey = useStore(s => s.edges.map(e => [e.id, e.source, e.target, (e.data as LinkData | undefined)?.label || ''].join('|')).join(';'))
@@ -880,6 +890,7 @@ export function BoardAgent() {
         ...(q.about ? { about: q.about } : {}),
         ...(q.choices?.length ? { choices: q.choices } : {}),
         ...(q.answer ? { answer: q.answer } : {}),
+        ...(q.kind === 'proposal' ? { kind: 'plan' as const } : {}),
         state: q.answeredAt ? 'answered' : 'open',
       })),
     [questions.data],
@@ -1252,6 +1263,23 @@ export function BoardAgent() {
               }
               else place(board.addCard('questions', 'questions', { at: rf.screenToFlowPosition({ x: innerWidth / 2, y: innerHeight / 3 }) }))
               said('Claude left you a question')
+            },
+            (e: Error) => said(e.message),
+          )
+        }
+        onPropose={(plan, about) =>
+          void post<{ id: string }>('/api/questions', { question: plan, about, kind: 'proposal', by: 'Claude' }).then(
+            () => {
+              questions.reload()
+              // the Questions card comes onto the board where the person is looking, if it isn't on it yet
+              const card = rf.getNodes().find(n => n.type === 'questions')
+              // put away (in a tucked section, on the shelf, another space): brought out, else the question is never seen
+              if (card) {
+                bringOut(card.id)
+                touchCard(card.id, 'writing')
+              }
+              else place(board.addCard('questions', 'questions', { at: rf.screenToFlowPosition({ x: innerWidth / 2, y: innerHeight / 3 }) }))
+              said("Claude wants to change the board: Do it or Don't, in Questions")
             },
             (e: Error) => said(e.message),
           )

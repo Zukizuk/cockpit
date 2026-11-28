@@ -7,7 +7,7 @@ import { startAgentBridge } from './agent/bridge'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useReactFlow, useStore, type Edge, type Node } from '@xyflow/react'
 import { useTheme, type Theme } from './theme'
-import { get, post, put, track, type Board, type BoardCard, type BoardLink, type CardType, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Shelf, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
+import { get, post, put, track, type Board, type BoardCard, type BoardLink, type CardType, type Drawing, type Config, type Editor, type Extras, type NotesList, type OutputGroup, type Often, type Pin, type PinInput, type PinnedList, type CardComment, type ShownEntry, type Shelf, type Space, type StickyColor, type Tracker, type AgentMark } from './api'
 import { pack } from './layout'
 import { fileManager, mac } from './platform'
 import { useData, useEvent } from './lib'
@@ -383,6 +383,17 @@ interface Ctx {
   deleteSpace: (id: string) => void
   /** Sends cards to another space (out of view here); Undo brings them back. */
   moveToSpace: (ids: string[], space: string) => void
+  /** Pen strokes and boxes drawn on the board (every space; each shows in its own). */
+  drawings: Drawing[]
+  /** Draw mode: cards stay put and the mouse draws. */
+  drawing: boolean
+  setDrawing: (on: boolean) => void
+  /** Adds a drawing to the space shown; Undo takes it off. */
+  addDrawing: (d: Omit<Drawing, 'id' | 'space'>) => void
+  /** Rubs out drawings (one Undo brings back what one rub took). `again`: the same rub carries on. */
+  eraseDrawings: (ids: string[], again?: boolean) => void
+  /** Rubs out every drawing in the space shown. */
+  clearDrawings: () => void
   /** Comments on cards, by card id. */
   comments: Record<string, CardComment[]>
   addComment: (card: string, text: string, by?: 'you' | 'Claude') => Promise<void>
@@ -436,6 +447,14 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const [space, setSpaceState] = useState(initial.space || 'main')
   const spacesRef = useRef(spaces)
   const spaceRef = useRef(space)
+  // pen strokes and boxes, all spaces together (a ref too, so a save and Undo see the latest)
+  const [drawings, setDrawingsState] = useState<Drawing[]>(initial.drawings ?? [])
+  const drawingsRef = useRef(drawings)
+  const setDrawings = useCallback((next: Drawing[]) => {
+    drawingsRef.current = next
+    setDrawingsState(next)
+  }, [])
+  const [drawing, setDrawingMode] = useState(false)
   const setSpaces = (next: Space[]) => {
     spacesRef.current = next
     setSpacesState(next)
@@ -485,7 +504,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   /** The cards and arrows as saved (set below, with undo). */
-  const layoutRef = useRef<() => { cards: BoardCard[]; links: BoardLink[] }>(() => ({ cards: [], links: [] }))
+  const layoutRef = useRef<() => { cards: BoardCard[]; links: BoardLink[]; drawings: Drawing[] }>(() => ({ cards: [], links: [], drawings: [] }))
   const glideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const outputs = useData(() => get<OutputGroup[]>('/api/outputs'), [], { refreshEvery: 60_000 })
@@ -544,8 +563,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       const viewport = rf.getViewport()
       // each space keeps where its view was
       const spacesNow = spacesRef.current.map(x => (x.id === spaceRef.current ? { ...x, viewport } : x))
-      const { cards, links } = layoutRef.current()
-      const body: Board = { cards, viewport, spaces: spacesNow, space: spaceRef.current, links }
+      const { cards, links, drawings } = layoutRef.current()
+      const body: Board = { cards, viewport, spaces: spacesNow, space: spaceRef.current, links, drawings }
       put('/api/board', body).catch(() => toast("Couldn't save the board's layout"))
     }, 600)
   }, [rf, toast])
@@ -575,16 +594,16 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
   const discardable = (n: CardNode) => isSticky(n.type, n.data.ref) || n.type === 'table'
 
   // ---- undo -----------------------------------------------------------------------------------------------------
-  // The whole layout (every card with its place, size, fold and lock, and the arrows between them) before each
-  // change; Ctrl+Z puts it back.
-  type Layout = { cards: BoardCard[]; links: BoardLink[] }
+  // The whole layout (every card with its place, size, fold and lock, the arrows between them and the drawings)
+  // before each change; Ctrl+Z puts it back.
+  type Layout = { cards: BoardCard[]; links: BoardLink[]; drawings: Drawing[] }
   const past = useRef<Layout[]>([])
   const future = useRef<Layout[]>([])
   const layoutNow = useCallback((): Layout => {
     const cards = rf.getNodes().map(fromNode)
     const ids = new Set(cards.map(c => c.id))
     // an arrow whose card was taken off goes with it (Undo brings both back)
-    return { cards, links: rf.getEdges().filter(e => ids.has(e.source) && ids.has(e.target)).map(fromEdge) }
+    return { cards, links: rf.getEdges().filter(e => ids.has(e.source) && ids.has(e.target)).map(fromEdge), drawings: drawingsRef.current }
   }, [rf])
   layoutRef.current = layoutNow
   const remember = useCallback(() => {
@@ -604,9 +623,10 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       glide()
       rf.setNodes(layout.cards.map(c => ({ ...toNode(c), hidden: offBoard(c, spaceRef.current), selected: picked.has(c.id) })))
       rf.setEdges(layout.links.map(toEdge))
+      setDrawings(layout.drawings)
       persist()
     },
-    [rf, glide, persist, discardIfEmpty],
+    [rf, glide, persist, discardIfEmpty, setDrawings],
   )
   const focusSavedRef = useRef<{ focus: string | string[] } | null>(null)
   /** The cards in focus (one, or several side by side). */
@@ -1129,6 +1149,43 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     [rf, persist],
   )
 
+  // ---- drawings ---------------------------------------------------------------------------------------------------
+  const setDrawing = useCallback(
+    (on: boolean) => {
+      if (on) rf.setNodes(ns => ns.map(n => (n.selected ? { ...n, selected: false } : n))) // Delete must not take a card meanwhile
+      setDrawingMode(on)
+    },
+    [rf],
+  )
+  const addDrawing = useCallback(
+    (d: Omit<Drawing, 'id' | 'space'>) => {
+      remember()
+      const id = `w${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+      setDrawings([...drawingsRef.current, { ...d, id, space: spaceRef.current }])
+      persist()
+    },
+    [remember, persist, setDrawings],
+  )
+  const eraseDrawings = useCallback(
+    (ids: string[], again = false) => {
+      const gone = new Set(ids)
+      if (!drawingsRef.current.some(d => gone.has(d.id))) return
+      // the first rub of a drag is remembered; the rest of the drag is the same Undo
+      if (!again) remember()
+      setDrawings(drawingsRef.current.filter(d => !gone.has(d.id)))
+      persist()
+    },
+    [remember, persist, setDrawings],
+  )
+  const clearDrawings = useCallback(() => {
+    const here = drawingsRef.current.filter(d => d.space === spaceRef.current)
+    if (!here.length) return
+    remember()
+    setDrawings(drawingsRef.current.filter(d => d.space !== spaceRef.current))
+    persist()
+    toast(`Cleared ${here.length === 1 ? 'the drawing' : `${here.length} drawings`} in this space`, { label: 'Undo', run: () => undoRef.current() })
+  }, [remember, persist, setDrawings, toast])
+
   const addLink = useCallback(
     (from: string, to: string, data: LinkData = {}) => {
       // (a card added a moment ago may not be in React Flow's store yet; an arrow to a card that never arrives is
@@ -1478,6 +1535,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       if (!gone) return
       if (spaceRef.current === id) switchSpace('main')
       setSpaces(spacesRef.current.filter(x => x.id !== id))
+      setDrawings(drawingsRef.current.filter(d => d.space !== id)) // drawings aren't cards: they go with the space
       let moved = 0
       rf.setNodes(ns =>
         ns.map(n => {
@@ -1491,7 +1549,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       toast(moved ? `Removed ${gone.name}; its cards are in Main` : `Removed ${gone.name}`)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rf, persist, toast, switchSpace],
+    [rf, persist, toast, switchSpace, setDrawings],
   )
 
   const moveToSpace = useCallback(
@@ -1733,10 +1791,10 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
       outputs: outputs.data || [], unseenOutputs: (outputs.data || []).filter(g => !g.seen).length, reloadOutputs: outputs.reload,
       showImage, items: items.data || [], notes: notes.data, trackers: trackers.data || [], versions, persist,
-      spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace,
+      spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, drawings, drawing, setDrawing, addDrawing, eraseDrawings, clearDrawings,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removeCards, addSection, fitSection, tidySection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, commentsData.data, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, addSection, fitSection, tidySection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, drawings, drawing, setDrawing, addDrawing, eraseDrawings, clearDrawings, commentsData.data, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

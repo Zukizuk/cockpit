@@ -516,6 +516,8 @@ export interface Question {
   id: string
   question: string
   guess?: string
+  /** a plan for a change to the board (Approve on the board): answered Do it or Don't */
+  kind?: 'proposal'
   /** the card it's about, by title */
   about?: string
   /** a few answers to pick from (something else can still be written) */
@@ -542,6 +544,18 @@ export interface BoardLink {
   heads?: 'both' | 'none'
 }
 
+export type DrawColor = 'ink' | 'red' | 'orange' | 'green' | 'blue'
+
+/** A pen stroke or a box drawn on the board itself (flow coordinates), shown only in the space it was drawn in. */
+export interface Drawing {
+  id: string
+  kind: 'pen' | 'box'
+  space: string
+  color: DrawColor
+  points?: [number, number][]
+  rect?: { x: number; y: number; w: number; h: number }
+}
+
 export interface Board {
   cards: BoardCard[]
   viewport: { x: number; y: number; zoom: number } | null
@@ -549,6 +563,7 @@ export interface Board {
   /** The space shown now. */
   space?: string
   links?: BoardLink[]
+  drawings?: Drawing[]
 }
 
 export type Shell = 'pwsh' | 'bash'

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStore, useStoreApi, type EdgeChange, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Minus, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
+import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Eraser, Minus, PenLine, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
 import { BoardProvider, besideSpot, contentsOf, heldBy, offBoard, sectionOf, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -37,6 +37,7 @@ import { ImageEditor } from './views/ImageEditor'
 import { looksSecret } from './cards/SnippetsCard'
 import { BoardAgent } from './agent/boardAgent'
 import { AgentFrames, AgentPill } from './agent/presence'
+import { DrawTools, Drawings } from './draw'
 import { DictionaryExtra, openDictionary } from './views/Dictionary'
 import { fileManager, letterOf, mac, shortcut } from './platform'
 import { KeyCaps } from './components/KeyCaps'
@@ -88,6 +89,7 @@ export function App() {
           <FocusBar />
           <UsageAsk />
           <CornerTools />
+          <DrawTools />
           <SpaceSwitcher />
           <TuckedTray />
           <PutAwayDialog />
@@ -366,6 +368,11 @@ function Canvas({ initial }: { initial: Board }) {
         return
       }
       if (typing || board.expanded || board.palette || document.querySelector('[role="menu"], [role="dialog"]')) return
+      // Esc leaves draw mode
+      if (e.key === 'Escape' && board.drawing) {
+        board.setDrawing(false)
+        return
+      }
       const picked = rf.getNodes().filter(n => n.selected)
       const one = picked.length === 1 ? picked[0] : null
       // AltGr (French, German… keyboards) arrives as Ctrl+Alt: a character typed with it is a bare key, not a combination
@@ -508,6 +515,8 @@ function Canvas({ initial }: { initial: Board }) {
             !picked.every(n => n.data.veiled),
           )
         },
+        // draw on the board (it moves and hides nothing)
+        b: () => board.setDrawing(!board.drawing),
         '?': () => board.setKeysOpen(true),
       }
       const fn = run[e.key.toLowerCase()] ?? (digit === '0' ? run['0'] : undefined)
@@ -577,6 +586,7 @@ function Canvas({ initial }: { initial: Board }) {
     rf.setNodes(ns => ns.map(n => (ids.has(n.id) ? foldNode(n, fold) : n)))
     board.persist()
   }
+  const hasDrawings = board.drawings.some(d => d.space === board.space)
   const onlyStickies = nodes.some(n => !n.hidden) && !foldable.length
   const fitAll = () => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 })
 
@@ -669,6 +679,12 @@ function Canvas({ initial }: { initial: Board }) {
             Show everything
             <DropdownMenuShortcut>0</DropdownMenuShortcut>
           </DropdownMenuItem>
+          {hasDrawings && (
+            <DropdownMenuItem onSelect={() => board.clearDrawings()}>
+              <Eraser strokeWidth={1.75} />
+              Clear the drawings in this space
+            </DropdownMenuItem>
+          )}
             </>
           )}
           {!inSection && (
@@ -712,6 +728,8 @@ function Canvas({ initial }: { initial: Board }) {
         </DropdownMenuContent>
       </DropdownMenu>
       <ReactFlow<CardNode, LinkEdge>
+        // while Focus is on, the sections stay behind, faded (their cards are in the column on the left)
+        className={board.focusing ? 'is-focusing' : undefined}
         nodes={nodes}
         onNodesChange={onChange}
         nodeTypes={nodeTypes}
@@ -818,6 +836,7 @@ function Canvas({ initial }: { initial: Board }) {
       >
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.8} color="var(--dots)" />
         <AgentFrames />
+        <Drawings />
       </ReactFlow>
       {nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">
@@ -921,6 +940,9 @@ function Dock() {
       <DockButton label="Outputs" shortcut="O" onClick={() => board.setOutputsOpen(true)} active={board.outputsOpen}>
         <Inbox className="size-[17px]" strokeWidth={1.75} />
         {board.unseenOutputs > 0 && <span className="dock-dot">{board.unseenOutputs > 9 ? '9+' : board.unseenOutputs}</span>}
+      </DockButton>
+      <DockButton label="Draw" shortcut="B" onClick={() => board.setDrawing(!board.drawing)} active={board.drawing}>
+        <PenLine className="size-[16px]" strokeWidth={1.75} />
       </DockButton>
       <span className="mx-0.5 h-5 w-px bg-ink/10" />
       <DockButton label="Show everything" shortcut="0" onClick={() => rf.fitView({ duration: 320, padding: 0.15, maxZoom: 1 })}>

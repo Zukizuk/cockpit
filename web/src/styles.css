@@ -4504,3 +4504,156 @@ body.col-resizing .reader-divider::after {
 .tbl input.is-error:not(:focus) {
   color: var(--destructive);
 }
+
+/* Drawing on the board: five inks that read on both themes, the clear sheet over the board while drawing, the tool strip */
+:root {
+  --draw-ink: oklch(0.93 0 0);
+  --draw-red: oklch(0.7 0.19 25);
+  --draw-orange: oklch(0.78 0.15 65);
+  --draw-green: oklch(0.78 0.16 150);
+  --draw-blue: oklch(0.72 0.14 250);
+}
+
+:root[data-theme='light'] {
+  --draw-ink: oklch(0.25 0 0);
+  --draw-red: oklch(0.58 0.2 25);
+  --draw-orange: oklch(0.66 0.16 55);
+  --draw-green: oklch(0.55 0.15 150);
+  --draw-blue: oklch(0.52 0.17 255);
+}
+
+.draw-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  touch-action: none;
+  user-select: none;
+}
+
+.draw-strip {
+  position: fixed;
+  left: 50%;
+  bottom: 74px;
+  translate: -50% 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 999px;
+}
+
+.corner-btn.is-on {
+  background: oklch(var(--contrast) / 0.12);
+  color: var(--foreground);
+}
+
+.draw-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  outline: none;
+  box-shadow: 0 0 0 1px oklch(var(--contrast) / 0.25);
+  transition: scale 150ms var(--ease-out);
+}
+
+.draw-swatch:hover {
+  scale: 1.12;
+}
+
+.draw-swatch.is-on {
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--foreground);
+}
+
+.draw-swatch:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+.draw-done {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 12px 0 8px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--foreground);
+  outline: none;
+}
+
+.draw-done:hover {
+  background: oklch(var(--contrast) / 0.08);
+}
+
+.draw-done:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 50%, transparent);
+}
+
+/* Focus: the sections stay behind, faded, while their cards wait in the column on the left */
+.is-focusing .react-flow__node-section {
+  opacity: 0.3;
+  transition: opacity 200ms ease-out;
+}
+
+/* a folded table is only its label: what's in it, beside the name, so it doesn't look gone */
+.bare-sub {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Approve on the board: a plan from Claude with Do it and Don't */
+.proposal-label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--muted-foreground);
+}
+
+.proposal .question-text {
+  margin-top: 4px;
+}
+
+.proposal-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.proposal-yes,
+.proposal-no {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  transition-property: background-color, scale;
+  transition-duration: 150ms;
+}
+
+.proposal-yes {
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.proposal-yes:hover {
+  background: color-mix(in oklab, var(--primary) 88%, var(--foreground));
+}
+
+.proposal-no {
+  background: oklch(var(--contrast) / 0.07);
+}
+
+.proposal-no:hover {
+  background: oklch(var(--contrast) / 0.12);
+}
+
+.proposal-yes:active,
+.proposal-no:active {
+  scale: 0.96;
+}

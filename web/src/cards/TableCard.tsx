@@ -358,6 +358,7 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
       born={data.born}
       icon={Table2}
       title={err ? <span className="text-destructive">{err}</span> : naming ? <TitleInput value={title} onDone={keepTitle} /> : <TitleButton title={title} empty="Table" always onName={() => setNaming(true)} />}
+      subtitle={data.folded && t ? `${Math.max(0, t.rows.length - 1)} ${t.rows.length === 2 ? 'row' : 'rows'} · folded` : undefined}
       hug
       bare
       onContext={e => {

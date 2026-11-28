@@ -985,7 +985,7 @@ test('outputs: a turn kept as one group; only listed targets can be opened', asy
 
 test('board: cards saved and read back, bad ones dropped, sizes kept sane', async () => {
   const { readBoard, saveBoard } = await import('../server/lib/board.js')
-  assert.deepEqual(readBoard(), { cards: [], viewport: null, spaces: [{ id: 'main', name: 'Main' }], space: 'main', links: [] })
+  assert.deepEqual(readBoard(), { cards: [], viewport: null, spaces: [{ id: 'main', name: 'Main' }], space: 'main', links: [], drawings: [] })
   saveBoard({ cards: [{ id: 'a', type: 'item', ref: 'x', x: 10, y: 20, w: 50, h: 9000 }, { id: 'b', type: 'nope', ref: 'y' }], viewport: { x: 1, y: 2, zoom: 9 } })
   const b = readBoard()
   assert.deepEqual(b.cards, [{ id: 'a', type: 'item', ref: 'x', x: 10, y: 20, w: 200, h: 4000 }])
@@ -1752,4 +1752,39 @@ test('file picker: macOS opens osascript, parses paths with spaces/quotes/non-AS
     pickFiles({ platform: 'linux', run() {} }),
     /not available here; paste a path instead/,
   )
+})
+
+test('drawings: kept with the board in their space; bad kinds, colours and numbers are cleaned; an old file has none', async () => {
+  const { readBoard, saveBoard } = await import('../server/lib/board.js')
+  const many = Array.from({ length: 2500 }, (_, i) => [i, i])
+  const r = saveBoard({
+    cards: [],
+    viewport: null,
+    spaces: [{ id: 'main', name: 'Main' }, { id: 'work', name: 'Work' }],
+    drawings: [
+      { id: 'd1', kind: 'pen', space: 'work', color: 'red', points: [[1.26, 2.34], [3, 'x'], [4.04, 5.55]], extra: 'x' },
+      { id: 'd2', kind: 'box', space: 'main', color: 'blue', rect: { x: 10.04, y: 20.06, w: -30.25, h: 40 } },
+      { id: 'd3', kind: 'circle', space: 'main', color: 'red', rect: { x: 1, y: 1, w: 2, h: 2 } },
+      { id: 'd4', kind: 'pen', space: 'main', color: 'pink', points: many },
+      { id: 'd1', kind: 'box', space: 'main', color: 'red', rect: { x: 1, y: 1, w: 2, h: 2 } },
+      { id: 'd5', kind: 'box', space: 'main', color: 'red', rect: { x: 1, y: 'a', w: 2, h: 2 } },
+      { id: 'd6', kind: 'pen', space: 'gone', color: 'red', points: [[1, 1]] },
+      { id: 'd7', kind: 'pen', space: 'main', color: 'red', points: [] },
+      null,
+    ],
+  })
+  assert.equal(r.drawings, 3)
+  const got = readBoard().drawings
+  assert.deepEqual(got[0], { id: 'd1', kind: 'pen', space: 'work', color: 'red', points: [[1.3, 2.3], [4, 5.6]] })
+  assert.deepEqual(got[1], { id: 'd2', kind: 'box', space: 'main', color: 'blue', rect: { x: 10, y: 20.1, w: 30.3, h: 40 } })
+  assert.equal(got[2].points.length, 2000, 'a stroke is cut to 2,000 points')
+  assert.equal(got[2].color, 'ink', 'an unknown colour becomes ink')
+
+  const lots = Array.from({ length: 1200 }, (_, i) => ({ id: `p${i}`, kind: 'pen', color: 'ink', points: [[i, i]] }))
+  assert.equal(saveBoard({ cards: [], viewport: null, drawings: lots }).drawings, 1000)
+
+  // a board file written before drawings existed
+  const file = path.join(process.env.COCKPIT_DATA, 'board.json')
+  fs.writeFileSync(file, JSON.stringify({ cards: [], viewport: null }))
+  assert.deepEqual(readBoard().drawings, [])
 })

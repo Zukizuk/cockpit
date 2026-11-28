@@ -978,7 +978,7 @@ async function api(req, res, url) {
     if (!a && method === 'GET') return json(res, 200, questions.listQuestions())
     if (!a && method === 'POST') {
       const body = await readBody(req)
-      const q = questions.askQuestion({ question: body.question, guess: body.guess, about: body.about, choices: body.choices, by: body.by })
+      const q = questions.askQuestion({ question: body.question, guess: body.guess, about: body.about, choices: body.choices, by: body.by, kind: body.kind })
       broadcast('questions', { id: q.id })
       return json(res, 200, q)
     }
@@ -986,6 +986,21 @@ async function api(req, res, url) {
       const body = await readBody(req)
       const q = questions.answerQuestion(a, body.answer)
       broadcast('questions', { id: a })
+      // Approve on the board: the person's Do it or Don't goes straight to the chats listening (no Tell Claude needed)
+      if (q.kind === 'proposal' && q.answeredAt) {
+        const yes = q.answer === questions.PROPOSAL_CHOICES[0]
+        const ping = {
+          text: yes
+            ? `On the board, the user said Do it to your plan: "${q.question}". Go ahead with that change on the board, and only that.`
+            : `On the board, the user said Don't to your plan: "${q.question}". Leave it as it is.`,
+          at: new Date().toISOString(),
+          ...(q.about ? { about: q.about } : {}),
+          approval: { id: q.id, plan: q.question, answer: yes ? 'do it' : "don't" },
+        }
+        const sent = [...pingWaiters].map(w => w.label)
+        for (const w of [...pingWaiters]) answerWaiter(w, { ping })
+        logAgentCall({ agent: 'You', tool: 'ping', what: `${yes ? 'approved' : 'turned down'} "${q.question.slice(0, 60)}" for ${sent.join(', ') || 'no one listening'}` })
+      }
       return json(res, 200, q)
     }
     if (a && b === 'remove' && method === 'POST') {

@@ -36,13 +36,18 @@ function choicesOf(list) {
   return out.length >= 2 ? out : []
 }
 
-export function askQuestion({ question, guess, about, choices, by = 'Claude' }, now = new Date()) {
+/** A plan the agent proposes for a change to the board (Approve on the board): the person says Do it or Don't. */
+export const PROPOSAL_CHOICES = ['Do it', "Don't"]
+
+export function askQuestion({ question, guess, about, choices, by = 'Claude', kind }, now = new Date()) {
   const q = clean(question)
-  if (!q) throw new UserError('Write the question')
-  const options = choicesOf(choices)
+  if (!q) throw new UserError(kind === 'proposal' ? 'Write the plan' : 'Write the question')
+  const proposal = kind === 'proposal'
+  const options = proposal ? PROPOSAL_CHOICES : choicesOf(choices)
+  if (proposal) guess = ''
   const list = readAll()
   // the same question asked again while it's still open: the one there stands (its guess and choices brought up to date)
-  const open = list.find(x => !x.answeredAt && x.question.toLowerCase() === q.toLowerCase())
+  const open = list.find(x => !x.answeredAt && x.question.toLowerCase() === q.toLowerCase() && (x.kind === 'proposal') === proposal)
   if (open) {
     if (clean(guess)) open.guess = clean(guess)
     if (options.length) open.choices = options
@@ -56,6 +61,7 @@ export function askQuestion({ question, guess, about, choices, by = 'Claude' }, 
     // a few to pick from (the person can still write something else)
     ...(options.length ? { choices: options } : {}),
     ...(clean(about, 200) ? { about: clean(about, 200) } : {}),
+    ...(proposal ? { kind: 'proposal' } : {}),
     by: BY.has(by) ? by : 'An agent',
     at: now.toISOString(),
   }

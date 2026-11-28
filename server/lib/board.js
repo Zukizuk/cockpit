@@ -74,15 +74,53 @@ export function linksOf(list, cardIds) {
   return out
 }
 
+// Pen strokes and boxes drawn on the board itself, each in the space it was drawn in.
+const MAX_DRAWINGS = 1000
+const MAX_POINTS = 2000
+export const DRAW_COLORS = ['ink', 'red', 'orange', 'green', 'blue']
+const DRAW_KINDS = new Set(['pen', 'box'])
+const round1 = n => Math.round(n * 10) / 10
+
+/** The drawings as saved: known kinds only, numbers rounded, a stroke cut to its first points, a space that's gone drops its drawings. */
+export function drawingsOf(list, spaceIds) {
+  const out = []
+  const seen = new Set()
+  for (const d of Array.isArray(list) ? list : []) {
+    if (out.length >= MAX_DRAWINGS) break
+    if (!d || typeof d.id !== 'string' || !d.id || seen.has(d.id) || !DRAW_KINDS.has(d.kind)) continue
+    const space = typeof d.space === 'string' && d.space ? d.space.slice(0, 80) : 'main'
+    if (spaceIds && !spaceIds.has(space)) continue
+    // an unknown colour is ink rather than a lost drawing
+    const color = DRAW_COLORS.includes(d.color) ? d.color : DRAW_COLORS[0]
+    const id = d.id.slice(0, 80)
+    if (d.kind === 'pen') {
+      const points = (Array.isArray(d.points) ? d.points : [])
+        .filter(p => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]))
+        .slice(0, MAX_POINTS)
+        .map(p => [round1(p[0]), round1(p[1])])
+      if (!points.length) continue
+      seen.add(id)
+      out.push({ id, kind: 'pen', space, color, points })
+    } else {
+      const r = d.rect
+      if (!r || ![r.x, r.y, r.w, r.h].every(Number.isFinite)) continue
+      seen.add(id)
+      out.push({ id, kind: 'box', space, color, rect: { x: round1(r.x), y: round1(r.y), w: round1(Math.abs(r.w)), h: round1(Math.abs(r.h)) } })
+    }
+  }
+  return out
+}
+
 export function readBoard() {
   try {
     const b = JSON.parse(fs.readFileSync(file(), 'utf8'))
     const spaces = spacesOf(b.spaces)
     const space = spaces.some(s => s.id === b.space) ? b.space : 'main'
     const cards = Array.isArray(b.cards) ? b.cards : []
-    return { cards, viewport: b.viewport || null, spaces, space, links: linksOf(b.links, new Set(cards.map(c => c?.id))) }
+    const drawings = drawingsOf(b.drawings, new Set(spaces.map(x => x.id)))
+    return { cards, viewport: b.viewport || null, spaces, space, links: linksOf(b.links, new Set(cards.map(c => c?.id))), drawings }
   } catch {
-    return { cards: [], viewport: null, spaces: spacesOf([]), space: 'main', links: [] }
+    return { cards: [], viewport: null, spaces: spacesOf([]), space: 'main', links: [], drawings: [] }
   }
 }
 
@@ -163,9 +201,10 @@ export function saveBoard(body) {
   for (const c of cards) if (c.space && !spaces.some(s => s.id === c.space)) delete c.space
   const space = spaces.some(s => s.id === body.space) ? body.space : 'main'
   const links = linksOf(body.links, new Set(cards.map(c => c.id)))
-  writeFileAtomic(file(), JSON.stringify({ cards, viewport, spaces, space, links }, null, 1) + '\n')
+  const drawings = drawingsOf(body.drawings, new Set(spaces.map(x => x.id)))
+  writeFileAtomic(file(), JSON.stringify({ cards, viewport, spaces, space, links, drawings }, null, 1) + '\n')
   backup()
-  return { ok: true, count: cards.length, links: links.length }
+  return { ok: true, count: cards.length, links: links.length, drawings: drawings.length }
 }
 
 const KEEP_BACKUPS = 14

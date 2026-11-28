@@ -1405,3 +1405,128 @@ test('a table: formulas show their result, the formula while editing; Claude see
   assert.equal(after.rows[3][3], '=B4/C4', "a moved row's formula follows it")
   assert.equal(after.values[1][3], '15')
 })
+
+test('drawing: a pen stroke and a box on the board, the eraser, Undo, Esc gives the cards back, and a reload keeps them', async () => {
+  await clearSelection()
+  // the drawings of the space shown, as saved (it saves a moment after a change)
+  const saved = async () => {
+    const b = await api('/api/board')
+    return (b.drawings || []).filter(d => d.space === b.space)
+  }
+  const count = async n => (await until(async () => (await saved()).length === n, 4000)) && (await saved())
+  const tool = name => page.getByRole('button', { name, exact: true }).click()
+  const sheet = page.getByTestId('draw-sheet')
+
+  await tool('Draw')
+  await sheet.waitFor()
+  // the pen: a bent line
+  await page.mouse.move(900, 200)
+  await page.mouse.down()
+  await page.mouse.move(950, 240, { steps: 10 })
+  await page.mouse.move(1000, 200, { steps: 10 })
+  await page.mouse.up()
+  // the box: drag from one corner to the other
+  await tool('Box')
+  await page.mouse.move(900, 300)
+  await page.mouse.down()
+  await page.mouse.move(1100, 380, { steps: 8 })
+  await page.mouse.up()
+  const two = await count(2)
+  assert.ok(two, `two drawings saved, got ${(await saved()).length}`)
+  const pen = two.find(d => d.kind === 'pen')
+  const box = two.find(d => d.kind === 'box')
+  assert.ok(pen && pen.points.length >= 3 && pen.points.length < 100, `the stroke is thinned: ${pen?.points.length} points`)
+  assert.ok(box && box.rect.w > 50 && box.rect.h > 20, `the box has a size: ${JSON.stringify(box?.rect)}`)
+
+  // the eraser rubs out what it touches: a click on the stroke itself, found on screen
+  await tool('Eraser')
+  const onScreen = await page.evaluate(([i]) => {
+    const path = document.querySelector('[data-testid=drawings] path')
+    const m = path.getScreenCTM()
+    const pt = path.getPointAtLength(path.getTotalLength() * i)
+    return { x: pt.x * m.a + m.e, y: pt.y * m.d + m.f }
+  }, [0.5])
+  await page.mouse.click(onScreen.x, onScreen.y)
+  const one = await count(1)
+  assert.ok(one && one[0].kind === 'box', 'the stroke is gone, the box stays')
+
+  // Undo brings it back
+  await page.keyboard.press('Control+z')
+  assert.ok(await count(2), 'Undo brings the stroke back')
+
+  // Esc leaves draw mode: the sheet goes and a card can be dragged again
+  await page.keyboard.press('Escape')
+  await sheet.waitFor({ state: 'detached' })
+  // a new note, brought into view (earlier tests have left the board panned and zoomed); dragged by its strip
+  await agent('act', { steps: [{ ref: 'Board', action: 'addSticky', args: ['Drag me'] }] })
+  const mine = page.locator('.react-flow__node-note', { hasText: 'Drag me' })
+  await mine.waitFor()
+  await agent('act', { steps: [{ ref: 'Drag me', action: 'focus' }] })
+  await page.waitForTimeout(700)
+  const id = await mine.getAttribute('data-id')
+  const yOf = async () => (await api('/api/board')).cards.find(c => c.id === id).y
+  const yBefore = await yOf()
+  // dragged by its strip, as a person drags a sticky note
+  const t = await mine.locator('.card-drag').first().boundingBox()
+  await page.mouse.move(t.x + 40, t.y + t.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(t.x + 43, t.y + t.height / 2 + 3)
+  await page.mouse.move(t.x + 44, t.y + t.height / 2 + 4)
+  await page.mouse.move(t.x + 60, t.y + t.height / 2 + 40, { steps: 5 })
+  await page.mouse.move(t.x + 80, t.y + t.height / 2 + 70, { steps: 5 })
+  await page.mouse.up()
+  assert.ok(await until(async () => (await yOf()) !== yBefore, 4000), 'the card moved')
+  assert.equal((await saved()).length, 2, 'dragging the card drew nothing')
+
+  // a reload keeps them, drawn again where they were
+  await page.reload()
+  await until(async () => (await page.locator('.react-flow__node').count()) >= 4, 15000)
+  assert.ok(await until(async () => (await page.locator('[data-testid=drawings] path, [data-testid=drawings] rect').count()) === 2, 5000), 'both drawings are back after a reload')
+  assert.equal((await saved()).length, 2)
+})
+
+test('Approve on the board: Claude proposes a change, Do it wakes the listening chat at once; Don\'t says leave it', async () => {
+  await clearSelection()
+  const proposed = await agent('act', { steps: [{ ref: 'Questions list', action: 'propose', args: ['Line up the cards in the Sort test table section', 'Sort test'] }] })
+  assert.notEqual(proposed.output?.ok, false, JSON.stringify(proposed).slice(0, 300))
+  const plan = page.locator('.question.proposal', { hasText: 'Line up the cards' })
+  await plan.waitFor()
+  await plan.scrollIntoViewIfNeeded()
+  assert.match(await plan.innerText(), /Claude wants to/)
+  // a chat listening, as scripts/wait-ping.mjs listens: the click answers it, no Tell Claude needed
+  const waiting = api('/api/agent/wait?label=' + encodeURIComponent('Claude · e2e'))
+  await page.waitForTimeout(300)
+  await plan.getByRole('button', { name: 'Do it', exact: true }).click()
+  const woke = await waiting
+  assert.match(woke.ping?.text || '', /said Do it to your plan: "Line up the cards/, JSON.stringify(woke))
+  assert.equal(woke.ping?.approval?.answer, 'do it')
+  await plan.getByText('You said do it').waitFor()
+  // Claude reads it as a plan, answered
+  const read = (await agent('act', { steps: [{ ref: 'Questions list', action: 'read' }] })).output?.steps?.[0]?.result
+  const mine = read.find(q => q.question.startsWith('Line up the cards'))
+  assert.deepEqual([mine.kind, mine.answer, mine.state], ['plan', 'Do it', 'answered'])
+  // Don't
+  await agent('act', { steps: [{ ref: 'Questions list', action: 'propose', args: ['Move every sticky note to Work'] }] })
+  const other = page.locator('.question.proposal', { hasText: 'Move every sticky note' })
+  await other.waitFor()
+  const waiting2 = api('/api/agent/wait?label=' + encodeURIComponent('Claude · e2e'))
+  await page.waitForTimeout(300)
+  await other.getByRole('button', { name: "Don't", exact: true }).click()
+  assert.match((await waiting2).ping?.text || '', /said Don't .* Leave it as it is/)
+})
+
+test('a folded card: Unfold is in the menu itself, and a folded table says how many rows it has', async () => {
+  await clearSelection()
+  const table = page.locator('.react-flow__node-table', { hasText: 'Sort test' })
+  await table.scrollIntoViewIfNeeded()
+  await agent('act', { steps: [{ ref: 'Sort test', action: 'fold' }] })
+  await table.locator('.bare-sub', { hasText: '4 rows · folded' }).waitFor()
+  await table.locator('.bare-label').click({ button: 'right', position: { x: 30, y: 10 } })
+  const menu = page.locator('[role=menu]').last()
+  await menu.waitFor()
+  const items = (await menu.locator(':scope > [role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0])
+  assert.ok(items.includes('Unfold'), `Unfold is in the menu itself: ${items}`)
+  await page.keyboard.press('Escape')
+  await table.getByRole('button', { name: 'Unfold (F)' }).click()
+  await table.locator('input[data-cell="1:0"]').waitFor()
+})

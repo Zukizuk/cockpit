@@ -264,8 +264,9 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     [...own, { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) }],
     [
       // only what the card's own strip already has (fold, hide, a sticky note's tuck, full screen, open, draw) is
-      // under More; everything else stays in the menu itself
-      { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F', more: true },
+      // under More; everything else stays in the menu itself. The way back out of a state is never under More: a
+      // folded card's Unfold, a hidden one's Show its contents.
+      { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F', more: !folded },
       { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
       {
         label: 'Compare side by side',
@@ -289,7 +290,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     ],
     [
       { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
-      { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H', more: true },
+      { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H', more: !veiled },
     ],
     // sharing with agents and moving to another space: in the menu itself
     ...agentAndSpaceActions(board, markIds, nodeId, mark),
@@ -436,7 +437,10 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
               <header className="card-head bare-label card-drag" onDoubleClick={folded ? toggleFold : undefined} title={folded ? 'Double-click to unfold' : 'Drag to move'}>
                 <Icon className="size-3.5 shrink-0" strokeWidth={1.75} />
                 <div className="bare-title min-w-0">{title}</div>
+                {/* folded, a bare card (a table) is only its label: say what's in it, so it doesn't look gone */}
+                {folded && subtitle && <span className="bare-sub">{subtitle}</span>}
                 <div className="card-actions nodrag flex items-center">
+                  {folded && <IconButton icon={ChevronsUpDown} label="Unfold (F)" onClick={toggleFold} className="bare-unfold" />}
                   <IconButton icon={veiled ? Eye : EyeOff} label={veiled ? 'Show its contents' : 'Hide its contents (H)'} onClick={toggleVeil} className={cn('veil-btn', veiled && 'veil-on')} />
                   {lockBadge}
                   {menu}

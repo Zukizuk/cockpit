@@ -46,6 +46,7 @@ export const KEY_GROUPS: { title: string; keys: Key[] }[] = [
       { keys: ['0'], what: 'Show everything' },
       { keys: ['Ctrl', 'Alt', 'T'], what: 'Tidy: line cards up from the top-left' },
       { keys: ['Ctrl', 'Alt', 'G'], what: 'A section around the selected cards (or an empty one)' },
+      { keys: ['B'], what: 'Draw on the board (Esc leaves)' },
       { keys: ['[', ']'], what: 'The space before or after (S lists them)' },
       { keys: ['Alt', '1'], what: 'Go to space 1 (to 9)' },
       { keys: ['Ctrl', 'Z'], what: `Undo (${shortcut('Ctrl Y')} redoes)` },

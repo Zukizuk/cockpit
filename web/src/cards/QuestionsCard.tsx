@@ -3,7 +3,7 @@
 // the guess as it is. The agent reads the answers when it next looks. Answered ones go below, and can be changed.
 import { useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { ArrowUp, Check, MessageCircleQuestion, Pencil, X } from 'lucide-react'
+import { ArrowUp, Check, MessageCircleQuestion, Pencil, Sparkles, X } from 'lucide-react'
 import { get, post, type Question } from '../api'
 import { useBoard, type CardNode } from '../board'
 import { ago, useData } from '../lib'
@@ -37,15 +37,23 @@ export function QuestionsCard({ id, data, selected }: NodeProps<CardNode>) {
         </p>
       ) : (
         <div className="questions">
-          {open.map(q => (
-            <QuestionRow key={q.id} q={q} onAnswer={t => answer(q, t)} onRemove={() => remove(q)} />
-          ))}
+          {open.map(q =>
+            q.kind === 'proposal' ? (
+              <ProposalRow key={q.id} q={q} onAnswer={t => answer(q, t)} onRemove={() => remove(q)} />
+            ) : (
+              <QuestionRow key={q.id} q={q} onAnswer={t => answer(q, t)} onRemove={() => remove(q)} />
+            ),
+          )}
           {answered.length > 0 && <div className="questions-sep">Answered</div>}
-          {answered.map(q => (
-            <QuestionRow key={q.id} q={q} onAnswer={t => answer(q, t)} onRemove={() => remove(q)} />
-          ))}
+          {answered.map(q =>
+            q.kind === 'proposal' ? (
+              <ProposalRow key={q.id} q={q} onAnswer={t => answer(q, t)} onRemove={() => remove(q)} />
+            ) : (
+              <QuestionRow key={q.id} q={q} onAnswer={t => answer(q, t)} onRemove={() => remove(q)} />
+            ),
+          )}
           {/* a chat listening for the user: one click wakes it to read the answers */}
-          {listening.length > 0 && answered.length > 0 && (
+          {listening.length > 0 && answered.some(q => q.kind !== 'proposal') && (
             <div className="questions-tell">
               <TellClaude who={listening} text="I've answered your questions on the board's Questions card." label="Tell Claude I've answered" />
             </div>
@@ -144,6 +152,46 @@ function QuestionRow({ q, onAnswer, onRemove }: { q: Question; onAnswer: (text: 
             )}
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Approve on the board: a change Claude would make to the board, waiting for the person's Do it or Don't. The answer
+ * goes straight to a chat that's listening (no Tell Claude needed); one that isn't reads it when it next looks.
+ */
+function ProposalRow({ q, onAnswer, onRemove }: { q: Question; onAnswer: (text: string) => Promise<unknown>; onRemove: () => void }) {
+  const done = !!q.answeredAt
+  const yes = q.answer === 'Do it'
+  return (
+    <div className={cn('question proposal', done && 'is-answered')}>
+      <div className="question-head">
+        <p className="proposal-label">
+          <Sparkles className="size-3.5" strokeWidth={2} />
+          {q.by} wants to
+        </p>
+        <IconButton icon={X} label="Take this plan away" onClick={onRemove} className="question-x" />
+      </div>
+      <p className="question-text">{q.question}</p>
+      <p className="question-meta">
+        {ago(q.at)}
+        {q.about ? ` · about ${q.about}` : ''}
+      </p>
+      {done ? (
+        <div className="question-answer">
+          {yes ? <Check className="size-3.5 shrink-0" strokeWidth={2} /> : <X className="size-3.5 shrink-0" strokeWidth={2} />}
+          <span>{yes ? `You said do it. ${q.by} has been told.` : `You said don't. ${q.by} has been told.`}</span>
+        </div>
+      ) : (
+        <div className="proposal-buttons">
+          <button type="button" className="proposal-yes" onClick={() => onAnswer('Do it')}>
+            Do it
+          </button>
+          <button type="button" className="proposal-no" onClick={() => onAnswer("Don't")}>
+            Don't
+          </button>
+        </div>
       )}
     </div>
   )
