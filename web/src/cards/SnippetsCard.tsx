@@ -80,7 +80,7 @@ async function copyText(id: string) {
   }
 }
 
-type Action = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean }
+type Action = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean; /** the one that is set now */ on?: boolean }
 
 function MenuItems({ actions, Item, Sep }: { actions: Action[]; Item: typeof ContextMenuItem | typeof DropdownMenuItem; Sep: typeof ContextMenuSeparator | typeof DropdownMenuSeparator }) {
   return (
@@ -91,6 +91,7 @@ function MenuItems({ actions, Item, Sep }: { actions: Action[]; Item: typeof Con
           <Item variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
             <a.icon strokeWidth={1.75} />
             {a.label}
+            {a.on && <Check className="ml-auto" strokeWidth={2} />}
           </Item>
         </Fragment>
       ))}
@@ -145,7 +146,7 @@ function SnippetRow({ s }: { s: Snippet }) {
     ...(many ? [{ label: open ? 'Show less' : 'Show all', icon: open ? ChevronUp : ChevronDown, run: expand }] : []),
     { label: 'Rename', icon: Pencil, run: () => setNaming(true), gap: true },
     { label: s.secret ? 'Make it plain' : 'Make it secret', icon: s.secret ? LockOpen : Lock, run: () => update({ secret: !s.secret }) },
-    ...KEEPS.map((k, i) => ({ label: `Keep ${k.value === 'forever' ? 'always' : `for ${k.label}`}`, icon: Timer, run: () => update({ keep: k.value }), gap: i === 0 })),
+    ...KEEPS.map((k, i) => ({ label: `Keep ${k.value === 'forever' ? 'always' : `for ${k.label}`}`, icon: Timer, run: () => update({ keep: k.value }), gap: i === 0, on: s.keep === k.value })),
     { label: 'Delete', icon: Trash2, run: remove, danger: true, gap: true },
   ]
   const from = s.from && s.from !== 'you' ? `From ${s.from.replace(/^Claude · /, 'Claude in ')}, ` : 'Kept '

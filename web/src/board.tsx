@@ -317,6 +317,9 @@ interface Ctx {
   remember: () => void
   undo: () => void
   redo: () => void
+  /** Whether there is anything to undo or redo now (asked when a menu opens, so Undo and Redo can be greyed). */
+  canUndo: () => boolean
+  canRedo: () => boolean
   /** Focus: one card in the middle, every other card folded onto a shelf at its left. Again: all back as it was. */
   focusing: boolean
   /** Focus on a card, or several side by side (the selected ones if none are named); again: everything back. */
@@ -647,6 +650,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     past.current.push(layoutNow())
     apply(next)
   }, [apply, layoutNow, toast])
+  const canUndo = useCallback(() => past.current.length > 0, [])
+  const canRedo = useCallback(() => future.current.length > 0, [])
   // for buttons made before the latest undo existed (a toast's Undo)
   const undoRef = useRef(undo)
   undoRef.current = undo
@@ -665,6 +670,8 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
     (ids: string[], shelf?: { until?: number }) => {
       const set = new Set(ids)
       if (!set.size) return
+      // a card in Focus going away would leave Focus on with nothing in it: everything comes back first
+      if (focusSavedRef.current && ids.some(inFocus)) toggleFocusRef.current()
       const here = rf.getNodes().filter(n => !n.hidden)
       const shelved = shelf ? { at: Date.now(), ...(shelf.until ? { until: shelf.until } : {}) } : undefined
       // a section tucked takes what's in it along: one tab, and they come back with it
@@ -1785,7 +1792,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
 
   const value = useMemo<Ctx>(
     () => ({
-      addCard, removeCard, removeCards, addSection, fitSection, tidySection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo,
+      addCard, removeCard, removeCards, addSection, fitSection, tidySection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, canUndo, canRedo,
       keysOpen, setKeysOpen, focusing, toggleFocus, compareCards, tidy, expand, expanded, toast, toastText: toastState.text, toastAction: toastState.action, copy, openLink, palette, setPalette, paletteSeed,
       outputsOpen, setOutputsOpen, settingsOpen, setSettingsOpen, prefs, reloadPrefs: config.reload, openChangelog, sendFeedback,
       pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned: pinned.data || { items: [], groups: [], often: [] }, pin, openPin, openOften, readPin, putOnBoard,
@@ -1794,7 +1801,7 @@ export function BoardProvider({ children, initial }: { children: ReactNode; init
       spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, drawings, drawing, setDrawing, addDrawing, eraseDrawings, clearDrawings,
       comments: commentsData.data?.cards || {}, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink,
     }),
-    [addCard, removeCard, removeCards, addSection, fitSection, tidySection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, drawings, drawing, setDrawing, addDrawing, eraseDrawings, clearDrawings, commentsData.data, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
+    [addCard, removeCard, removeCards, addSection, fitSection, tidySection, foldSection, growAround, sectionCards, setSectionTitle, removing, retarget, showItem, saveLater, setLater, setLaterText, renameItem, newSticky, setColor, setLocked, remember, undo, redo, canUndo, canRedo, keysOpen, focusing, toggleFocus, compareCards, tidy, expanded, toast, toastState, copy, openLink, palette, setPalette, paletteSeed, outputsOpen, settingsOpen, prefs, config.reload, openChangelog, sendFeedback, pinnedOpen, setPinnedOpen, quickKept, setQuickKept, pinned.data, pin, openPin, openOften, readPin, putOnBoard, expand, outputs.data, outputs.reload, items.data, notes.data, trackers.data, versions, persist, showImage, spaces, space, switchSpace, newSpace, renameSpace, deleteSpace, moveToSpace, drawings, drawing, setDrawing, addDrawing, eraseDrawings, clearDrawings, commentsData.data, addComment, removeComment, tuck, unshelf, untuck, setVeiled, setCardAgents, setSpaceAgents, addLink, setLink, removeLink],
   )
 
   return <BoardCtx.Provider value={value}>{children}</BoardCtx.Provider>

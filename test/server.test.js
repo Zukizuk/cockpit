@@ -789,6 +789,8 @@ test('snippets: copy text back, secrets encrypted and hidden, expiry, instant de
   assert.equal(secret.secret, true, 'guessed from the text')
   assert.equal(secret.preview, '', 'never in the list')
   assert.equal(secret.expiresAt, now + 7 * 86_400_000, 'a week by default')
+  // the choice that set the time comes with it, so a menu can tick it
+  assert.deepEqual([code.keep, secret.keep], ['forever', 'week'])
   const onDisk = fs.readFileSync(path.join(sn.snippetsDir(), `${secret.id}.json`), 'utf8')
   assert.ok(!onDisk.includes(value), 'encrypted on disk')
   assert.equal(await sn.snippetText(secret.id), value, 'and back again')
@@ -806,6 +808,7 @@ test('snippets: copy text back, secrets encrypted and hidden, expiry, instant de
   assert.equal(sn.listSnippets(now + 2 * 86_400_000).some(s => s.id === day.id), false, 'gone when its time is up')
   await sn.updateSnippet(code.id, { keep: 'day', title: 'Stop node' }, now)
   assert.equal(sn.listSnippets(now).find(s => s.id === code.id).title, 'Stop node')
+  assert.equal(sn.listSnippets(now).find(s => s.id === code.id).keep, 'day', 'changed to a day')
   // made secret afterwards: encrypted and hidden; made plain again: as it was
   await sn.updateSnippet(code.id, { secret: true }, now)
   assert.ok(!fs.readFileSync(path.join(sn.snippetsDir(), `${code.id}.json`), 'utf8').includes('Stop-Process'))

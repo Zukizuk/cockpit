@@ -177,6 +177,8 @@ function LaterRow({ e }: { e: ShownEntry }) {
       : { label: 'Done', icon: Check, run: () => board.setLater(e.id, 'done'), gap: true },
     { label: 'Take off the list', icon: X, run: takeOff, danger: true },
   ].filter(a => !a.hidden)
+  // the menus hold only what isn't already a button on the row
+  const menuActions = actions.filter(a => a.more)
 
   if (mode === 'editing') return <NoteEdit e={e} onDone={() => setMode('')} />
 
@@ -189,9 +191,7 @@ function LaterRow({ e }: { e: ShownEntry }) {
   const old = state === 'todo' && Date.now() - Date.parse(e.laterAt || e.createdAt) > 3 * 86_400_000
   const open = () => (isLink ? board.openLink(e.url || '') : note ? setMode('editing') : read())
 
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>
+  const row = (
         <div className={cn('later-row', menuOpen && 'is-menu')} onDoubleClick={() => !note && readable && read()} {...dragToBoard({ kind: 'item', target: e.id, title: e.title })}>
           <Icon className="later-icon" strokeWidth={1.5} />
           {mode === 'naming' ? (
@@ -229,6 +229,7 @@ function LaterRow({ e }: { e: ShownEntry }) {
                   .map(a => (
                     <MiniButton key={a.label} a={a} />
                   ))}
+                {menuActions.length > 0 && (
                 <DropdownMenu onOpenChange={setMenuOpen}>
                   <DropdownMenuTrigger asChild>
                     <button type="button" aria-label="More" className="later-btn" onClick={ev => ev.stopPropagation()}>
@@ -236,9 +237,9 @@ function LaterRow({ e }: { e: ShownEntry }) {
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-56">
-                    {actions.map(a => (
+                    {menuActions.map((a, i) => (
                       <div key={a.label}>
-                        {a.gap && <DropdownMenuSeparator />}
+                        {a.gap && i > 0 && <DropdownMenuSeparator />}
                         <DropdownMenuItem variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
                           <a.icon strokeWidth={1.75} />
                           {a.label}
@@ -247,15 +248,21 @@ function LaterRow({ e }: { e: ShownEntry }) {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                )}
               </div>
             </>
           )}
         </div>
-      </ContextMenuTrigger>
+  )
+  // a note's row has no menu left (its buttons are all there is): a right-click there gets the card's menu
+  if (!menuActions.length) return row
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
       <ContextMenuContent className="min-w-56">
-        {actions.map(a => (
+        {menuActions.map((a, i) => (
           <div key={a.label}>
-            {a.gap && <ContextMenuSeparator />}
+            {a.gap && i > 0 && <ContextMenuSeparator />}
             <ContextMenuItem variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
               <a.icon strokeWidth={1.75} />
               {a.label}

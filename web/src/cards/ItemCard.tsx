@@ -79,8 +79,9 @@ export function useItemActions(read: ShownRead | null, reload: () => void) {
           icon: board.prefs.editor === 'vscode' ? Code2 : PenLine,
           run: () => native('editor'),
           hidden: !textual || e.kind !== 'file' || board.prefs.editor === 'default',
+          more: true,
         },
-        { label: 'Read the page again', icon: RefreshCw, run: readAgain, hidden: e.kind !== 'link' },
+        { label: 'Read the page again', icon: RefreshCw, run: readAgain, hidden: e.kind !== 'link', more: true },
         // Later is a list of the same kept things: the card stays on the board either way
         {
           label: 'Keep on Later',
@@ -173,7 +174,8 @@ export function ItemCard({ id, data, selected }: NodeProps<CardNode>) {
   )
   const all: CardAction[] = [
     { label: 'Open full screen', icon: Maximize2, run: () => board.expand({ type: 'item', ref: data.ref }), more: true },
-    ...actions,
+    // written content has its Copy button on the strip
+    ...actions.map(a => (e?.kind === 'content' && a.label === 'Copy the text' ? { ...a, hidden: true } : a)),
     { label: 'Remove from board', icon: X, run: () => board.removeCard(id), gap: true },
   ]
   const sub = e ? [kindLabel(e), e.kind === 'link' ? e.siteName : e.kind === 'file' ? placeOf(e.path) : e.from, ago(e.shownAt || e.createdAt)].filter(Boolean).join(' · ') : ''

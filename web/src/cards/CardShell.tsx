@@ -3,7 +3,7 @@
 // A sticky note gets a paper frame instead: a slim strip to drag it by, the rest is writing.
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Handle, NodeResizer, Position, useNodeId, useNodesData, useReactFlow, useStore } from '@xyflow/react'
-import { Archive, Ellipsis, Package, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, MessageSquare, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, SquareDashed, X } from 'lucide-react'
+import { Archive, Ellipsis, Package, ChevronsDownUp, ChevronsUpDown, Focus, Lock, LockOpen, MoreHorizontal, Shrink, type LucideIcon, Layers, Eye, EyeOff, ArrowUpToLine, SquareSplitHorizontal, Bot, ShieldOff, SquareDashed, X } from 'lucide-react'
 import type { CardType, StickyColor } from '../api'
 import { foldNode, isSticky, minSize, resizingRef, useBoard, type CardNode } from '../board'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -18,6 +18,9 @@ import { shortcut } from '../platform'
 const SIDE_POS = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left } as const
 
 export type CardAction = { label: string; icon: LucideIcon; run: () => void; danger?: boolean; gap?: boolean; hidden?: boolean; keys?: string; /** only in the right-click menu (about what was right-clicked) */ context?: boolean; /** under More, a side menu: used now and then */ more?: boolean }
+
+/** The text box (or editor) that something is in, if it is in one. */
+const inField = (el: EventTarget) => (el as HTMLElement).closest?.('input, textarea, [contenteditable="true"]')
 
 /** A menu's groups as one list: a line between groups; inside one, a card's own items keep the lines they draw
  * between theirs (its copy items, say). */
@@ -123,6 +126,8 @@ interface Props {
   bare?: boolean
   /** Right-click on the card, before its menu opens (to say what was right-clicked). */
   onContext?: (e: React.MouseEvent) => void
+  /** The ⋯ button was opened (so what an earlier right-click said was clicked no longer holds). */
+  onMenuButton?: () => void
   /** A sticky note: paper in this colour, a slim strip instead of a header. */
   sticky?: StickyColor
   /** Shown in the sticky strip (only when something needs saying, like "Not saved"). */
@@ -130,7 +135,7 @@ interface Props {
   children: ReactNode
 }
 
-export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, quick, actions, onExpand, bodyClassName, autoHeight, hug, bare, onContext, sticky, stripText, children }: Props) {
+export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, quick, actions, onExpand, bodyClassName, autoHeight, hug, bare, onContext, onMenuButton, sticky, stripText, children }: Props) {
   const nodeId = useNodeId()
   const rf = useReactFlow<CardNode>()
   const board = useBoard()
@@ -149,10 +154,12 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   // several cards picked (a drag on the board): their outline says so; resize corners only for one
   const pickedCount = useStore(s => s.nodes.reduce((k, n) => k + (n.selected ? 1 : 0), 0))
   const manyPicked = pickedCount > 1
+  // (a section picked along with cards has its own menu, on its title: it isn't one of "these")
+  const cardsPicked = useStore(s => s.nodes.reduce((k, n) => k + (n.selected && n.type !== 'section' ? 1 : 0), 0))
   const toggleVeil = () => nodeId && board.setVeiled([nodeId], !veiled)
   // agents: this card shared with them, or private (never shown to them); several picked: all of them
   const mark = node?.data.agents
-  const markIds = () => (manyPicked && selected ? rf.getNodes().filter(n => n.selected).map(n => n.id) : nodeId ? [nodeId] : [])
+  const markIds = () => (many ? pickedIds() : nodeId ? [nodeId] : [])
   const setMark = (m: 'shared' | 'private' | null, said: string) => {
     board.setCardAgents(markIds(), m)
     board.toast(said)
@@ -202,25 +209,32 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   const here = actions.filter(a => a.context && !a.hidden)
   const isEnd = (a: CardAction) => /^(Remove from board|Archive|Delete)/.test(a.label)
   const own = actions.filter(a => !a.context && !isEnd(a))
-  const end = actions.filter(a => !a.context && isEnd(a))
+  // (every card's Remove from board is the Del key, so every one says so)
+  const end = actions.filter(a => !a.context && isEnd(a)).map(a => (/^Remove from board/.test(a.label) && !a.keys ? { ...a, keys: 'Del' } : a))
   // Several cards picked and this one among them: its menu acts on all of them, with only what makes sense for
   // several (no opening, renaming or copying one card)
-  const many = manyPicked && !!selected
+  const many = manyPicked && !!selected && cardsPicked > 1
+  // how many cards are picked, and what is true of all of them (a section picked along with them doesn't count)
   const pickedState = useStore(s => {
     if (!many) return ''
-    const p = s.nodes.filter(n => n.selected) as CardNode[]
+    const p = s.nodes.filter(n => n.selected && n.type !== 'section') as CardNode[]
     const all = (f: (n: CardNode) => boolean) => (p.every(f) ? '1' : '0')
-    return [all(n => !!n.data.folded), all(n => !!n.data.locked), all(n => !!n.data.veiled), all(n => isSticky(n.type, n.data.ref)), all(n => n.type === 'note'), all(n => !n.data.locked)].join('')
+    const flags = [all(n => !!n.data.folded), all(n => !!n.data.locked), all(n => !!n.data.veiled), all(n => isSticky(n.type, n.data.ref)), all(n => n.type === 'note'), all(n => !n.data.locked), all(n => n.type === 'item' || n.type === 'note'), all(n => n.data.agents === 'shared'), all(n => n.data.agents === 'private')]
+    return `${p.length}:${flags.join('')}`
   })
-  const [allFolded, allLocked, allVeiled, allSticky, allNotes, noneLocked] = pickedState.split('').map(c => c === '1')
+  const [pickedN = '0', pickedFlags = ''] = pickedState.split(':')
+  const [allFolded, allLocked, allVeiled, allSticky, allNotes, noneLocked, allComparable, allShared, allPrivate] = pickedFlags.split('').map(c => c === '1')
   // (a section picked along with them is left out: it has its own menu, on its title)
   const pickedIds = () => rf.getNodes().filter(n => n.selected && n.type !== 'section').map(n => n.id)
+  // Focus has its own bar to come back from; while it's on, nothing that moves cards out of it is offered
+  const focusing = board.focusing
   const manyGroups = (): CardAction[][] => {
-    const n = pickedCount
+    const n = Number(pickedN)
     return [
       [
-        { label: board.focusing ? 'Bring everything back' : 'Focus on these cards', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
-        { label: 'Compare side by side', icon: SquareSplitHorizontal, run: () => board.compareCards(pickedIds()), hidden: n !== 2, keys: 'Space' },
+        { label: 'Focus on these cards', icon: Focus, run: () => board.toggleFocus(nodeId || undefined), hidden: focusing },
+        // only two files, pages or notes open side by side
+        { label: 'Compare side by side', icon: SquareSplitHorizontal, run: () => board.compareCards(pickedIds()), hidden: n !== 2 || !allComparable, keys: 'Space' },
         { label: `Put these ${n} in a section`, icon: SquareDashed, run: () => board.addSection({ around: pickedIds() }), keys: 'Ctrl+Alt+G' },
       ],
       [
@@ -235,14 +249,15 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
           },
           keys: 'F',
         },
-        { label: `Tuck these ${n} away`, icon: ArrowUpToLine, run: () => board.tuck(pickedIds()) },
-        { label: `Put these ${n} on the shelf…`, icon: Package, run: () => askPutAway(pickedIds()) },
+        { label: `Tuck these ${n} away`, icon: ArrowUpToLine, run: () => board.tuck(pickedIds()), hidden: focusing },
+        { label: `Put these ${n} on the shelf…`, icon: Package, run: () => askPutAway(pickedIds()), hidden: focusing },
       ],
       [
-        { label: allLocked ? `Unlock these ${n}` : `Lock these ${n} in place`, icon: allLocked ? LockOpen : Lock, run: () => board.setLocked(pickedIds(), !allLocked), keys: 'Ctrl+Shift+L' },
+        { label: allLocked ? `Unlock these ${n}` : `Lock these ${n} in place`, icon: allLocked ? LockOpen : Lock, run: () => board.setLocked(pickedIds(), !allLocked), keys: 'Ctrl+Shift+L', hidden: focusing },
         { label: allVeiled ? 'Show their contents' : 'Hide their contents', icon: allVeiled ? Eye : EyeOff, run: () => board.setVeiled(pickedIds(), !allVeiled), keys: 'H' },
       ],
-      ...agentAndSpaceActions(board, pickedIds, nodeId, mark),
+      // shared or private only when all of them are
+      ...agentAndSpaceActions(board, pickedIds, nodeId, allShared ? 'shared' : allPrivate ? 'private' : undefined),
       [
         {
           label: `Archive these ${n} notes`,
@@ -261,22 +276,18 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   }
   const groups: CardAction[][] = many ? manyGroups() : [
     here,
-    [...own, { label: 'Comment', icon: MessageSquare, run: () => setTimeout(() => emit('comments-open', { id: nodeId }), 60) }],
+    // (Comment is the bubble on the card's corner)
+    own,
     [
       // only what the card's own strip already has (fold, hide, a sticky note's tuck, full screen, open, draw) is
-      // under More; everything else stays in the menu itself. The way back out of a state is never under More: a
-      // folded card's Unfold, a hidden one's Show its contents.
-      { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F', more: !folded },
-      { label: board.focusing ? 'Bring everything back' : manyPicked && selected ? 'Focus on these cards' : 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId || undefined) },
-      {
-        label: 'Compare side by side',
-        icon: SquareSplitHorizontal,
-        run: () => board.compareCards(rf.getNodes().filter(n => n.selected).map(n => n.id)),
-        hidden: !(selected && pickedCount === 2),
-        keys: 'Space',
-      },
-      { label: 'Tuck away', icon: ArrowUpToLine, run: () => nodeId && board.tuck([nodeId]), more: !!sticky },
-      { label: 'Put on the shelf…', icon: Package, run: () => nodeId && askPutAway([nodeId]) },
+      // under More, and fitting, which is rarely wanted; everything else stays in the menu itself. The way back out
+      // of a state is never under More: a folded card's Unfold, a hidden one's Show its contents. A table (bare) has
+      // no fold button on its strip, so its Fold stays in the menu.
+      { label: folded ? (sticky ? 'Unroll' : 'Unfold') : sticky ? 'Roll up into its strip' : 'Fold to its title', icon: folded ? ChevronsUpDown : ChevronsDownUp, run: toggleFold, keys: 'F', more: !folded && !bare },
+      // (while Focus is on, its bar at the bottom brings everything back; the rest would only break it)
+      { label: 'Focus on this card', icon: Focus, run: () => board.toggleFocus(nodeId ? [nodeId] : undefined), hidden: focusing },
+      { label: 'Tuck away', icon: ArrowUpToLine, run: () => nodeId && board.tuck([nodeId]), more: !!sticky, hidden: focusing },
+      { label: 'Put on the shelf…', icon: Package, run: () => nodeId && askPutAway([nodeId]), hidden: focusing },
       {
         label: 'Fit to contents',
         icon: Shrink,
@@ -286,10 +297,11 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
           board.persist()
         },
         hidden: !autoHeight || fits || folded,
+        more: true,
       },
     ],
     [
-      { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L' },
+      { label: locked ? 'Unlock' : 'Lock in place', icon: locked ? LockOpen : Lock, run: toggleLock, keys: 'Ctrl+Shift+L', hidden: focusing },
       { label: veiled ? 'Show its contents' : 'Hide its contents', icon: veiled ? Eye : EyeOff, run: toggleVeil, keys: 'H', more: !veiled },
     ],
     // sharing with agents and moving to another space: in the menu itself
@@ -315,7 +327,9 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     const Sub = context ? ContextMenuSub : DropdownMenuSub
     const SubTrigger = context ? ContextMenuSubTrigger : DropdownMenuSubTrigger
     const SubContent = context ? ContextMenuSubContent : DropdownMenuSubContent
-    const list = shown.filter(a => context || !a.context)
+    // right-click on a table's cell: only the cell, its row and its column; anywhere else the card's own menu
+    const cell = context && here.length > 0
+    const list = shown.filter(a => !!a.context === cell)
     const main = list.filter(a => !a.more)
     const extra = list.filter(a => a.more)
     // the side menu goes just before taking the card off the board (or last, when there's nothing to take it off)
@@ -344,7 +358,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
     )
     return (
     <>
-      {sticky && (!many || allSticky) && (
+      {!cell && sticky && (!many || allSticky) && (
         <>
           <div className="sticky-swatches" role="group" aria-label="Colour">
             {STICKY_COLORS.map(c => (
@@ -372,7 +386,7 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
   }
 
   const menu = (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={open => open && onMenuButton?.()}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -417,7 +431,16 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div
-            onContextMenuCapture={onContext}
+            // A text box counts as being typed in once it has the cursor. A right-click on one that hasn't doesn't give
+            // it the cursor (so the card's menu opens, as on any other part of the card); on the one that has, the
+            // event goes no further, so the card's menu never hears of it and the browser's own (Cut, Copy, Paste) opens.
+            onMouseDownCapture={e => {
+              if (e.button === 2 && inField(e.target) && inField(e.target) !== document.activeElement) e.preventDefault()
+            }}
+            onContextMenuCapture={e => {
+              if (inField(e.target) && inField(e.target) === document.activeElement) return e.stopPropagation()
+              onContext?.(e)
+            }}
             className={cn(
               'card',
               selected && 'is-selected',

@@ -2,6 +2,24 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Improved**
+- Menus show only what fits what you clicked. Right-click a table cell for just the cell, its row and its column; right-click the table's title (or use its ⋯) for the table.
+- A menu no longer repeats a button that's already in front of you: Comment (the bubble on the card's corner), the reader's ⋮ menu (its bar buttons), and the hover buttons on a Later or Quick access row.
+- While Focus is on, the menus leave out Focus, Lock, Tuck, Shelf, Tidy and Fold all, which only get in its way.
+- A table's Fold is in its menu, "Copy for Excel" is now "Copy the table", and "Copy as Markdown" is gone (ask Claude for Markdown).
+- The board's menu greys Undo and Redo when there is nothing to undo or redo, and keeps Keyboard shortcuts, What's new, Settings and Send feedback under More.
+- Compare side by side is offered only when two files, pages or notes are picked. A card's Fit to contents, Read the page again and the editor choices are under More.
+- An arrow's two toggles are one "Arrowheads" choice: One end, Both ends or None, with the current one ticked. A snippet's "Keep for…" ticks the one set now.
+- Remove from board shows its Del key on every card. A locked section no longer offers Remove.
+
+**Fixed**
+- Right-click in text you're typing in (a note, a table cell, an answer box) gives the usual Cut, Copy and Paste again, not the card's menu.
+- Tucking or putting away the card in Focus no longer leaves Focus on with nothing in it.
+- A table's ⋯ menu no longer loses "Filter rows" after you right-clicked a cell.
+- With several cards picked, a picked section no longer counts in "these N", and Share or Private says what is true of all of them.
+
 ## 28 November 2026 (version 0.2.22)
 
 **New**

@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Background, BackgroundVariant, ConnectionMode, ReactFlow, ReactFlowProvider, SelectionMode, useEdgesState, useNodesState, useReactFlow, useStore, useStoreApi, type EdgeChange, type NodeChange } from '@xyflow/react'
 import '@xyflow/react/dist/base.css'
-import { ArrowLeftRight, Bookmark, ChevronRight, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Eraser, Minus, PenLine, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
+import { ArrowLeftRight, Bookmark, Check, ChevronRight, Ellipsis, MoveRight, SquareDashed, Spline, Tag, Trash2, ChevronsDownUp, ChevronsUpDown, ClipboardList, Inbox, Keyboard, LayoutGrid, Maximize, MessageSquare, Eraser, Minus, PenLine, Pin, Plus, Redo2, Settings2, Sparkles, StickyNote, Undo2, X } from 'lucide-react'
 import { get, post, track, type Board, type ShownEntry, type TelemetryStatus, type UpdateStatus } from './api'
 import { BoardProvider, besideSpot, contentsOf, heldBy, offBoard, sectionOf, fitsContent, foldNode, isSection, isSticky, resizingRef, toEdge, toNode, useBoard, type CardNode, type LinkData, type LinkEdge } from './board'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { KeysDialog } from './views/KeysDialog'
 import { ItemCard } from './cards/ItemCard'
 import { NoteCard } from './cards/NoteCard'
@@ -607,14 +607,22 @@ function Canvas({ initial }: { initial: Board }) {
               <ArrowLeftRight strokeWidth={1.75} />
               Point the other way
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => board.setLink(arrowMenu.id, { heads: arrowMenu.data.heads === 'both' ? undefined : 'both' })}>
-              <MoveRight strokeWidth={1.75} />
-              {arrowMenu.data.heads === 'both' ? 'Arrowhead at one end' : 'Arrowheads at both ends'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => board.setLink(arrowMenu.id, { heads: arrowMenu.data.heads === 'none' ? undefined : 'none' })}>
-              <Minus strokeWidth={1.75} />
-              {arrowMenu.data.heads === 'none' ? 'Make it an arrow' : 'Plain line, no arrowhead'}
-            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <MoveRight strokeWidth={1.75} />
+                Arrowheads
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-44">
+                {/* (no choice made yet is one end: the arrow points to where it was dragged) */}
+                {([['One end', undefined, MoveRight], ['Both ends', 'both', ArrowLeftRight], ['None', 'none', Minus]] as const).map(([label, heads, Icon]) => (
+                  <DropdownMenuItem key={label} onSelect={() => board.setLink(arrowMenu.id, { heads })}>
+                    <Icon strokeWidth={1.75} />
+                    {label}
+                    {arrowMenu.data.heads === heads && <Check className="ml-auto" strokeWidth={2} />}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuItem onSelect={() => board.setLink(arrowMenu.id, { dash: !arrowMenu.data.dash })}>
               <Spline strokeWidth={1.75} />
               {arrowMenu.data.dash ? 'Solid line' : 'Dashed line'}
@@ -661,19 +669,24 @@ function Canvas({ initial }: { initial: Board }) {
           {!inSection && (
             <>
           <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={!foldable.some(n => !n.data.folded)} onSelect={() => foldAll(true)}>
-            <ChevronsDownUp strokeWidth={1.75} />
-            {onlyStickies ? 'Fold all cards (not sticky notes)' : 'Fold all cards'}
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!foldable.some(n => n.data.folded)} onSelect={() => foldAll(false)}>
-            <ChevronsUpDown strokeWidth={1.75} />
-            Unfold all cards
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!nodes.length} onSelect={() => board.tidy()}>
-            <LayoutGrid strokeWidth={1.75} />
-            Tidy
-            <DropdownMenuShortcut>{shortcut('Ctrl Alt T')}</DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {/* (while Focus is on these do nothing: its bar brings everything back first) */}
+          {!board.focusing && (
+            <>
+              <DropdownMenuItem disabled={!foldable.some(n => !n.data.folded)} onSelect={() => foldAll(true)}>
+                <ChevronsDownUp strokeWidth={1.75} />
+                {onlyStickies ? 'Fold all cards (not sticky notes)' : 'Fold all cards'}
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!foldable.some(n => n.data.folded)} onSelect={() => foldAll(false)}>
+                <ChevronsUpDown strokeWidth={1.75} />
+                Unfold all cards
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!nodes.length} onSelect={() => board.tidy()}>
+                <LayoutGrid strokeWidth={1.75} />
+                Tidy
+                <DropdownMenuShortcut>{shortcut('Ctrl Alt T')}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </>
+          )}
           <DropdownMenuItem disabled={!nodes.length} onSelect={fitAll}>
             <Maximize strokeWidth={1.75} />
             Show everything
@@ -690,12 +703,12 @@ function Canvas({ initial }: { initial: Board }) {
           {!inSection && (
             <>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => board.undo()}>
+          <DropdownMenuItem disabled={!board.canUndo()} onSelect={() => board.undo()}>
             <Undo2 strokeWidth={1.75} />
             Undo
             <DropdownMenuShortcut>{shortcut('Ctrl Z')}</DropdownMenuShortcut>
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => board.redo()}>
+          <DropdownMenuItem disabled={!board.canRedo()} onSelect={() => board.redo()}>
             <Redo2 strokeWidth={1.75} />
             Redo
             <DropdownMenuShortcut>{shortcut('Ctrl Y')}</DropdownMenuShortcut>
@@ -705,24 +718,33 @@ function Canvas({ initial }: { initial: Board }) {
           {!inSection && (
             <>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => board.setKeysOpen(true)}>
-            <Keyboard strokeWidth={1.75} />
-            Keyboard shortcuts
-            <DropdownMenuShortcut>?</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => board.openChangelog()}>
-            <Sparkles strokeWidth={1.75} />
-            What's new
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => board.setSettingsOpen(true)}>
-            <Settings2 strokeWidth={1.75} />
-            Settings
-            <DropdownMenuShortcut>,</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={board.sendFeedback}>
-            <MessageSquare strokeWidth={1.75} />
-            Send feedback
-          </DropdownMenuItem>
+          {/* (each of these is also on the Dock or a corner button) */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Ellipsis strokeWidth={1.75} />
+              More
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="min-w-52">
+              <DropdownMenuItem onSelect={() => board.setKeysOpen(true)}>
+                <Keyboard strokeWidth={1.75} />
+                Keyboard shortcuts
+                <DropdownMenuShortcut>?</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => board.openChangelog()}>
+                <Sparkles strokeWidth={1.75} />
+                What's new
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => board.setSettingsOpen(true)}>
+                <Settings2 strokeWidth={1.75} />
+                Settings
+                <DropdownMenuShortcut>,</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={board.sendFeedback}>
+                <MessageSquare strokeWidth={1.75} />
+                Send feedback
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
             </>
           )}
         </DropdownMenuContent>

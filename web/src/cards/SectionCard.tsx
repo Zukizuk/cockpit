@@ -120,22 +120,26 @@ export function SectionMenuItems({ id, Item, Separator }: { id: string; Item: Co
             Move to {x.name}, with what's in it
           </Item>
         ))}
-      <Separator />
-      <Item
-        onSelect={() => {
-          track('section.remove')
-          if (locked) return board.toast('Unlock it first')
-          board.removeCards([id])
-        }}
-      >
-        <X strokeWidth={1.75} />
-        Remove the section{count ? ' (its cards stay)' : ''}
-      </Item>
-      {count > 0 && (
-        <Item variant="destructive" onSelect={() => (locked ? board.toast('Unlock it first') : board.removeCards([id, ...inside().map(n => n.id)]))}>
-          <Trash2 strokeWidth={1.75} />
-          Remove it and {these}
-        </Item>
+      {/* a locked section can't be removed: Unlock is the way to it, so nothing here to refuse with a toast */}
+      {!locked && (
+        <>
+          <Separator />
+          <Item
+            onSelect={() => {
+              track('section.remove')
+              board.removeCards([id])
+            }}
+          >
+            <X strokeWidth={1.75} />
+            Remove the section{count ? ' (its cards stay)' : ''}
+          </Item>
+          {count > 0 && (
+            <Item variant="destructive" onSelect={() => board.removeCards([id, ...inside().map(n => n.id)])}>
+              <Trash2 strokeWidth={1.75} />
+              Remove it and {these}
+            </Item>
+          )}
+        </>
       )}
     </>
   )

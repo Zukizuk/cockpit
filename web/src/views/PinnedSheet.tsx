@@ -74,7 +74,7 @@ const openLabel = (kind: Pin['kind']) => (kind === 'folder' ? `Open in ${fileMan
 
 /**
  * One row: a click does the usual thing; on hover, its main actions (open in its own program, read in Cockpit when
- * Cockpit can show it); everything in the ⋮ menu and on right-click; dragged onto the board it becomes a card.
+ * Cockpit can show it); the rest in the ⋮ menu and on right-click; dragged onto the board it becomes a card.
  */
 function QuickRow({ thing, icon: Icon, title, detail, faded, n, onOpen, actions }: {
   thing: { kind: Pin['kind']; target: string; title: string }
@@ -87,15 +87,18 @@ function QuickRow({ thing, icon: Icon, title, detail, faded, n, onOpen, actions 
   actions: RowAction[]
 }) {
   const menu = (Item: typeof ContextMenuItem | typeof DropdownMenuItem, Sep: typeof ContextMenuSeparator | typeof DropdownMenuSeparator) =>
-    actions.map(a => (
-      <Fragment key={a.label}>
-        {a.gap && <Sep />}
-        <Item variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
-          <a.icon strokeWidth={1.75} />
-          {a.label}
-        </Item>
-      </Fragment>
-    ))
+    // (what's already a button on the row isn't repeated)
+    actions
+      .filter(a => !a.primary)
+      .map((a, i) => (
+        <Fragment key={a.label}>
+          {a.gap && i > 0 && <Sep />}
+          <Item variant={a.danger ? 'destructive' : 'default'} onSelect={() => a.run()}>
+            <a.icon strokeWidth={1.75} />
+            {a.label}
+          </Item>
+        </Fragment>
+      ))
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>

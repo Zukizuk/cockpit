@@ -1,10 +1,10 @@
 // The Table extra (Settings > Extras): a small grid on the board, kept as a .csv in the notes folder's tables/, so it
 // opens in Excel too. Type in a cell; Tab and Enter move along (and add a row at the end); a block copied from Excel
-// pastes across the cells; Copy gives it back for Excel, or as Markdown for a note or a chat. The first row is the
+// pastes across the cells; Copy gives it back for Excel. The first row is the
 // header. Claude can make a table, read it and fill it in.
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { ArrowDownAZ, ArrowDownToLine, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowUpZA, Copy, ExternalLink, FileText, Filter, FilterX, Heading, Plus, Table2, Trash2, X } from 'lucide-react'
+import { ArrowDownAZ, ArrowDownToLine, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowUpZA, Copy, ExternalLink, Filter, FilterX, Heading, Plus, Table2, Trash2, X } from 'lucide-react'
 import { get, openOutside, post, put, type TableData } from '../api'
 import { useBoard, type CardNode } from '../board'
 import { onEvent } from '../lib'
@@ -47,11 +47,6 @@ const even = (rows: string[][]) => {
 
 /** Tab-separated, as Excel copies and pastes. */
 const toTsv = (rows: string[][]) => rows.map(r => r.map(c => c.replace(/[\t\n]/g, ' ')).join('\t')).join('\n')
-const toMarkdown = (rows: string[][]) => {
-  const esc = (c: string) => c.replace(/\|/g, '\\|').replace(/\n/g, ' ') || ' '
-  const [head, ...body] = rows
-  return [`| ${head.map(esc).join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...body.map(r => `| ${r.map(esc).join(' | ')} |`)].join('\n')
-}
 
 /** Numbers as numbers ("9" before "10", "1,200" and "€30" too), the rest as words; empty cells always last. */
 const asNumber = (v: string) => {
@@ -292,7 +287,7 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
     change(next)
   }
 
-  const copy = (how: 'tsv' | 'md') => board.copy(how === 'tsv' ? toTsv(rows) : toMarkdown(rows), how === 'tsv' ? 'Copied: paste it into Excel' : 'Copied as Markdown')
+  const copy = () => board.copy(toTsv(rows), 'Copied: paste it into Excel')
   const keepTitle = async (v: string | null) => {
     setNaming(false)
     if (v === null || !v.trim() || v.trim() === t?.title) return
@@ -305,7 +300,7 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
     }
   }
 
-  // what was right-clicked: its row and column get their own actions in the menu
+  // what was right-clicked: a cell's menu is only about it, its row and its column (the card's own menu is the title's)
   const [at, setAt] = useState<{ r: number; c: number } | null>(null)
   const insertCol = (at: number) => change(rows.map((row, i) => [...row.slice(0, at), i === 0 ? `Column ${cols + 1}` : '', ...row.slice(at)]))
   const colName = (c: number) => rows[0]?.[c]?.trim() || `column ${c + 1}`
@@ -325,12 +320,11 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
 
   const actions: CardAction[] = [
     ...cellActions,
-    { label: 'Filter rows', icon: Filter, run: openFilter, hidden: !!filters || !!at },
-    { label: 'Clear the filter', icon: FilterX, run: () => setFilters(null), hidden: !filters },
     { label: 'Rename', icon: Heading, run: () => setNaming(true), keys: 'F2' },
-    { label: 'Copy for Excel', icon: Copy, run: () => copy('tsv') },
-    { label: 'Copy as Markdown', icon: FileText, run: () => copy('md') },
+    { label: 'Copy the table', icon: Copy, run: copy },
     { label: 'Open in Excel', icon: ExternalLink, run: () => save().then(() => openOutside({ kind: 'table', path: data.ref, how: 'default' })).catch(e => board.toast(e.message)) },
+    { label: 'Filter rows', icon: Filter, run: openFilter, hidden: !!filters },
+    { label: 'Clear the filter', icon: FilterX, run: () => setFilters(null), hidden: !filters },
     {
       label: 'Delete table',
       icon: Trash2,
@@ -361,6 +355,7 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
       subtitle={data.folded && t ? `${Math.max(0, t.rows.length - 1)} ${t.rows.length === 2 ? 'row' : 'rows'} · folded` : undefined}
       hug
       bare
+      onMenuButton={() => setAt(null)}
       onContext={e => {
         const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-cell]')?.dataset.cell
         setAt(cell ? { r: Number(cell.split(':')[0]), c: Number(cell.split(':')[1]) } : null)

@@ -475,20 +475,19 @@ function ItemPage({ id }: { id: string }) {
     if (read?.entry.format === 'link' && read.entry.readingAt) load()
   })
   const { native, readAgain, actions } = useItemActions(read, load)
-  const menu = useMenu({ type: 'item', ref: id }, actions)
+  // the bar's buttons: every action, though side by side there's room for fewer (the ones that open it elsewhere stay)
+  const onBar = actions.filter(a => !a.hidden).slice(0, split ? 3 : undefined)
+  // the ⋮ menu holds only what the bar hasn't a button for
+  const menu = useMenu({ type: 'item', ref: id }, actions.filter(a => !onBar.includes(a)))
   if (!read) return null
   const e = read.entry
   const wide = ['compare', 'csv', 'code', 'text', 'json', 'pdf', 'html', 'image', 'diff', 'video', 'sheet'].includes(e.format)
   return (
     <div className={cn('reader-page', wide && 'wide')}>
       <Bar kicker={[kindLabel(e), e.kind === 'link' ? e.siteName : e.kind === 'file' ? placeOf(e.path) : e.from, ago(e.shownAt || e.createdAt)].filter(Boolean).join(' · ')} title={e.title} menu={menu}>
-        {actions
-          .filter(a => !a.hidden)
-          // side by side there's room for fewer buttons: the ones that open it elsewhere stay
-          .slice(0, split ? 3 : undefined)
-          .map(a => (
-            <IconButton key={a.label} icon={a.icon} label={a.label} onClick={a.run} />
-          ))}
+        {onBar.map(a => (
+          <IconButton key={a.label} icon={a.icon} label={a.label} onClick={a.run} />
+        ))}
       </Bar>
       <div className={cn('reader-body', ['pdf', 'html'].includes(e.format) && 'tall')}>
         {e.kind === 'link' && e.format === 'article' && (

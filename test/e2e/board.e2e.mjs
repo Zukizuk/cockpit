@@ -109,6 +109,22 @@ const clearSelection = async () => {
   await page.waitForTimeout(250)
 }
 
+test('the board menu: Undo and Redo greyed with nothing to undo; the rest of the settings under More', async () => {
+  await clearSelection()
+  await page.mouse.click(EMPTY.x, EMPTY.y, { button: 'right' })
+  const menu = page.locator('[role=menu]').last()
+  await menu.waitFor()
+  const top = (await menu.locator(':scope > [role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0])
+  for (const l of ['Sticky note here', 'Section here', 'Add or find…', 'Fold all cards', 'Tidy', 'Show everything', 'Undo', 'Redo', 'More']) assert.ok(top.some(x => x.startsWith(l)), `${l} is in the board menu: ${top}`)
+  for (const l of ['Keyboard shortcuts', "What's new", 'Settings', 'Send feedback']) assert.ok(!top.includes(l), `${l} is under More`)
+  assert.equal(await menu.getByRole('menuitem', { name: /^Undo/ }).getAttribute('data-disabled'), '', 'Undo is greyed: nothing done yet')
+  assert.equal(await menu.getByRole('menuitem', { name: /^Redo/ }).getAttribute('data-disabled'), '', 'Redo is greyed')
+  await menu.getByRole('menuitem', { name: 'More', exact: true }).hover()
+  for (const l of ['Keyboard shortcuts', "What's new", 'Settings', 'Send feedback']) await page.getByRole('menuitem', { name: new RegExp('^' + l) }).waitFor()
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+})
+
 test('agents see only what is shared or selected; read gives one card; a private card never shows', async () => {
   await clearSelection()
   assert.deepEqual(cardsSeen(await agent('snapshot')), ['Shared plan'], 'only the shared card')
@@ -179,12 +195,15 @@ test("a card's menu: everything it does, with only what its strip has too under 
   const at = l => labels.findIndex(x => x.startsWith(l))
   // what the strip has too (full screen, roll up, hide, tuck) are under More; the rest, sharing and spaces
   // included (even once shared), is in the menu itself
-  const order = ['Comment', 'Focus on this card', 'Put on the shelf…', 'Lock in place', 'Stop sharing with agents', 'More', 'Remove from board']
+  const order = ['Focus on this card', 'Put on the shelf…', 'Lock in place', 'Stop sharing with agents', 'More', 'Remove from board']
+  // Comment is the bubble on the card's corner; Compare is for several cards; Fit and the editor are under More
+  for (const l of ['Comment', 'Compare side by side', 'Bring everything back', 'Open in Notepad', 'Open in VS Code', 'Open in its own program']) assert.ok(at(l) < 0, `${l} is not in the menu itself`)
   for (const l of ['Open full screen', 'Roll up into its strip', 'Hide its contents']) assert.ok(at(l) < 0, `${l} is under More`)
   for (const l of ['Pin to Quick access', 'Copy the text']) assert.ok(at(l) >= 0, `${l} is in the menu`)
   for (const l of order) assert.ok(at(l) >= 0, `${l} is in the menu`)
   assert.deepEqual([...order].sort((a, b) => at(a) - at(b)), order, 'in this order')
   assert.equal(labels.at(-1), 'Remove from board')
+  assert.match(await menu.getByRole('menuitem', { name: /^Remove from board/ }).innerText(), /Del/, 'Remove from board shows its key')
   // the menu is all on the screen, and More opens beside it with the strip's own
   const m = await menu.boundingBox()
   const vp = page.viewportSize()
@@ -334,6 +353,30 @@ test('arrows: drag from a card to another, change it from its menu, take it off 
   await page.getByRole('menuitem', { name: 'Point the other way' }).click()
   assert.ok(await saved(l => l[0]?.from === 'private' && l[0]?.to === 'shared'), 'reversed')
 
+  // Arrowheads: one submenu (One end, Both ends, None) in place of the two toggles, the current one ticked
+  const heads = async choice => {
+    at = await onLine()
+    await page.mouse.click(at.x, at.y, { button: 'right' })
+    const top = (await page.locator('[role=menu]').last().locator(':scope > [role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0])
+    assert.ok(top.includes('Arrowheads'), `Arrowheads is in the arrow's menu: ${top}`)
+    for (const l of ['Plain line, no arrowhead', 'Make it an arrow', 'Arrowheads at both ends', 'Arrowhead at one end']) assert.ok(!top.includes(l), `${l} is gone`)
+    await page.getByRole('menuitem', { name: 'Arrowheads' }).hover()
+    await page.getByRole('menuitem', { name: 'One end', exact: true }).waitFor()
+    const ticked = async name => (await page.getByRole('menuitem', { name, exact: true }).locator('svg.lucide-check').count()) === 1
+    const now = []
+    for (const name of ['One end', 'Both ends', 'None']) if (await ticked(name)) now.push(name)
+    if (choice) await page.getByRole('menuitem', { name: choice, exact: true }).click()
+    else await page.keyboard.press('Escape'), await page.keyboard.press('Escape')
+    return now
+  }
+  assert.deepEqual(await heads('Both ends'), ['One end'], 'one end is ticked to start with')
+  assert.ok(await saved(l => l[0]?.heads === 'both'), 'both ends')
+  assert.deepEqual(await heads('None'), ['Both ends'], 'the current one is ticked')
+  assert.ok(await saved(l => l[0]?.heads === 'none'), 'no arrowheads')
+  assert.deepEqual(await heads('One end'), ['None'])
+  assert.ok(await saved(l => l[0] && l[0].heads === undefined), 'one end again')
+  assert.deepEqual(await heads(null), ['One end'])
+
   // a label: double-click, type, Enter
   at = await onLine()
   await page.mouse.dblclick(at.x, at.y)
@@ -458,7 +501,27 @@ test('with several cards selected, a card menu acts on all of them, and leaves o
   for (const l of ['Fold these 2', 'Tuck these 2 away', 'Lock these 2 in place', 'Hide their contents', 'Archive these 2 notes', 'Remove these 2 from board'])
     assert.ok(labels.includes(l), `${l} is in it`)
   for (const l of ['Open full screen', 'Rename', 'Add a title', 'Copy the text', 'Comment']) assert.ok(!labels.includes(l), `${l} is not`)
-  await menu.getByRole('menuitem', { name: 'Remove these 2 from board' }).click()
+  assert.ok(labels.includes('Compare side by side'), 'two notes can be compared')
+  // one shared and one private: neither label claims they all are
+  assert.ok(labels.includes('Share with agents') && labels.includes('Private from agents'), `labels fit all of them: ${labels}`)
+  await page.keyboard.press('Escape')
+
+  // a note and a Later card: they can't be compared, so it isn't offered
+  await clearSelection()
+  await note('Plain list').click({ position: { x: 150, y: 200 } })
+  await page.locator('.react-flow__node-later').click({ position: { x: 200, y: 20 }, modifiers: ['Shift'] })
+  await note('Plain list').click({ button: 'right', position: { x: 60, y: 12 } })
+  const mixed = page.locator('[role=menu]').last()
+  await mixed.waitFor()
+  const l2 = (await mixed.locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
+  assert.ok(l2.includes('Fold these 2') && !l2.includes('Compare side by side'), `no Compare for a Later card: ${l2}`)
+  await page.keyboard.press('Escape')
+  await clearSelection()
+  await note('Plain list').click({ position: { x: 150, y: 200 } })
+  await note('Shared plan').click({ position: { x: 150, y: 200 }, modifiers: ['Shift'] })
+  await note('Shared plan').click({ button: 'right', position: { x: 60, y: 12 } })
+  await page.locator('[role=menu]').last().waitFor()
+  await page.locator('[role=menu]').last().getByRole('menuitem', { name: 'Remove these 2 from board' }).click()
   const on = async () => (await api('/api/board')).cards.map(c => c.id)
   assert.ok(await until(async () => !(await on()).includes('plain') && !(await on()).includes('shared')), 'both taken off')
   await page.mouse.click(EMPTY.x, EMPTY.y)
@@ -1529,4 +1592,131 @@ test('a folded card: Unfold is in the menu itself, and a folded table says how m
   await page.keyboard.press('Escape')
   await table.getByRole('button', { name: 'Unfold (F)' }).click()
   await table.locator('input[data-cell="1:0"]').waitFor()
+})
+
+/** The browser's own menu (Cut, Copy, Paste) may be open now: a click anywhere else closes it. */
+const closeNativeMenu = async () => {
+  await page.keyboard.press('Escape')
+  await page.mouse.click(SIDE.x, SIDE.y)
+  await page.waitForTimeout(250)
+}
+/** Empty board at the right edge, where a new note is never put (EMPTY may be under it). */
+const SIDE = { x: 1395, y: 300 }
+
+/** A new sticky note, with the board fitted so all of it shows; where its strip and its text are, to click. */
+const probeNote = async text => {
+  await agent('act', { steps: [{ ref: 'Board', action: 'addSticky', args: [text] }] })
+  const card = note(text)
+  await card.waitFor()
+  await page.keyboard.press('Escape')
+  await page.mouse.click(SIDE.x, SIDE.y)
+  await page.keyboard.press('0')
+  await page.waitForTimeout(700)
+  return { card, ...(await where(card)) }
+}
+const where = async card => {
+  const strip = await card.locator('.sticky-strip').boundingBox()
+  const body = await card.locator('.cm-content').boundingBox()
+  return { strip: { x: strip.x + 12, y: strip.y + strip.height / 2 }, body: { x: body.x + 20, y: body.y + 10 } }
+}
+
+test("a table's menus: a cell's is only about the cell, its row and column; the title's is the table's; typing in a cell keeps the browser's", async () => {
+  await clearSelection()
+  const card = page.locator('.react-flow__node-table', { hasText: 'Sort test' })
+  await card.scrollIntoViewIfNeeded()
+  const items = async () => (await page.locator('[role=menu]').last().locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
+  await card.locator('input[data-cell="2:1"]').click({ button: 'right' })
+  await page.locator('[role=menu]').last().waitFor()
+  const cell = await items()
+  for (const l of ['Sort by Amount, A to Z', 'Sort by Amount, Z to A', 'Filter rows', 'Insert a row above', 'Insert a row below', 'Insert a column left', 'Insert a column right', 'Delete this row', 'Delete Amount'])
+    assert.ok(cell.includes(l), `${l} is in the cell's menu: ${cell}`)
+  for (const l of ['Rename', 'Copy the table', 'Open in Excel', 'Fold to its title', 'Focus on this card', 'Lock in place', 'Share with agents', 'Move to Work', 'Delete table', 'Remove from board', 'More'])
+    assert.ok(!cell.includes(l), `${l} is not in the cell's menu`)
+  await page.keyboard.press('Escape')
+
+  // its title: the table's, with no cell's Sort; Fold is in it (a table has no fold button); Delete table last but one
+  await card.locator('.bare-label').click({ button: 'right', position: { x: 30, y: 10 } })
+  await page.locator('[role=menu]').last().waitFor()
+  const title = await items()
+  for (const l of ['Rename', 'Copy the table', 'Open in Excel', 'Filter rows', 'Fold to its title', 'Delete table']) assert.ok(title.includes(l), `${l} is in the title's menu: ${title}`)
+  assert.ok(!title.some(l => /^Sort by|^Insert a|^Delete this|Markdown|Excel$/.test(l) && l !== 'Open in Excel'), `no cell items or Markdown: ${title}`)
+  assert.deepEqual(title.slice(-2), ['Delete table', 'Remove from board'])
+  await page.keyboard.press('Escape')
+
+  // ⋮ after a cell right-click: still the table's, with Filter rows (it was hidden by the cell clicked before)
+  await card.locator('input[data-cell="2:1"]').click({ button: 'right' })
+  await page.locator('[role=menu]').last().waitFor()
+  await page.keyboard.press('Escape')
+  await card.getByRole('button', { name: 'More', exact: true }).click()
+  await page.locator('[role=menu]').last().waitFor()
+  const dots = await items()
+  assert.ok(dots.includes('Filter rows') && dots.includes('Rename') && !dots.some(l => l.startsWith('Sort by')), `the ⋮ menu is the table's: ${dots}`)
+  await page.keyboard.press('Escape')
+
+  // the cell with the cursor in it gets the browser's own menu (Cut, Copy, Paste): the page doesn't stop it
+  await page.evaluate(() => {
+    window.__ctx = []
+    document.addEventListener('contextmenu', e => setTimeout(() => window.__ctx.push(e.defaultPrevented), 0), true)
+  })
+  assert.ok(await until(async () => (await page.locator('[role=menu]').count()) === 0), 'the ⋮ menu has closed')
+  await card.locator('input[data-cell="1:0"]').click()
+  await card.locator('input[data-cell="1:0"]').click({ button: 'right' })
+  await page.waitForTimeout(300)
+  assert.equal(await page.locator('[role=menu]').count(), 0, 'no card menu over the cell being typed in')
+  assert.deepEqual(await page.evaluate(() => window.__ctx), [false], "and the browser's menu isn't blocked")
+  await closeNativeMenu()
+  // another cell, not being edited, still gets the cell's menu
+  await card.locator('input[data-cell="3:1"]').click({ button: 'right' })
+  await page.locator('[role=menu]').last().waitFor()
+  assert.ok((await items()).includes('Delete Amount'), 'a cell not being edited has its menu')
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
+
+  // the same in a note's text: typing there keeps the browser's menu; its strip still has the card's
+  const p = await probeNote('Menu probe')
+  await page.mouse.click(p.body.x, p.body.y)
+  await page.evaluate(() => (window.__ctx = []))
+  await page.mouse.click(p.body.x, p.body.y, { button: 'right' })
+  await page.waitForTimeout(300)
+  assert.equal(await page.locator('[role=menu]').count(), 0, 'no card menu over the note being typed in')
+  assert.deepEqual(await page.evaluate(() => window.__ctx), [false])
+  await closeNativeMenu()
+  await page.mouse.click(p.strip.x, p.strip.y, { button: 'right' })
+  await page.locator('[role=menu]').last().waitFor()
+  await page.keyboard.press('Escape')
+  await clearSelection()
+})
+
+test('while Focus is on: no Focus, Lock, Tuck or Shelf in a card menu, no Tidy or Fold all in the board menu; tucking the card ends Focus', async () => {
+  const { card, strip } = await probeNote('Focus probe')
+  await page.mouse.click(strip.x, strip.y, { button: 'right' })
+  await page.getByRole('menuitem', { name: 'Focus on this card' }).click()
+  const back = page.getByRole('button', { name: 'Bring everything back' })
+  await back.waitFor()
+  const items = async () => (await page.locator('[role=menu]').last().locator('[role=menuitem]').allInnerTexts()).map(t => t.split('\n')[0]).filter(Boolean)
+  await page.waitForTimeout(800)
+  const now = await where(card)
+  await page.mouse.click(now.strip.x, now.strip.y, { button: 'right' })
+  await page.locator('[role=menu]').last().waitFor()
+  const l = await items()
+  for (const x of ['Focus on this card', 'Bring everything back', 'Lock in place', 'Unlock', 'Tuck away', 'Put on the shelf…']) assert.ok(!l.includes(x), `${x} is not in a card's menu while Focus is on`)
+  assert.ok(l.includes('Remove from board') && l.includes('Private from agents'), `the rest is: ${l}`)
+  await page.keyboard.press('Escape')
+
+  // the board's menu, on a bit of empty board
+  await page.mouse.click(1380, 130, { button: 'right' })
+  await page.locator('[role=menu]').last().waitFor()
+  const b = await items()
+  assert.ok(b.includes('Show everything') && b.includes('Sticky note here'), `the board's menu: ${b}`)
+  for (const x of ['Tidy', 'Fold all cards', 'Unfold all cards']) assert.ok(!b.some(y => y.startsWith(x)), `${x} is not in the board's menu while Focus is on`)
+  await page.keyboard.press('Escape')
+
+  // tucked away, the card in Focus doesn't leave Focus on with nothing in it
+  await card.getByRole('button', { name: 'Tuck away at the top' }).click()
+  assert.ok(await until(async () => (await back.count()) === 0), 'Focus ended')
+  assert.ok(await until(async () => (await card.count()) === 0 || !(await card.isVisible())), 'and the card is tucked')
+  await page.mouse.click(EMPTY.x, EMPTY.y)
+  await page.keyboard.press('Control+z')
+  assert.ok(await until(async () => await card.isVisible()), 'Undo brings it back')
+  await clearSelection()
 })

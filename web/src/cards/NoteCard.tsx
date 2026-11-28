@@ -103,6 +103,7 @@ export function NoteCard({ id, data, selected }: NodeProps<CardNode>) {
       label: editorLabel(board.prefs.editor),
       icon: board.prefs.editor === 'vscode' ? Code2 : ExternalLink,
       run: () => note.save().then(() => openOutside({ kind: 'note', path: data.ref, how: 'editor' })).catch(e => board.toast(e.message)),
+      more: true,
     },
     { label: 'Archive note', icon: Archive, danger: true, gap: true, run: () => archive() },
     { label: 'Remove from board', icon: X, run: () => board.removeCard(id), keys: 'Del' },

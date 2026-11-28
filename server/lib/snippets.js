@@ -246,6 +246,12 @@ export function addSnippetSync(input = {}, now = Date.now()) {
   return make(input, isSecret, isSecret ? keySync() : null, now)
 }
 
+/** The keep choice for a span of time (the nearest one). */
+function keepOf(span) {
+  if (!span) return 'forever'
+  return ['day', 'week', 'month'].reduce((a, b) => (Math.abs(KEEP[b] - span) < Math.abs(KEEP[a] - span) ? b : a))
+}
+
 function make({ text, title, language, keep, from }, isSecret, k, now) {
   const span = KEEP[keep] ?? (isSecret ? KEEP.week : KEEP.forever)
   const s = {
@@ -257,6 +263,7 @@ function make({ text, title, language, keep, from }, isSecret, k, now) {
     lines: text.split('\n').length,
     createdAt: now,
     expiresAt: span ? now + span : null,
+    keep: keepOf(span),
     from: typeof from === 'string' ? from.slice(0, 120) : '',
   }
   if (isSecret) s.enc = seal(k, text)
@@ -278,6 +285,8 @@ function view(s) {
     preview: s.secret ? '' : String(s.text).slice(0, 400),
     createdAt: s.createdAt,
     expiresAt: s.expiresAt,
+    // the choice that set the time (older ones: the nearest to their span), so a menu can tick it
+    keep: s.keep ?? keepOf(s.expiresAt ? s.expiresAt - s.createdAt : 0),
     from: s.from,
   }
 }
@@ -366,6 +375,7 @@ export async function updateSnippet(id, { title, keep, secret } = {}, now = Date
   if (keep !== undefined) {
     if (!(keep in KEEP)) throw new UserError('Keep it for a day, a week, a month, or until you delete it')
     s.expiresAt = KEEP[keep] ? now + KEEP[keep] : null
+    s.keep = keep
   }
   if (typeof secret === 'boolean' && secret !== s.secret) {
     const k = await key()

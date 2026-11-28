@@ -44,6 +44,8 @@ export interface Snippet {
   preview: string
   createdAt: number
   expiresAt: number | null
+  /** The choice that set expiresAt. */
+  keep: SnippetKeep
   from: string
 }
 export type SnippetKeep = 'day' | 'week' | 'month' | 'forever'
