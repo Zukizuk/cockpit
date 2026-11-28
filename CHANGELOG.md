@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 28 November 2026 (version 0.2.22)
 
 **New**
 - Sort a table: right-click a cell for "Sort by <column>, A to Z" or "Z to A". Numbers sort as numbers (9 before 10, 1,200 after 900), and empty cells go last. Claude can sort a table too.
