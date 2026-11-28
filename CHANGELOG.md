@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 28 November 2026 (version 0.2.23)
 
 **Improved**
 - Menus show only what fits what you clicked. Right-click a table cell for just the cell, its row and its column; right-click the table's title (or use its ⋯) for the table.
