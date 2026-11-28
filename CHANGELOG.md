@@ -2,6 +2,13 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
+## Coming next
+
+**Fixed**
+- Setup's "Open Cockpit" opens Cockpit as the app you installed from Edge, if you did, so you no longer get a second Cockpit window beside it.
+- Cockpit's icon is sharp in the taskbar, on shortcuts, in Setup and in Settings > Apps: each size is drawn for itself instead of scaled down.
+- On a Mac, Ctrl+click on a note's text opens Cockpit's menu again.
+
 ## 28 November 2026 (version 0.2.23)
 
 **Improved**

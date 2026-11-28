@@ -1,6 +1,7 @@
 ' Opens Cockpit: starts its server if it isn't running (no window), waits until it answers, then opens Cockpit
-' in its own Edge window (the default browser if there's no Edge). The Start menu's "Cockpit" shortcut runs this,
-' and so does Ctrl+Alt+K until Cockpit is installed as an app from Edge. If the server can't start, it says so.
+' as the app installed from Edge when there is one, else in its own Edge window (the default browser if there's no
+' Edge). The Start menu's "Cockpit" shortcut and Setup's last page run this, and so does Ctrl+Alt+K until Cockpit is
+' installed as an app from Edge. If the server can't start, it says so.
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 here = fso.GetParentFolderName(WScript.ScriptFullName)
@@ -27,6 +28,37 @@ If Not Up() Then
       sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\.cockpit\server.log", vbExclamation, "Cockpit"
     WScript.Quit 1
   End If
+End If
+
+' Cockpit installed as an app from Edge: open that (its own window and sharp icon), not a plain Edge window.
+' Edge puts its shortcut in the Start menu, and in Startup when it opens at login; both carry --app-id.
+Function EdgeApp()
+  EdgeApp = ""
+  On Error Resume Next
+  For Each dir In Array(sh.SpecialFolders("Programs"), sh.SpecialFolders("Startup"))
+    If fso.FolderExists(dir) Then
+      For Each f In fso.GetFolder(dir).Files
+        If LCase(Left(f.Name, 7)) = "cockpit" And LCase(fso.GetExtensionName(f.Name)) = "lnk" Then
+          Set l = sh.CreateShortcut(f.Path)
+          Set re = New RegExp
+          re.Pattern = "--app-id=\S+"
+          If re.Test(l.Arguments) And fso.FileExists(l.TargetPath) Then
+            args = re.Execute(l.Arguments)(0).Value
+            re.Pattern = "--profile-directory=(""[^""]+""|\S+)"
+            If re.Test(l.Arguments) Then args = re.Execute(l.Arguments)(0).Value & " " & args
+            EdgeApp = """" & l.TargetPath & """ " & args
+            Exit Function
+          End If
+        End If
+      Next
+    End If
+  Next
+End Function
+
+app = EdgeApp()
+If app <> "" Then
+  sh.Run app, 1, False
+  WScript.Quit 0
 End If
 
 edge = ""

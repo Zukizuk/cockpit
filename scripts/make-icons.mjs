@@ -45,7 +45,10 @@ function inShape(u, v, s) {
   return dx * dx + dy * dy <= s.r * s.r
 }
 
-function render(size, maskable) {
+const render = (size, maskable) => png(size, size, pixels(size, maskable))
+
+/** The icon as RGBA pixels, straight (not premultiplied) alpha. */
+function pixels(size, maskable) {
   const shapes = shapesFor(maskable)
   const px = Buffer.alloc(size * size * 4)
   const S = 4
@@ -71,7 +74,7 @@ function render(size, maskable) {
       px[i + 3] = Math.round(a / (S * S))
     }
   }
-  return png(size, size, px)
+  return px
 }
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
@@ -93,6 +96,45 @@ function chunk(type, data) {
   const crc = Buffer.alloc(4)
   crc.writeUInt32BE(crc32(td))
   return Buffer.concat([len, td, crc])
+}
+
+/** A Windows .ico with each size drawn on its own (not scaled down): 32-bit bitmaps below 256, a PNG at 256. */
+function ico(sizes) {
+  const images = sizes.map(size => {
+    const px = pixels(size, false)
+    if (size >= 256) return png(size, size, px)
+    const header = Buffer.alloc(40)
+    header.writeUInt32LE(40, 0)
+    header.writeInt32LE(size, 4)
+    header.writeInt32LE(size * 2, 8) // colour rows plus the mask's
+    header.writeUInt16LE(1, 12)
+    header.writeUInt16LE(32, 14)
+    const bgra = Buffer.alloc(size * size * 4)
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const s = (y * size + x) * 4
+        const d = ((size - 1 - y) * size + x) * 4 // bottom-up
+        bgra[d] = px[s + 2]; bgra[d + 1] = px[s + 1]; bgra[d + 2] = px[s]; bgra[d + 3] = px[s + 3]
+      }
+    }
+    const mask = Buffer.alloc((Math.ceil(size / 32) * 4) * size) // all zero: alpha does the work
+    return Buffer.concat([header, bgra, mask])
+  })
+  const dir = Buffer.alloc(6 + 16 * sizes.length)
+  dir.writeUInt16LE(1, 2) // type: icon
+  dir.writeUInt16LE(sizes.length, 4)
+  let offset = dir.length
+  sizes.forEach((size, i) => {
+    const e = 6 + 16 * i
+    dir[e] = size >= 256 ? 0 : size
+    dir[e + 1] = size >= 256 ? 0 : size
+    dir.writeUInt16LE(1, e + 4) // planes
+    dir.writeUInt16LE(32, e + 6) // bits per pixel
+    dir.writeUInt32LE(images[i].length, e + 8)
+    dir.writeUInt32LE(offset, e + 12)
+    offset += images[i].length
+  })
+  return Buffer.concat([dir, ...images])
 }
 
 function png(w, h, rgba) {
@@ -123,8 +165,11 @@ function svg() {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">\n${shapesFor(false).map(el).join('\n')}\n</svg>\n`
 }
 
+fs.writeFileSync(path.join(out, 'icon-32.png'), render(32, false))
 fs.writeFileSync(path.join(out, 'icon-192.png'), render(192, false))
 fs.writeFileSync(path.join(out, 'icon-512.png'), render(512, false))
 fs.writeFileSync(path.join(out, 'maskable-512.png'), render(512, true))
 fs.writeFileSync(path.join(out, 'favicon.svg'), svg())
+// shortcuts, Setup and Settings > Apps: Windows picks the size it needs, so each one is drawn sharp
+fs.writeFileSync(path.join(out, 'cockpit.ico'), ico([16, 20, 24, 32, 40, 48, 64, 256]))
 console.log(`icons written to ${out}`)
