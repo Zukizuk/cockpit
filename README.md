@@ -4,7 +4,8 @@ A calm, free-form board for the things you want in front of you: links to read l
 snippets to copy, and what your AI agents make. Paste a link or a file path anywhere and it becomes
 a card you can read, move, resize and put beside anything else.
 
-It runs on your PC only (a small local server on `127.0.0.1`) and opens in its own window. Windows 10 and 11.
+It runs on your PC only (a small local server on `127.0.0.1`) and opens in its own window. Windows 10 and 11; on a
+Mac it runs from a clone for now (see [Develop](#develop)).
 
 ![Cockpit's board](docs/screenshot.png)
 
@@ -174,7 +175,7 @@ These stay out of the way until you set them up:
 
 ## Develop
 
-You need Node 20 or later and Windows.
+You need Node 20 or later, and Windows or macOS.
 
 ```powershell
 git clone https://github.com/Zukizuk/cockpit.git
@@ -190,6 +191,10 @@ npm run setup
 
 `npm run setup` builds the app and runs your clone the way an installed copy runs: Start menu entry, server at
 login, <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>K</kbd>, and optionally the Claude Code connection.
+
+On a Mac, run `npm run setup:mac` instead. It puts Cockpit.app in `~/Applications` (open it from Launchpad or
+Spotlight, or keep it in the Dock), starts the server at login, and optionally connects Claude Code. Undo it with
+`scripts/mac/install-startup.sh --remove` and by moving Cockpit.app to the Bin.
 
 | Command | What it does |
 | --- | --- |
@@ -211,7 +216,8 @@ $env:COCKPIT_PORT=4799; $env:COCKPIT_HOME="$env:TEMP\cockpit-test"; $env:COCKPIT
   server.
 - `web/`: React, Vite, Tailwind, shadcn/ui and React Flow (the board).
 - `scripts/`: the launcher, the login start, the <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>K</kbd> helper (C#, built
-  with Windows' own compiler), and the installer.
+  with Windows' own compiler), and the installer. `scripts/mac/` has the Mac's launcher (Cockpit.app) and login
+  start.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 

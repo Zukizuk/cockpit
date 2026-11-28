@@ -10,7 +10,7 @@ Thanks for wanting to help. Bug reports, ideas and pull requests are all welcome
 
 ## Setting up
 
-See [Develop](README.md#develop) in the README. In short: Node 20+, Windows, `npm install`, then `npm start`.
+See [Develop](README.md#develop) in the README. In short: Node 20+, Windows or macOS, `npm install`, then `npm start`.
 Work against a second server with its own folders (`COCKPIT_PORT`, `COCKPIT_HOME`, `COCKPIT_DATA`) so your own
 board and notes stay out of it.
 
