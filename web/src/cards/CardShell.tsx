@@ -13,7 +13,7 @@ import { askPutAway } from '../views/Shelf'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuShortcut, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { shortcut } from '../platform'
+import { mac, shortcut } from '../platform'
 
 const SIDE_POS = { top: Position.Top, right: Position.Right, bottom: Position.Bottom, left: Position.Left } as const
 
@@ -434,8 +434,10 @@ export function CardShell({ selected, pulse, born, icon: Icon, title, subtitle, 
             // A text box counts as being typed in once it has the cursor. A right-click on one that hasn't doesn't give
             // it the cursor (so the card's menu opens, as on any other part of the card); on the one that has, the
             // event goes no further, so the card's menu never hears of it and the browser's own (Cut, Copy, Paste) opens.
+            // On a Mac, Ctrl+click is a right-click too: it mustn't give the text box the cursor either.
             onMouseDownCapture={e => {
-              if (e.button === 2 && inField(e.target) && inField(e.target) !== document.activeElement) e.preventDefault()
+              const rightClick = e.button === 2 || (mac && e.button === 0 && e.ctrlKey)
+              if (rightClick && inField(e.target) && inField(e.target) !== document.activeElement) e.preventDefault()
             }}
             onContextMenuCapture={e => {
               if (inField(e.target) && inField(e.target) === document.activeElement) return e.stopPropagation()

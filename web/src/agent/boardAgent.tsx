@@ -951,6 +951,9 @@ export function BoardAgent() {
       done = `Claude sorted ${title} by ${head[c]?.trim() || `column ${c + 1}`}`
     }
     await put('/api/tables', { path: ref, rows, baseMtime: t.mtime, by: 'Claude' })
+    // what Claude reads next is the table as it is now, not as it was before this change (read again, then drawn)
+    await tables.reload()
+    await new Promise(r => requestAnimationFrame(() => r(null)))
     said(done)
   }
 
