@@ -13,7 +13,7 @@ import { definePrimitive } from '@ui-sdk/core'
 import { createParts } from '@ui-sdk/react/primitive'
 import { contentsOf, foldNode, freeSpot, isSection, isSticky, sectionOf, spaceOf, useBoard, type CardNode, type LinkData } from '../board'
 import { get, post, put, type Question, type ShownRead, type Snippet, type StickyColor, type TableData } from '../api'
-import { newTable, rowsFromText } from '../cards/TableCard'
+import { newTable, rowsFromText, sortRows } from '../cards/TableCard'
 import { emit, onEvent, useData } from '../lib'
 import { COLORS as INK, baseSize, exportPng, imageUrl, loadImage, type ColorName, type Mark, type Pt } from '../lib/markup'
 import { summary } from '../cards/OutputsCard'
@@ -251,7 +251,7 @@ type CardOptions = {
 }
 export type Side = 'right' | 'left' | 'below' | 'above'
 const SIDES: Record<string, Side> = { right: 'right', left: 'left', below: 'below', under: 'below', beneath: 'below', above: 'above', over: 'above', top: 'above', bottom: 'below' }
-export type TableChange = { setCell?: [row: unknown, column: unknown, text: string]; addRows?: string[][]; setRows?: string[][]; removeRow?: unknown }
+export type TableChange = { setCell?: [row: unknown, column: unknown, text: string]; addRows?: string[][]; setRows?: string[][]; removeRow?: unknown; sortBy?: [column: unknown, desc: boolean] }
 const COLORS: Record<string, StickyColor> = { yellow: 'yellow', green: 'green', pink: 'pink', orange: 'orange', charcoal: 'ink', ink: 'ink', dark: 'ink', black: 'ink' }
 
 const cardPrimitive = definePrimitive({
@@ -308,6 +308,8 @@ const cardPrimitive = definePrimitive({
       addRows: (rows: unknown) => track(call('onTable')({ addRows: rowsOf(rows) })),
       setRows: (rows: unknown) => track(call('onTable')({ setRows: rowsOf(rows) })),
       removeRow: (row: unknown) => track(call('onTable')({ removeRow: row })),
+      // the rows under the header in order of one column: 'asc' (A to Z, small to big) or 'desc'
+      sortBy: (column: unknown, order?: unknown) => track(call('onTable')({ sortBy: [column, /^(desc|z)/i.test(String(order ?? ''))] })),
       // a note: add to its end, or write all of it anew (that waits for the user's Allow)
       append: (text: string) => track(call('onWrite')({ text: String(text ?? ''), append: true })),
       setText: (text: string) => track(call('onWrite')({ text: String(text ?? ''), append: false })),
@@ -329,7 +331,7 @@ const cardPrimitive = definePrimitive({
     // them on every card (UI SDK lists each function the api has)
     const o = context.options()
     const only: [boolean, (keyof typeof api)[]][] = [
-      [!!o.onTable, ['setCell', 'addRows', 'setRows', 'removeRow']],
+      [!!o.onTable, ['setCell', 'addRows', 'setRows', 'removeRow', 'sortBy']],
       [!!o.onWrite, ['append', 'setText']],
       [!!o.onColor, ['setColor']],
       [!!o.onRename, ['rename']],
@@ -339,7 +341,7 @@ const cardPrimitive = definePrimitive({
     return api
   },
   slots: slot => ({ root: slot({ attrs: () => ({ role: 'group' }) }) }),
-  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'putOnShelf', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'moveToSection', 'markUp', 'remove'] },
+  agent: { actions: ['read', 'comment', 'fold', 'unfold', 'focus', 'moveToSpace', 'rename', 'setColor', 'tuck', 'putOnShelf', 'bringBack', 'hideContents', 'showContents', 'setCell', 'addRows', 'setRows', 'removeRow', 'sortBy', 'append', 'setText', 'placeNextTo', 'connectTo', 'disconnect', 'moveToSection', 'markUp', 'remove'] },
 })
 const { Root: CardRoot } = createParts(cardPrimitive, { root: 'div' })
 
@@ -927,6 +929,10 @@ export function BoardAgent() {
     } else if (ch.removeRow !== undefined) {
       rows.splice(row(ch.removeRow), 1)
       done = `Claude took a row out of ${title}`
+    } else if (ch.sortBy) {
+      const c = col(ch.sortBy[0])
+      rows = sortRows(rows, c, ch.sortBy[1])
+      done = `Claude sorted ${title} by ${head[c]?.trim() || `column ${c + 1}`}`
     }
     await put('/api/tables', { path: ref, rows, baseMtime: t.mtime, by: 'Claude' })
     said(done)

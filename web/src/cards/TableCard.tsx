@@ -2,9 +2,9 @@
 // opens in Excel too. Type in a cell; Tab and Enter move along (and add a row at the end); a block copied from Excel
 // pastes across the cells; Copy gives it back for Excel, or as Markdown for a note or a chat. The first row is the
 // header. Claude can make a table, read it and fill it in.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import type { NodeProps } from '@xyflow/react'
-import { ArrowDownToLine, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, Copy, ExternalLink, FileText, Heading, Plus, Table2, Trash2, X } from 'lucide-react'
+import { ArrowDownAZ, ArrowDownToLine, ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowUpZA, Copy, ExternalLink, FileText, Filter, FilterX, Heading, Plus, Table2, Trash2, X } from 'lucide-react'
 import { get, openOutside, post, put, type TableData } from '../api'
 import { useBoard, type CardNode } from '../board'
 import { onEvent } from '../lib'
@@ -51,6 +51,38 @@ const toMarkdown = (rows: string[][]) => {
   const [head, ...body] = rows
   return [`| ${head.map(esc).join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`, ...body.map(r => `| ${r.map(esc).join(' | ')} |`)].join('\n')
 }
+
+/** Numbers as numbers ("9" before "10", "1,200" and "€30" too), the rest as words; empty cells always last. */
+const asNumber = (v: string) => {
+  const s = v.trim().replace(/[\s,€$£%]/g, '')
+  return s && /^[-+]?\d*\.?\d+$/.test(s) ? Number(s) : null
+}
+export function compareCells(a: string, b: string) {
+  if (!a.trim() || !b.trim()) return !a.trim() && !b.trim() ? 0 : !a.trim() ? 1 : -1
+  const x = asNumber(a)
+  const y = asNumber(b)
+  if (x !== null && y !== null) return x - y
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+}
+/** The rows under the header in order of one column (A to Z, or Z to A); the header stays on top, ties keep their order. */
+export function sortRows(rows: string[][], col: number, desc = false) {
+  const [head, ...body] = rows
+  const sorted = body
+    .map((r, i) => ({ r, i }))
+    .sort((p, q) => {
+      const empty = !(p.r[col] ?? '').trim() || !(q.r[col] ?? '').trim()
+      const c = compareCells(p.r[col] ?? '', q.r[col] ?? '')
+      return (empty || !desc ? c : -c) || p.i - q.i
+    })
+    .map(x => x.r)
+  return [head, ...sorted]
+}
+/** Whether a row passes the filters (a word or part of one per column, any case); a row still empty always does. */
+export function passes(row: string[], filters: string[]) {
+  if (row.every(c => !c.trim())) return true
+  return filters.every((f, c) => !f.trim() || (row[c] ?? '').toLowerCase().includes(f.trim().toLowerCase()))
+}
+const filterKey = (ref: string) => `cockpit-table-filter:${ref}`
 
 /** A new table on the board (rows given, or a header and two empty rows); resolves to its card's id. */
 export async function newTable(board: Board, { title, rows }: { title?: string; rows?: string[][] } = {}) {
@@ -160,6 +192,40 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
 
   const rows = t?.rows || []
   const cols = rows[0]?.length || 0
+
+  // Filter: a box under each heading; only the rows that match are shown (the file keeps them all). Kept for this
+  // table on this PC until cleared.
+  const [filters, setFilters] = useState<string[] | null>(() => {
+    try {
+      const f = JSON.parse(localStorage.getItem(filterKey(data.ref)) || 'null')
+      return Array.isArray(f) ? f.map(String) : null
+    } catch {
+      return null
+    }
+  })
+  useEffect(() => {
+    try {
+      if (filters) localStorage.setItem(filterKey(data.ref), JSON.stringify(filters))
+      else localStorage.removeItem(filterKey(data.ref))
+    } catch {}
+  }, [filters, data.ref])
+  const filtering = !!filters && filters.some(f => f.trim())
+  const shown = rows.map((row, r) => r === 0 || !filters || passes(row, filters))
+  const shownCount = shown.filter((s, r) => r > 0 && s).length
+  const openFilter = () => {
+    setFilters(f => f ?? Array(cols).fill(''))
+    requestAnimationFrame(() => grid.current?.querySelector<HTMLInputElement>('input[data-filter="0"]')?.focus())
+  }
+  const setFilter = (c: number, v: string) => setFilters(f => Array.from({ length: cols }, (_, j) => (j === c ? v : (f?.[j] ?? ''))))
+  /** The next row shown, up or down from r (the header, row 0, is always shown). */
+  const nextShown = (r: number, step: 1 | -1) => {
+    for (let i = r + step; i >= 0 && i < rows.length; i += step) if (shown[i]) return i
+    return -1
+  }
+  const sortBy = (c: number, desc = false) => {
+    change(sortRows(rows, c, desc))
+    board.toast(`Sorted by ${rows[0]?.[c]?.trim() || `column ${c + 1}`}, ${desc ? 'Z to A' : 'A to Z'}`)
+  }
   const set = (r: number, c: number, v: string) => change(rows.map((row, i) => (i === r ? row.map((x, j) => (j === c ? v : x)) : row)))
   const addRow = (at = rows.length) => change([...rows.slice(0, at), Array(cols).fill(''), ...rows.slice(at)])
   const addCol = () => change(rows.map((row, i) => [...row, i === 0 ? `Column ${cols + 1}` : '']))
@@ -174,20 +240,28 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
       if (e.shiftKey) return c > 0 ? focusCell(r, c - 1) : r > 0 && focusCell(r - 1, cols - 1)
       if (c < cols - 1) return focusCell(r, c + 1)
       tabFrom.current = 0
-      if (r === rows.length - 1) addRow()
-      return focusCell(r + 1, 0)
+      const below = nextShown(r, 1)
+      if (below < 0) {
+        addRow()
+        return focusCell(rows.length, 0)
+      }
+      return focusCell(below, 0)
     }
     // Enter goes down; after Tab, Tab, Enter it goes back to the column the row was started in (as Excel does)
     const from = tabFrom.current
     if (/^(Enter|Arrow|Escape)/.test(e.key)) tabFrom.current = null
     if (e.key === 'Enter') {
       e.preventDefault()
-      if (e.shiftKey) return r > 0 && focusCell(r - 1, c)
-      if (r === rows.length - 1) addRow()
-      return focusCell(r + 1, from ?? c)
+      if (e.shiftKey) return r > 0 && focusCell(nextShown(r, -1), c)
+      const below = nextShown(r, 1)
+      if (below < 0) {
+        addRow()
+        return focusCell(rows.length, from ?? c)
+      }
+      return focusCell(below, from ?? c)
     }
-    if (e.key === 'ArrowDown' && r < rows.length - 1) return e.preventDefault(), focusCell(r + 1, c)
-    if (e.key === 'ArrowUp' && r > 0) return e.preventDefault(), focusCell(r - 1, c)
+    if (e.key === 'ArrowDown' && nextShown(r, 1) > 0) return e.preventDefault(), focusCell(nextShown(r, 1), c)
+    if (e.key === 'ArrowUp' && r > 0) return e.preventDefault(), focusCell(nextShown(r, -1), c)
     if (e.key === 'Escape') {
       e.currentTarget.blur()
       save()
@@ -227,7 +301,10 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
   const colName = (c: number) => rows[0]?.[c]?.trim() || `column ${c + 1}`
   const cellActions: CardAction[] = at
     ? [
-        { label: 'Insert a row above', icon: ArrowUpToLine, run: () => addRow(Math.max(1, at.r)), context: true, hidden: at.r === 0 },
+        { label: `Sort by ${colName(at.c)}, A to Z`, icon: ArrowDownAZ, run: () => sortBy(at.c), context: true, hidden: rows.length < 3 },
+        { label: `Sort by ${colName(at.c)}, Z to A`, icon: ArrowUpZA, run: () => sortBy(at.c, true), context: true, hidden: rows.length < 3 },
+        { label: filters ? `Filter ${colName(at.c)}` : 'Filter rows', icon: Filter, run: () => (openFilter(), requestAnimationFrame(() => grid.current?.querySelector<HTMLInputElement>(`input[data-filter="${at.c}"]`)?.focus())), context: true, gap: true },
+        { label: 'Insert a row above', icon: ArrowUpToLine, run: () => addRow(Math.max(1, at.r)), context: true, hidden: at.r === 0, gap: true },
         { label: 'Insert a row below', icon: ArrowDownToLine, run: () => addRow(at.r + 1), context: true },
         { label: 'Insert a column left', icon: ArrowLeftToLine, run: () => insertCol(at.c), context: true },
         { label: 'Insert a column right', icon: ArrowRightToLine, run: () => insertCol(at.c + 1), context: true },
@@ -238,6 +315,8 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
 
   const actions: CardAction[] = [
     ...cellActions,
+    { label: 'Filter rows', icon: Filter, run: openFilter, hidden: !!filters || !!at },
+    { label: 'Clear the filter', icon: FilterX, run: () => setFilters(null), hidden: !filters },
     { label: 'Rename', icon: Heading, run: () => setNaming(true), keys: 'F2' },
     { label: 'Copy for Excel', icon: Copy, run: () => copy('tsv') },
     { label: 'Copy as Markdown', icon: FileText, run: () => copy('md') },
@@ -280,11 +359,41 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
     >
       {t && (
         <div className="tbl-free">
+          {filters && (
+            <div className="tbl-filter-note">
+              <span>{filtering ? `Showing ${shownCount} of ${rows.length - 1} rows` : 'Type in a box to show only the rows that match'}</span>
+              <button type="button" onClick={() => setFilters(null)}>
+                Clear the filter
+              </button>
+            </div>
+          )}
           <div className="tbl-grid">
             <table ref={grid} className="tbl" onBlur={e => !e.currentTarget.contains(e.relatedTarget as Node) && save()}>
               <tbody>
                 {rows.map((row, r) => (
-                  <tr key={r} className={cn(r === 0 && 'tbl-head')}>
+                  <Fragment key={r}>
+                  {r === 1 && filters && (
+                    <tr className="tbl-filter">
+                      {rows[0].map((h, c) => (
+                        <td key={c}>
+                          <input
+                            data-filter={c}
+                            value={filters[c] ?? ''}
+                            placeholder="Filter…"
+                            aria-label={`Filter ${h.trim() || `column ${c + 1}`}`}
+                            spellCheck={false}
+                            onChange={e => setFilter(c, e.target.value)}
+                            onKeyDown={e => {
+                              e.stopPropagation()
+                              if (e.key === 'Escape') setFilters(null)
+                            }}
+                          />
+                        </td>
+                      ))}
+                    </tr>
+                  )}
+                  {shown[r] && (
+                  <tr className={cn(r === 0 && 'tbl-head')}>
                     {row.map((v, c) => (
                       <td key={c}>
                         <input
@@ -306,6 +415,8 @@ export function TableCard({ id, data, selected }: NodeProps<CardNode>) {
                       </td>
                     ))}
                   </tr>
+                  )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

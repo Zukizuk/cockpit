@@ -4463,3 +4463,34 @@ body.col-resizing .reader-divider::after {
 .img-editor-frame {
   overflow: hidden;
 }
+
+/* Filter: a box under each heading, and a line above the table saying how many rows match */
+.tbl-filter td {
+  background: color-mix(in oklab, var(--card) 96%, var(--foreground));
+}
+
+.tbl-filter input {
+  height: 26px;
+  font-size: 12.5px;
+}
+
+.tbl-filter-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.tbl-filter-note button {
+  border-radius: 6px;
+  padding: 1px 6px;
+  color: var(--foreground);
+  background: oklch(var(--contrast) / 0.06);
+  transition: background-color 150ms ease-out;
+}
+
+.tbl-filter-note button:hover {
+  background: oklch(var(--contrast) / 0.1);
+}

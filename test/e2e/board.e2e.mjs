@@ -1345,3 +1345,33 @@ test("a card taken off isn't in what Claude sees any more", async () => {
   assert.ok(await until(async () => !(await titles()).includes('Gone soon')), 'not listed, not even as off the page')
   assert.deepEqual((await agent('query', { text: 'Gone soon' })).output, [], 'not found either')
 })
+
+test('a table: sort by a column from its menu, filter rows by what is typed, and Claude sorts it too', async () => {
+  await clearSelection()
+  const made = await agent('act', { steps: [{ ref: 'Board', action: 'addTable', args: ['Sort test', [['Name', 'Amount'], ['pear', '10'], ['Apple', '9'], ['fig', ''], ['banana', '1,200']]] }] })
+  assert.notEqual(made.output?.ok, false, JSON.stringify(made).slice(0, 300))
+  const card = page.locator('.react-flow__node-table', { hasText: 'Sort test' })
+  await card.waitFor()
+  const rowsOf = async () => (await agent('act', { steps: [{ ref: 'Sort test', action: 'read' }] })).output?.steps?.[0]?.result?.rows
+  // a right-click on a cell of Amount: sort by it, numbers as numbers, the empty cell last
+  await card.locator('input[data-cell="1:1"]').click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Sort by Amount, A to Z' }).click()
+  assert.ok(await until(async () => JSON.stringify((await rowsOf())?.map(r => r[0])) === JSON.stringify(['Name', 'Apple', 'pear', 'banana', 'fig']), 4000), `sorted by Amount: ${JSON.stringify(await rowsOf())}`)
+  // Z to A by Name, any case
+  await card.locator('input[data-cell="1:0"]').click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Sort by Name, Z to A' }).click()
+  assert.ok(await until(async () => JSON.stringify((await rowsOf())?.map(r => r[0])) === JSON.stringify(['Name', 'pear', 'fig', 'banana', 'Apple']), 4000), 'sorted by Name, Z to A')
+  // filter: only the rows with "an" in Name show; the file keeps them all
+  await card.locator('input[data-cell="1:0"]').click({ button: 'right' })
+  await page.getByRole('menuitem', { name: 'Filter rows' }).click()
+  await card.getByLabel('Filter Name').fill('AN')
+  assert.equal(await card.locator('input[data-cell]').count(), 2 + 2, 'the header and one row (banana) of two columns')
+  await card.getByText('Showing 1 of 4 rows').waitFor()
+  assert.equal((await rowsOf()).length, 5, 'every row is still in the table')
+  await card.getByRole('button', { name: 'Clear the filter' }).click()
+  assert.equal(await card.locator('input[data-cell]').count(), 10, 'all rows back')
+  // Claude sorts it, by a column's heading
+  const sorted = await agent('act', { steps: [{ ref: 'Sort test', action: 'sortBy', args: ['Amount', 'desc'] }] })
+  assert.notEqual(sorted.output?.ok, false, JSON.stringify(sorted).slice(0, 300))
+  assert.deepEqual((await rowsOf()).map(r => r[0]), ['Name', 'banana', 'pear', 'Apple', 'fig'], 'Z to A by Amount, the empty cell still last')
+})

@@ -88,7 +88,8 @@ const BOARD_NOTE =
   'board, rows being an array of arrays of text with the header first; use it when the user wants something compared ' +
   "or listed in a table they can edit. A table card's read() gives its rows (header first); its actions are " +
   'setCell(row, column, text) (row: its number from 1 under the header, or its first cell; column: its heading or ' +
-  'number from 1), addRows(rows), setRows(rows) to replace it all, removeRow(row). setRows and removeRow wait for ' +
+  'number from 1), addRows(rows), sortBy(column, "asc" | "desc") to put the rows in order of one column (numbers as ' +
+  'numbers, empty cells last), setRows(rows) to replace it all, removeRow(row). setRows and removeRow wait for ' +
   "the user's Allow. If addTable says tables are off, tell the user where to turn them on. " +
   "Pages: Board's addPage(title, html, space?) puts a small page you write (HTML with its own CSS and script, or just " +
   'what goes in its body) on the board as a card that keeps what the user types or ticks in it: use it for a ' +
