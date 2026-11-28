@@ -2,7 +2,7 @@
 
 Newest first. Each change is listed under New, Improved or Fixed.
 
-## Coming next
+## 28 November 2026 (version 0.2.24)
 
 **Fixed**
 - Setup's "Open Cockpit" opens Cockpit as the app you installed from Edge, if you did, so you no longer get a second Cockpit window beside it.
